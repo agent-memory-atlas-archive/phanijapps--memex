@@ -199,6 +199,7 @@ def test_client_factory_builds_openai_compat(monkeypatch: pytest.MonkeyPatch) ->
 
     monkeypatch.setattr("openai.OpenAI", FakeOpenAI)
     monkeypatch.delenv("MEMEX_LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("MEMEX_DATA_DIR", raising=False)
     config = ConfigLoader().load()
     client = client_from_config(config.consolidation_llm())
     assert isinstance(client, OpenAICompatClient)
@@ -221,6 +222,7 @@ def test_complete_wraps_api_errors(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr("openai.OpenAI", ExplodingOpenAI)
     monkeypatch.delenv("MEMEX_LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("MEMEX_DATA_DIR", raising=False)
     client = client_from_config(ConfigLoader().load().consolidation_llm())
     with pytest.raises(LLMError, match="LLM API call failed"):
         client.complete("sys", "user", max_tokens=10)

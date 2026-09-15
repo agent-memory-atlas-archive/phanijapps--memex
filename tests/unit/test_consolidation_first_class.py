@@ -62,6 +62,7 @@ class TestConsolidationConfig:
     def test_env_overrides_beat_toml(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("MEMEX_API_KEY", raising=False)
         monkeypatch.delenv("MEMEX_LLM_PROVIDER", raising=False)
+        monkeypatch.delenv("MEMEX_DATA_DIR", raising=False)
         monkeypatch.setenv("MEMEX_CONSOLIDATE_PROVIDER", "openrouter")
         monkeypatch.setenv("MEMEX_CONSOLIDATE_MODEL", "cheap-model")
         monkeypatch.setenv("MEMEX_CONSOLIDATE_API_KEY", "sk-consolidate")

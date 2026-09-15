@@ -11,7 +11,10 @@ MARKETPLACE = Path(__file__).parent.parent.parent / "marketplace"
 
 
 @pytest.fixture
-def homes(tmp_path: Path) -> tuple[Path, Path]:
+def homes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path]:
+    # Consolidation provisioning writes memex.toml into MEMEX_DATA_DIR;
+    # keep every installer test away from the developer's real ~/.memex.
+    monkeypatch.setenv("MEMEX_DATA_DIR", str(tmp_path / "memex-data"))
     return tmp_path / "home", tmp_path / "project"
 
 
@@ -96,11 +99,14 @@ def test_copilot_install_instructions_and_workflow(homes: tuple[Path, Path]) -> 
     assert instructions_text.count("## Memory (memex)") == 1
 
 
-def test_cli_harness_install(homes: tuple[Path, Path], capture: dict[str, str]) -> None:
+def test_cli_harness_install(
+    homes: tuple[Path, Path], capture: dict[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
     from memex import cli
 
     home, project = homes
     project.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("MEMEX_DATA_DIR", str(project / "memex-data"))
     code = cli.main(
         [
             "harness",
