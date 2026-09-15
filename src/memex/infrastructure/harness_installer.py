@@ -204,18 +204,26 @@ def _install_codex(marketplace: Path, home: Path, project: Path, report: Install
     config_path = codex_dir / "config.toml"
     existing = config_path.read_text(encoding="utf-8") if config_path.exists() else ""
     _backup(config_path)
-    additions = ""
-    if "memex-codex-notify" not in existing:
-        additions += f'notify = ["{wrapper}"]\n'
+
+    # `notify` must sit in the TOML root table (line 3 by convention):
+    # appending after a [table] header would scope it to that table and
+    # silently disable it. Normalize: drop any existing notify line
+    # (root or misplaced), then insert at line 3.
+    lines = [line for line in existing.splitlines() if not line.strip().startswith("notify")]
+    notify_line = f'notify = ["{wrapper}"]'
+    lines.insert(min(2, len(lines)), notify_line)
+    updated = "\n".join(lines)
+    if updated and not updated.endswith("\n"):
+        updated += "\n"
+
     if report.with_mcp:
-        if "[mcp_servers.memex]" not in existing:
-            additions += '\n[mcp_servers.memex]\ncommand = "memex"\nargs = ["serve-mcp"]\n'
+        if "[mcp_servers.memex]" not in updated:
+            updated += '\n[mcp_servers.memex]\ncommand = "memex"\nargs = ["serve-mcp"]\n'
     else:
         report.notes.append("MCP: skipped (--no-mcp)")
-    if additions:
-        if existing and not existing.endswith("\n"):
-            existing += "\n"
-        config_path.write_text(existing + additions, encoding="utf-8")
+
+    if updated != existing:
+        config_path.write_text(updated, encoding="utf-8")
         report.files_merged.append(str(config_path))
     else:
         report.notes.append("config.toml already wired; left unchanged")
