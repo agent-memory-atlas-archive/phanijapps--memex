@@ -62,8 +62,11 @@ recall by default (`--include-expired` / `include_expired=True` opts back in).
 ## Getting started
 
 ```bash
-# install (from this repository); --force replaces an existing installation
-uv tool install . --force
+# install (from this repository); --force replaces an existing installation.
+# Add --no-cache when the version number has not changed since your last
+# install -- uv caches built wheels by version and would otherwise
+# reinstall the old code.
+uv tool install . --force --no-cache
 
 # store your first memory
 memex write --type preference --title "Deploy on Fridays" \
