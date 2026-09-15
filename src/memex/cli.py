@@ -226,9 +226,15 @@ def _run_install(args: argparse.Namespace) -> int:
         name = _pick_harness()
         if name is None:
             return 1
-    marketplace = default_marketplace(getattr(args, "marketplace", None))
+    marketplace = (
+        None if name == "custom" else default_marketplace(getattr(args, "marketplace", None))
+    )
     home = args.home if args.home is not None else Path.home()
-    report = install_harness(name, marketplace, home=home, project=Path.cwd())
+    try:
+        report = install_harness(name, marketplace or Path("."), home=home, project=Path.cwd())
+    except FileNotFoundError as exc:
+        print(f"memex: {exc}", file=sys.stderr)
+        return 1
     _emit(
         {
             "harness": report.harness,
