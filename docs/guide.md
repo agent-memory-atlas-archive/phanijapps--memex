@@ -62,8 +62,8 @@ recall by default (`--include-expired` / `include_expired=True` opts back in).
 ## Getting started
 
 ```bash
-# install (from this repository)
-uv tool install --path . memex
+# install (from this repository); --force replaces an existing installation
+uv tool install . --force
 
 # store your first memory
 memex write --type preference --title "Deploy on Fridays" \
