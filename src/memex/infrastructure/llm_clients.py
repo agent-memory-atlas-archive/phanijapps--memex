@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from memex.application.ports import LLMClient, LLMResponse
 from memex.domain.errors import LLMError
-from memex.infrastructure.config import MemexConfig
+from memex.infrastructure.config import LLMConfig
 
 _PLACEHOLDER_KEY = "not-set"
 
@@ -58,9 +58,8 @@ class OpenAICompatClient:
         )
 
 
-def client_from_config(config: MemexConfig) -> LLMClient:
-    """Build the LLM client from the llm config section."""
-    llm = config.llm
+def client_from_config(llm: LLMConfig) -> LLMClient:
+    """Build the LLM client from explicit LLM settings."""
     return OpenAICompatClient(
         base_url=llm.base_url,
         api_key=llm.api_key,

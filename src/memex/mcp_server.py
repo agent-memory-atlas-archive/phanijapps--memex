@@ -173,7 +173,8 @@ def memex_consolidate(
     Args:
         mode: "full" (write) or "dry-run" (preview); default "full".
         max_episodes: How many most-recent episodes to process;
-            default 10.
+            default 10. Distillation can use a dedicated low-effort
+            model via [consolidation] config.
 
     Returns:
         ConsolidationReport as JSON — mode, episodes_processed,

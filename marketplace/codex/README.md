@@ -39,3 +39,8 @@ notify = ["~/.codex/memex-codex-notify.py"]
 command = "memex"
 args = ["serve-mcp"]
 ```
+
+## Auto-consolidation
+
+- `MEMEX_AUTO_CONSOLIDATE=1` — after the notify wrapper captures a rollout,
+  distill the fresh episode immediately (cheap model via `[consolidation]`).

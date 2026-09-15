@@ -44,3 +44,8 @@ Or copy `extensions/memex.ts` to `~/.pi/agent/extensions/` manually.
   file name; re-capture on session switch overwrites, never duplicates).
 - The MCP server (`memex serve-mcp`) composes with this extension:
   hooks push context in; MCP tools let the model write/consolidate.
+
+## Auto-consolidation
+
+- `MEMEX_AUTO_CONSOLIDATE=1` — distill the captured session via the
+  `--consolidate` hook path (see the guide's [consolidation] config).

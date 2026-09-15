@@ -35,3 +35,9 @@ claude mcp add memex -- memex serve-mcp
 
 Remove the `memex hook ...` entries from `settings.json`; a pre-install
 backup is kept as `settings.json.memex-bak`.
+
+## Auto-consolidation
+
+- `MEMEX_AUTO_CONSOLIDATE=1` — after SessionEnd capture, distill the fresh
+  episode immediately (dedicated cheap model via `[consolidation]` in
+  `memex.toml`).

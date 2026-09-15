@@ -385,10 +385,16 @@ class Memex:
         return decay.apply_decay(self.wiki_store, self.index_manager, dry_run=dry_run)
 
     def _llm_client(self) -> LLMClient:
+        """The consolidation client: [consolidation] overrides over [llm].
+
+        Lets distillation run on a cheaper low-effort model than the main
+        configuration without duplicating credentials.
+        """
         if self._llm is None:
-            if not self.config.llm.api_key and self.config.llm.provider in ("openai", "openrouter"):
+            llm = self.config.consolidation_llm()
+            if not llm.api_key and llm.provider in ("openai", "openrouter"):
                 raise LLMError("llm.api_key is required (set MEMEX_API_KEY or [llm].api_key)")
-            self._llm = client_from_config(self.config)
+            self._llm = client_from_config(llm)
         return self._llm
 
 

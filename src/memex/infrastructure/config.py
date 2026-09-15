@@ -40,6 +40,21 @@ class LLMConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class ConsolidationConfig:
+    """Optional overrides for the consolidate operation.
+
+    Lets episode distillation run on a cheaper (low-effort) model than
+    the main ``[llm]`` block. Every field falls back to ``[llm]`` when
+    unset.
+    """
+
+    provider: str | None = None
+    model: str | None = None
+    api_base: str | None = None
+    api_key: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class BM25Config:
     # k1/b are parsed for forward compatibility; SQLite FTS5 bm25() uses
     # compile-time defaults and cannot be tuned from SQL.
@@ -78,11 +93,25 @@ class MemexConfig:
     app_name: str = "memex"
     data_dir: Path = Path.home() / ".memex"
     llm: LLMConfig = LLMConfig()
+    consolidation: ConsolidationConfig = ConsolidationConfig()
     bm25: BM25Config = BM25Config()
     recency_decay: RecencyDecayConfig = RecencyDecayConfig()
     index: IndexConfig = IndexConfig()
     wiki: WikiConfig = WikiConfig()
     logging: LoggingConfig = LoggingConfig()
+
+    def consolidation_llm(self) -> LLMConfig:
+        """Effective LLM settings for consolidation: overrides over [llm]."""
+        override = self.consolidation
+        base = self.llm
+        return LLMConfig(
+            provider=override.provider or base.provider,
+            model=override.model or base.model,
+            api_base=override.api_base or base.api_base,
+            api_key=override.api_key or base.api_key,
+            timeout=base.timeout,
+            max_tokens=base.max_tokens,
+        )
 
     @property
     def db_path(self) -> Path:
@@ -137,6 +166,7 @@ class ConfigLoader:
             app_name=str(_get(_table(raw, "app"), "name", str, "app") or "memex"),
             data_dir=data_dir,
             llm=llm,
+            consolidation=self._consolidation(raw),
             bm25=BM25Config(
                 k1=float(_or(_get(_table(raw, "bm25"), "k1", float, "bm25"), 1.5)),
                 b=float(_or(_get(_table(raw, "bm25"), "b", float, "bm25"), 0.75)),
@@ -199,6 +229,25 @@ class ConfigLoader:
             api_key=str(api_key) if api_key else None,
             timeout=int(_or(_get(table, "timeout", int, "llm"), 60)),
             max_tokens=int(_or(_get(table, "max_tokens", int, "llm"), 4096)),
+        )
+
+    def _consolidation(self, raw: dict[str, object]) -> ConsolidationConfig:
+        table = _table(raw, "consolidation")
+        provider_env = os.environ.get("MEMEX_CONSOLIDATE_PROVIDER")
+        model_env = os.environ.get("MEMEX_CONSOLIDATE_MODEL")
+        key_env = os.environ.get("MEMEX_CONSOLIDATE_API_KEY")
+        provider = provider_env or _get(table, "provider", str, "consolidation")
+        model = model_env or _get(table, "model", str, "consolidation")
+        api_key = key_env or _get(table, "api_key", str, "consolidation")
+        if provider is not None and provider not in PROVIDERS:
+            raise ConfigError(
+                f"consolidation.provider must be one of {PROVIDERS}, got {provider!r}"
+            )
+        return ConsolidationConfig(
+            provider=str(provider) if provider else None,
+            model=str(model) if model else None,
+            api_base=str(_get(table, "api_base", str, "consolidation") or "") or None,
+            api_key=str(api_key) if api_key else None,
         )
 
     def _logging(self, raw: dict[str, object], data_dir: Path) -> LoggingConfig:

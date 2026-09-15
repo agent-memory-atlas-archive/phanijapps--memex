@@ -63,7 +63,8 @@ LLM-calling operation; pass mode "dry-run" to preview without writing.
 
 Key constraints: processes up to max_episodes most recent episodes
 (default 10); requires configured LLM credentials (MEMEX_API_KEY or
-memex.toml).
+memex.toml). A dedicated low-effort model can be configured under
+[consolidation] without touching the main [llm] settings.
 
 Returns a report with nodes_created (or would-be nodes in dry-run)
 and token usage.

@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import json
+import os
 import sys
 import time
 from collections.abc import Sequence
@@ -151,6 +152,12 @@ def _build_parser() -> argparse.ArgumentParser:
     hook_transcript.add_argument(
         "--no-overwrite", action="store_true", help="Fail quietly if already ingested"
     )
+    hook_transcript.add_argument(
+        "--consolidate",
+        action="store_true",
+        help="Distill the fresh episode via LLM after capture "
+        "(also enabled by MEMEX_AUTO_CONSOLIDATE=1)",
+    )
 
     return parser
 
@@ -279,17 +286,32 @@ def _hook_transcript(args: argparse.Namespace) -> int:
     except FileExistsError:
         print(f"memex: transcript already ingested: {session_id}", file=sys.stderr)
         return 0
-    finally:
-        memex.close()
-    _emit(
-        {
-            "session_id": report.session_id,
-            "episode_node": report.episode_node,
-            "turn_count": report.turn_count,
-            "harness": args.harness,
-        }
-    )
+
+    result: dict[str, object] = {
+        "session_id": report.session_id,
+        "episode_node": report.episode_node,
+        "turn_count": report.turn_count,
+        "harness": args.harness,
+    }
+    auto = os.environ.get("MEMEX_AUTO_CONSOLIDATE") == "1"
+    if args.consolidate or auto:
+        result["consolidation"] = _consolidate_episode(memex, report.episode_node)
+    memex.close()
+    _emit(result)
     return 0
+
+
+def _consolidate_episode(memex: Memex, episode_slug: str) -> dict[str, object]:
+    """Best-effort distillation of one fresh episode; never fails the hook."""
+    try:
+        report = memex.consolidate(ConsolidateInput(episode_ids=[episode_slug]))
+        return {
+            "llm_calls": report.llm_calls,
+            "nodes_created": len(report.nodes_created),
+            "nodes_updated": len(report.nodes_updated),
+        }
+    except (MemexError, ValueError) as exc:
+        return {"requested": True, "error": str(exc)}
 
 
 def _emit(payload: object) -> None:

@@ -95,3 +95,12 @@ rule, and the OpenAI SDK is the single LLM client.
   exit code is CI-able. `memex harness install` ships the marketplace
   adapters idempotently (pi copy; claude/codex config merge with
   backups; copilot instructions + verify workflow).
+
+- **First-class hook-driven consolidation (spec §2.2 deviation, opt-in).**
+  The spec excluded auto-summarization because tool-calling LLMs are not
+  universally available. Consolidation remains off by default and
+  LLM-free until explicitly enabled — via `memex hook transcript
+  --consolidate` or `MEMEX_AUTO_CONSOLIDATE=1` — and a dedicated
+  low-effort model can be configured under `[consolidation]`, inheriting
+  `[llm]` credentials. Failures degrade to partial reports and never
+  block the hook.

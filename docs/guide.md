@@ -219,6 +219,22 @@ ingests the session transcript. MCP: `claude mcp add memex -- memex serve-mcp`.
 layer carries it. The adapter installs a memory contract into
 `.github/copilot-instructions.md` and a `memex verify` workflow on every PR.
 
+### Automatic consolidation at session end
+
+Capture and distillation can be one step. Any harness hook that ingests a
+transcript can distill the fresh episode immediately — enabled per call with
+`--consolidate`, or globally with `MEMEX_AUTO_CONSOLIDATE=1` (works for the
+pi, Claude Code, and Codex adapters unchanged, since they all invoke the
+same hook). Off by default: it spends tokens and needs credentials. Point
+`[consolidation]` at a low-effort model (a local Ollama model, a mini-tier
+endpoint) to keep it cheap. Failure never blocks the hook — a missing key
+reports the reason, an unreachable model returns an empty consolidation
+result.
+
+```bash
+memex hook transcript --harness pi --path <session.jsonl> --consolidate
+```
+
 ### MCP tools
 
 `memex serve-mcp` exposes eight tools with typed schemas (enums and bounds
@@ -277,6 +293,12 @@ model = "gpt-4o"
 timeout = 60
 max_tokens = 4096
 
+[consolidation]
+# Optional: distill episodes on a cheaper low-effort model.
+# Every field falls back to [llm] when unset.
+provider = "openai"        # e.g. ollama with a local model for zero-cost runs
+model = "gpt-4o-mini"
+
 [bm25]
 default_top_k = 10         # k1/b are reserved: SQLite FTS5 bm25() is not SQL-tunable
 
@@ -299,7 +321,9 @@ level = "INFO"             # DEBUG | INFO | WARNING | ERROR
 ```
 
 Environment overrides (highest priority): `MEMEX_DATA_DIR`, `MEMEX_API_KEY`,
-`MEMEX_LLM_PROVIDER`, `MEMEX_LLM_MODEL`, `MEMEX_LOG_LEVEL`.
+`MEMEX_LLM_PROVIDER`, `MEMEX_LLM_MODEL`, `MEMEX_LOG_LEVEL`, and for the
+distillation model `MEMEX_CONSOLIDATE_PROVIDER`, `MEMEX_CONSOLIDATE_MODEL`,
+`MEMEX_CONSOLIDATE_API_KEY`, `MEMEX_AUTO_CONSOLIDATE`.
 
 ## Data safety
 
