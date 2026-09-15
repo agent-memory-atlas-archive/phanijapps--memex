@@ -1,0 +1,200 @@
+from pathlib import Path
+
+import pytest
+
+from memex.domain.errors import WikiStoreError
+from memex.domain.models import WikiNode
+from memex.infrastructure.wiki_store import WikiStore, hash_body
+
+
+def make_node(**overrides: object) -> WikiNode:
+    fields: dict[str, object] = {
+        "type": "entity",
+        "title": "Ruff linter",
+        "body": "Ruff is a fast Python linter.",
+        "id": "id-0001",
+    }
+    fields.update(overrides)
+    return WikiNode(**fields)  # type: ignore[arg-type]
+
+
+class TestWriteRead:
+    def test_write_assigns_slug_id_and_path(self, data_dir: Path) -> None:
+        store = WikiStore(data_dir)
+        stored = store.write(make_node(id=""))
+        assert stored.slug == "ruff-linter"
+        assert stored.id
+        assert stored.file_path == str(data_dir / "wiki/entities/ruff-linter.md")
+        assert stored.content_hash == hash_body(stored.body)
+
+    def test_update_preserves_stored_fields(self, data_dir: Path) -> None:
+        store = WikiStore(data_dir)
+        store.write(make_node())
+        stored = store.write(make_node(id="other", slug="ruff-linter", body="updated body"))
+        assert stored.id == "id-0001"
+        assert stored.body == "updated body"
+        assert stored.slug == "ruff-linter"
+        assert store.list() and len(store.list()) == 1
+
+    def test_read_missing_returns_none(self, data_dir: Path) -> None:
+        store = WikiStore(data_dir)
+        assert store.read("nope") is None
+
+    def test_malformed_page_raises(self, data_dir: Path) -> None:
+        store = WikiStore(data_dir)
+        bad = data_dir / "wiki/entities/broken.md"
+        bad.parent.mkdir(parents=True, exist_ok=True)
+        bad.write_text("not front matter at all\n", encoding="utf-8")
+        with pytest.raises(WikiStoreError):
+            store.read("broken")
+
+
+class TestDeleteMove:
+    def test_delete_removes_file(self, data_dir: Path) -> None:
+        store = WikiStore(data_dir)
+        store.write(make_node())
+        store.delete("ruff-linter")
+        assert not store.exists("ruff-linter")
+
+    def test_delete_missing_raises(self, data_dir: Path) -> None:
+        with pytest.raises(WikiStoreError, match="cannot delete"):
+            WikiStore(data_dir).delete("ghost")
+
+    def test_move_changes_type_dir(self, data_dir: Path) -> None:
+        store = WikiStore(data_dir)
+        store.write(make_node())
+        node = store.move("ruff-linter", "preference")
+        assert node.file_path is not None
+        assert node.file_path.endswith("wiki/preferences/ruff-linter.md")
+        assert store.read("ruff-linter") is not None
+
+
+class TestGuardrails:
+    def test_get_path_unknown_type(self, data_dir: Path) -> None:
+        with pytest.raises(WikiStoreError, match="unknown node type"):
+            WikiStore(data_dir).get_path("x", "folder")
+
+    def test_list_unknown_type(self, data_dir: Path) -> None:
+        with pytest.raises(WikiStoreError, match="unknown node type"):
+            WikiStore(data_dir).list("folder")
+
+    def test_move_missing_slug(self, data_dir: Path) -> None:
+        with pytest.raises(WikiStoreError, match="cannot move"):
+            WikiStore(data_dir).move("ghost", "entity")
+
+    def test_move_unknown_type(self, data_dir: Path) -> None:
+        store = WikiStore(data_dir)
+        store.write(make_node())
+        with pytest.raises(WikiStoreError, match="unknown node type"):
+            store.move("ruff-linter", "folder")
+
+    def test_write_unknown_type(self, data_dir: Path) -> None:
+        with pytest.raises(ValueError, match="type"):
+            WikiStore(data_dir).write(make_node(type="folder"))
+
+
+class TestListScan:
+    def test_list_filters_by_type(self, data_dir: Path) -> None:
+        store = WikiStore(data_dir)
+        store.write(make_node(title="Tool X"))
+        store.write(make_node(id="id-2", title="Prefer dark mode", type="preference"))
+        assert [node.title for node in store.list("entity")] == ["Tool X"]
+        assert {node.type for node in store.list()} == {"entity", "preference"}
+
+    def test_scan_all_collects_errors(self, data_dir: Path) -> None:
+        store = WikiStore(data_dir)
+        store.write(make_node())
+        bad = data_dir / "wiki/entities/broken.md"
+        bad.write_text("garbage\n", encoding="utf-8")
+        errors: list[str] = []
+        nodes = store.scan_all(errors)
+        assert len(nodes) == 1
+        assert len(errors) == 1
+
+    def test_atomic_write_leaves_no_temp_files(self, data_dir: Path) -> None:
+        store = WikiStore(data_dir)
+        store.write(make_node())
+        leftovers = list((data_dir / "wiki/entities").glob("*.tmp"))
+        assert leftovers == []
+
+
+class TestFrontMatterValidation:
+    def write_raw(self, data_dir: Path, text: str) -> None:
+        target = data_dir / "wiki/entities/raw.md"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text, encoding="utf-8")
+
+    def test_unknown_key_rejected(self, data_dir: Path) -> None:
+        self.write_raw(
+            data_dir,
+            '---\nid: "a"\ntype: "entity"\ntitle: "t"\n'
+            'created: "2026-01-01T00:00:00Z"\nupdated: "2026-01-01T00:00:00Z"\n'
+            'importance: 0.5\nmystery: "x"\n---\nbody',
+        )
+        with pytest.raises(WikiStoreError, match="unknown front matter"):
+            WikiStore(data_dir).read("raw")
+
+    def test_missing_required_rejected(self, data_dir: Path) -> None:
+        self.write_raw(data_dir, '---\nid: "a"\ntype: "entity"\ntitle: "t"\n---\nbody')
+        with pytest.raises(WikiStoreError, match="required"):
+            WikiStore(data_dir).read("raw")
+
+    def test_non_numeric_importance_rejected(self, data_dir: Path) -> None:
+        self.write_raw(
+            data_dir,
+            '---\nid: "a"\ntype: "entity"\ntitle: "t"\n'
+            'created: "2026-01-01T00:00:00Z"\nupdated: "2026-01-01T00:00:00Z"\n'
+            'importance: "high"\n---\nbody',
+        )
+        with pytest.raises(WikiStoreError, match="importance"):
+            WikiStore(data_dir).read("raw")
+
+    def test_non_int_access_count_rejected(self, data_dir: Path) -> None:
+        self.write_raw(
+            data_dir,
+            '---\nid: "a"\ntype: "entity"\ntitle: "t"\n'
+            'created: "2026-01-01T00:00:00Z"\nupdated: "2026-01-01T00:00:00Z"\n'
+            'importance: 0.5\naccess_count: "many"\n---\nbody',
+        )
+        with pytest.raises(WikiStoreError, match="access_count"):
+            WikiStore(data_dir).read("raw")
+
+    def test_non_list_tags_rejected(self, data_dir: Path) -> None:
+        self.write_raw(
+            data_dir,
+            '---\nid: "a"\ntype: "entity"\ntitle: "t"\n'
+            'created: "2026-01-01T00:00:00Z"\nupdated: "2026-01-01T00:00:00Z"\n'
+            'importance: 0.5\ntags: "tool"\n---\nbody',
+        )
+        with pytest.raises(WikiStoreError, match="tags"):
+            WikiStore(data_dir).read("raw")
+
+    def test_non_string_list_items_rejected(self, data_dir: Path) -> None:
+        self.write_raw(
+            data_dir,
+            '---\nid: "a"\ntype: "entity"\ntitle: "t"\n'
+            'created: "2026-01-01T00:00:00Z"\nupdated: "2026-01-01T00:00:00Z"\n'
+            "importance: 0.5\nlinks: [1, 2]\n---\nbody",
+        )
+        with pytest.raises(WikiStoreError, match="links"):
+            WikiStore(data_dir).read("raw")
+
+    def test_invalid_type_rejected(self, data_dir: Path) -> None:
+        self.write_raw(
+            data_dir,
+            '---\nid: "a"\ntype: "folder"\ntitle: "t"\n'
+            'created: "2026-01-01T00:00:00Z"\nupdated: "2026-01-01T00:00:00Z"\n'
+            "importance: 0.5\n---\nbody",
+        )
+        with pytest.raises(WikiStoreError, match="node type"):
+            WikiStore(data_dir).read("raw")
+
+    def test_string_field_must_be_string(self, data_dir: Path) -> None:
+        self.write_raw(
+            data_dir,
+            '---\nid: "a"\ntype: "entity"\ntitle: "t"\n'
+            'created: "2026-01-01T00:00:00Z"\nupdated: "2026-01-01T00:00:00Z"\n'
+            "importance: 0.5\nlast_access: 5\n---\nbody",
+        )
+        with pytest.raises(WikiStoreError, match="last_access"):
+            WikiStore(data_dir).read("raw")

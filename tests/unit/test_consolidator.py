@@ -1,0 +1,226 @@
+import json
+from pathlib import Path
+
+import pytest
+
+from memex.application.ports import LLMResponse
+from memex.domain.errors import LLMError
+from memex.domain.models import ConsolidateInput, WikiNode
+from memex.infrastructure.config import ConfigLoader
+from memex.infrastructure.consolidator import WikiConsolidator
+from memex.infrastructure.index_manager import IndexManager
+from memex.infrastructure.link_manager import LinkManager
+from memex.infrastructure.llm_clients import OpenAICompatClient, client_from_config
+from memex.infrastructure.wiki_store import WikiStore
+
+VALID_LLM_OUTPUT = json.dumps(
+    [
+        {
+            "type": "preference",
+            "title": "user-prefers-ruff",
+            "body": "The user prefers ruff over flake8 for linting. See [[ruff-linter]].",
+            "tags": ["preference", "tooling"],
+            "importance": 0.9,
+            "links": [],
+        },
+        {
+            "type": "summary",
+            "title": "tooling-decisions",
+            "body": "Ruff was chosen as the linter for this project.",
+            "tags": ["tooling"],
+            "importance": 0.6,
+        },
+    ]
+)
+
+
+class FakeLLM:
+    def __init__(self, text: str = VALID_LLM_OUTPUT, error: bool = False) -> None:
+        self.text = text
+        self.error = error
+        self.last_prompt: str | None = None
+
+    def complete(self, system: str, user: str, *, max_tokens: int) -> LLMResponse:
+        self.last_prompt = user
+        if self.error:
+            raise LLMError("boom")
+        return LLMResponse(text=self.text, prompt_tokens=111, completion_tokens=222)
+
+
+@pytest.fixture
+def harness(data_dir: Path) -> tuple[WikiConsolidator, WikiStore, IndexManager, FakeLLM]:
+    store = WikiStore(data_dir)
+    index = IndexManager(data_dir / "mem.db")
+    links = LinkManager(index.connection, store.wiki_dir)
+    config = ConfigLoader().load()
+    fake = FakeLLM()
+    consolidator = WikiConsolidator(store, index, links, fake, config)
+    return consolidator, store, index, fake
+
+
+def _episode(store: WikiStore, index: IndexManager, session_id: str) -> WikiNode:
+    node = store.write(
+        WikiNode(
+            type="episode",
+            title=f"Session {session_id}",
+            body="The user said: I prefer ruff over flake8.",
+            id="",
+            session_id=session_id,
+            transcript_ref=f"transcripts/{session_id}.jsonl",
+        )
+    )
+    index.update_record(node)
+    return node
+
+
+def test_full_mode_writes_nodes(
+    harness: tuple[WikiConsolidator, WikiStore, IndexManager, FakeLLM],
+) -> None:
+    consolidator, store, index, _ = harness
+    _episode(store, index, "sess-1")
+
+    report = consolidator.consolidate(ConsolidateInput(mode="full"))
+
+    assert report.episodes_processed == 1
+    assert len(report.nodes_created) == 2
+    assert report.llm_calls == 1
+    assert report.llm_prompt_tokens == 111
+    assert report.llm_completion_tokens == 222
+    written = store.read("user-prefers-ruff")
+    assert written is not None
+    row = index.get("user-prefers-ruff")
+    assert row is not None
+
+
+def test_dry_run_writes_nothing(
+    harness: tuple[WikiConsolidator, WikiStore, IndexManager, FakeLLM],
+) -> None:
+    consolidator, store, index, _ = harness
+    _episode(store, index, "sess-2")
+
+    report = consolidator.consolidate(ConsolidateInput(mode="dry-run"))
+
+    assert report.dry_run is True
+    assert len(report.nodes_created) == 2
+    assert store.read("user-prefers-ruff") is None
+
+
+def test_llm_error_returns_partial_report(
+    harness: tuple[WikiConsolidator, WikiStore, IndexManager, FakeLLM],
+) -> None:
+    consolidator, store, index, fake = harness
+    fake.error = True
+    _episode(store, index, "sess-3")
+
+    report = consolidator.consolidate(ConsolidateInput())
+
+    assert report.nodes_created == []
+    assert report.llm_calls == 0
+    assert report.episodes_processed == 1
+
+
+def test_invalid_nodes_skipped(
+    harness: tuple[WikiConsolidator, WikiStore, IndexManager, FakeLLM],
+) -> None:
+    consolidator, store, index, fake = harness
+    _episode(store, index, "sess-4")
+    fake.text = json.dumps(
+        [
+            {"type": "entity", "title": "good node", "body": "fine", "importance": 0.5},
+            {"type": "bogus", "title": "bad type", "body": "x", "importance": 0.5},
+            {"type": "entity", "title": "", "body": "empty title", "importance": 0.5},
+            "not a dict",
+        ]
+    )
+
+    report = consolidator.consolidate(ConsolidateInput())
+    assert len(report.nodes_created) == 1
+
+
+def test_code_fenced_output_tolerated(
+    harness: tuple[WikiConsolidator, WikiStore, IndexManager, FakeLLM],
+) -> None:
+    consolidator, store, index, fake = harness
+    _episode(store, index, "sess-5")
+    fake.text = f"```json\n{VALID_LLM_OUTPUT}\n```"
+    report = consolidator.consolidate(ConsolidateInput())
+    assert len(report.nodes_created) == 2
+
+
+def test_specific_episode_ids(
+    harness: tuple[WikiConsolidator, WikiStore, IndexManager, FakeLLM],
+) -> None:
+    consolidator, store, index, fake = harness
+    episode = _episode(store, index, "sess-6")
+    fake.text = "[]"
+
+    report = consolidator.consolidate(ConsolidateInput(episode_ids=[episode.slug]))
+    assert report.episodes_processed == 1
+
+    with pytest.raises(ValueError, match="not an episode"):
+        consolidator.consolidate(ConsolidateInput(episode_ids=["nonexistent"]))
+
+
+def test_max_episodes_limits_selection(
+    harness: tuple[WikiConsolidator, WikiStore, IndexManager, FakeLLM],
+) -> None:
+    consolidator, store, index, fake = harness
+    fake.text = "[]"
+    for i in range(4):
+        _episode(store, index, f"sess-m{i}")
+
+    report = consolidator.consolidate(ConsolidateInput(max_episodes=2))
+    assert report.episodes_processed == 2
+
+
+def test_prompt_contains_spec_sections(
+    harness: tuple[WikiConsolidator, WikiStore, IndexManager, FakeLLM],
+) -> None:
+    consolidator, store, index, fake = harness
+    existing = store.write(WikiNode(type="entity", title="Ruff linter", body="fast", id=""))
+    index.update_record(existing)
+    _episode(store, index, "sess-p")
+
+    consolidator.consolidate(ConsolidateInput())
+    assert fake.last_prompt is not None
+    assert "## TASK" in fake.last_prompt
+    assert "## RULES" in fake.last_prompt
+    assert "## OUTPUT FORMAT" in fake.last_prompt
+    assert existing.slug in fake.last_prompt
+    assert "sess-p" in fake.last_prompt
+
+
+def test_client_factory_builds_openai_compat(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeOpenAI:
+        def __init__(self, **kwargs: object) -> None:
+            captured.update(kwargs)
+
+    monkeypatch.setattr("openai.OpenAI", FakeOpenAI)
+    monkeypatch.delenv("MEMEX_LLM_PROVIDER", raising=False)
+    config = ConfigLoader().load()
+    client = client_from_config(config)
+    assert isinstance(client, OpenAICompatClient)
+    assert captured["base_url"] == "https://api.openai.com/v1"
+
+
+def test_complete_wraps_api_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    class ExplodingCompletions:
+        def create(self, **kwargs: object) -> object:
+            raise RuntimeError("api down")
+
+    class ExplodingChat:
+        completions = ExplodingCompletions()
+
+    class ExplodingOpenAI:
+        def __init__(self, **kwargs: object) -> None:
+            pass
+
+        chat = ExplodingChat()
+
+    monkeypatch.setattr("openai.OpenAI", ExplodingOpenAI)
+    monkeypatch.delenv("MEMEX_LLM_PROVIDER", raising=False)
+    client = client_from_config(ConfigLoader().load())
+    with pytest.raises(LLMError, match="LLM API call failed"):
+        client.complete("sys", "user", max_tokens=10)

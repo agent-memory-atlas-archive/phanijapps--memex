@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 96" role="img" aria-label="memex">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0F766E"/>
+      <stop offset="1" stop-color="#134E4A"/>
+    </linearGradient>
+  </defs>
+  <g>
+    <rect x="8" y="12" width="72" height="72" rx="16" fill="url(#g)"/>
+    <path d="M 26 66 L 26 33 L 39 48 L 52 33 L 65 48 L 65 66"
+          fill="none" stroke="#F0FDFA" stroke-width="5.5"
+          stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="26" cy="33" r="5.5" fill="#5EEAD4"/>
+    <circle cx="52" cy="33" r="5.5" fill="#5EEAD4"/>
+    <circle cx="65" cy="48" r="5.5" fill="#5EEAD4"/>
+  </g>
+  <text x="98" y="66" font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif"
+        font-size="58" font-weight="700" letter-spacing="-2" fill="#0F172A">memex</text>
+</svg>

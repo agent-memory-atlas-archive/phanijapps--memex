@@ -1,0 +1,13 @@
+{
+  "name": "memex-pi",
+  "version": "0.1.0",
+  "description": "Deterministic memory recall and transcript capture for pi: memex hooks layer.",
+  "keywords": ["pi-package", "memex", "memory", "agent-memory"],
+  "license": "MIT",
+  "pi": {
+    "extensions": ["./extensions"]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  }
+}

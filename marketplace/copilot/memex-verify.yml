@@ -1,0 +1,22 @@
+name: memex verify
+
+on:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Install memex
+        run: |
+          uv tool install memex || uv tool install --path . memex
+          memex --version
+      - name: Memory health gate
+        env:
+          MEMEX_DATA_DIR: ${{ vars.MEMEX_DATA_DIR || '~/.memex' }}
+        run: |
+          # Activity window: since the PR was opened.
+          SINCE="${{ github.event.pull_request.created_at }}"
+          memex verify --since "$SINCE" --require-recall --require-write

@@ -1,0 +1,79 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "memex"
+version = "0.1.0"
+description = "A durable, team-ready memory layer for AI coding agents."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+keywords = ["ai", "agents", "coding-agents", "memory"]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Typing :: Typed",
+]
+dependencies = [
+    "mcp>=2,<3",
+    "openai>=1.60,<3",
+]
+
+[project.scripts]
+memex = "memex.cli:main"
+
+[[project.authors]]
+name = "Memex contributors"
+
+[dependency-groups]
+dev = [
+  "mypy>=1.15",
+  "pre-commit>=4.2",
+  "pytest>=8.3",
+  "pytest-cov>=6.0",
+  "ruff>=0.11",
+]
+docs = [
+  "mkdocs>=1.6",
+  "mkdocs-material>=9.5",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+exclude = [".agents", "docs", "marketplace"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S", "SIM", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101"]
+"src/memex/infrastructure/index_manager.py" = ["E501"]
+"src/memex/infrastructure/transcript_hook.py" = ["E501"]
+"src/memex/infrastructure/workspace_context.py" = ["S603"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
+disallow_any_generics = true
+no_implicit_reexport = true
+
+[tool.pytest.ini_options]
+addopts = ["--strict-markers", "--strict-config", "--cov=memex", "--cov-report=term-missing:skip-covered"]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+branch = true
+source = ["memex"]
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
+skip_covered = true

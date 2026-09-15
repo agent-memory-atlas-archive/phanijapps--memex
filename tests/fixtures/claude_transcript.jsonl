@@ -1,0 +1,5 @@
+{"type":"user","uuid":"u1","timestamp":"2026-09-15T10:00:00.123Z","message":{"role":"user","content":"Remember the deploy uses blue-green"}}
+{"type":"assistant","uuid":"u2","timestamp":"2026-09-15T10:00:01.456Z","message":{"role":"assistant","content":[{"type":"text","text":"Noted."},{"type":"tool_use","name":"Bash","input":{"command":"kubectl get pods"}}]}}
+{"type":"user","uuid":"u3","timestamp":"2026-09-15T10:00:02.789Z","message":{"role":"user","content":[{"type":"tool_result","content":"NAME READY\npod/a 1/1"}]}}
+{"type":"summary","uuid":"u4","summary":"older context"}
+not json at all

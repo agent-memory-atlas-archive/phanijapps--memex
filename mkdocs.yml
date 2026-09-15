@@ -1,0 +1,37 @@
+site_name: Memex
+site_description: A durable, local-first memory layer for AI coding agents. Filesystem wiki, disposable BM25 index, hooks + MCP + CI gates.
+site_url: https://phanijapps.github.io/memex/
+
+repo_url: https://github.com/phanijapps/memex
+repo_name: phanijapps/memex
+
+theme:
+  name: material
+  logo: assets/logo.svg
+  favicon: assets/favicon.svg
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - toc.follow
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - User guide: guide.md
+  - Specification: spec.md
+  - Implementation notes: implementation-notes.md
+
+strict: true

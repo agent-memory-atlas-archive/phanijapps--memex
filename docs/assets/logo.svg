@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="memex logo">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0F766E"/>
+      <stop offset="1" stop-color="#134E4A"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#g)"/>
+  <path d="M 15 46 L 15 22 L 27 36 L 39 22 L 51 36 L 51 46"
+        fill="none" stroke="#F0FDFA" stroke-width="5"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="15" cy="22" r="5" fill="#5EEAD4"/>
+  <circle cx="39" cy="22" r="5" fill="#5EEAD4"/>
+  <circle cx="51" cy="36" r="5" fill="#5EEAD4"/>
+</svg>
