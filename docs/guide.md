@@ -209,6 +209,13 @@ and back up existing configs). `memex install custom` initializes
 `~/.memex` only: directory tree plus a starter `memex.toml` with plain
 LLM config, for harnesses memex doesn't know yet.
 
+Installs register the MCP server where the harness supports it: Claude
+Code via `claude mcp add --scope user` (when the CLI is available — the
+note tells you the exact command otherwise), Codex via `[mcp_servers]`
+in `config.toml`, and Copilot via `.vscode/mcp.json` for VS Code agent
+mode. pi intentionally has no built-in MCP; its extension is the
+integration. `--no-mcp` skips registration everywhere.
+
 Installing `claude`, `codex`, or `pi` also provisions `memex.toml`
 (absent one) with `[consolidation] provider = "<harness>"` — so
 distillation rides the coding harness's own model, credentials, and

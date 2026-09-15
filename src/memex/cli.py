@@ -109,7 +109,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     install = sub.add_parser(
         "install", help="Install a harness adapter (claude, codex, pi, copilot, custom)"
-    )
+    )  # MCP server registration is included by default; --no-mcp skips it
     install.add_argument("harness", nargs="?", choices=list(SUPPORTED))
     install.add_argument(
         "--from",
@@ -120,6 +120,11 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     install.add_argument(
         "--home", type=Path, default=None, help="Override HOME for install targets (testing)"
+    )
+    install.add_argument(
+        "--no-mcp",
+        action="store_true",
+        help="Skip MCP server registration (hooks/adapters only)",
     )
 
     harness = sub.add_parser("harness", help="Harness integration management (alias of install)")
