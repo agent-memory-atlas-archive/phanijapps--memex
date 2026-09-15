@@ -13,6 +13,7 @@ theme:
     - navigation.sections
     - navigation.top
     - content.code.copy
+    - content.code.mermaid
     - toc.follow
   palette:
     - media: "(prefers-color-scheme: light)"
@@ -27,6 +28,11 @@ markdown_extensions:
   - tables
   - toc:
       permalink: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
 
 nav:
   - Home: index.md

@@ -29,7 +29,7 @@ tags:
   - filesystem-wiki
   - bm25-only
   - llm-as-wiki
-  - c4-diagrams
+  - architecture-diagrams
   - okf-v0.2
   - memex
   - transcript-hooks
@@ -49,7 +49,7 @@ dependencies: "zero-required"
 license: "Apache-2.0"
 build_time_estimate: "6-8 hours"
 acceptance_tests: 21
-arch_diagrams: "c4-mermaid"
+arch_diagrams: "mermaid"
 index_rebuildable: true
 index_primary: false
 wiki_primary: true
@@ -120,138 +120,146 @@ provenance for every stored fact.
 
 ---
 
-## 3. C4 Architecture Diagrams
+## 3. Architecture Diagrams
 
-All four C4 levels are rendered as Mermaid diagrams.
+All four levels (context, container, component, deployment) as Mermaid
+flowcharts that render on GitHub and the docs site.
 
 ### Level 1 — System Context
 
 ```mermaid
-C4Context
-    title System Context — Memex Filesystem Wiki Memory Harness
+flowchart TB
+    user("👤 User<br><small>human operator running the agent</small>")
+    subgraph memex ["🏠 Memex Memory Harness"]
+        core["<b>Memex</b><br>Filesystem wiki memory harness<br>wiki pages · BM25 index · transcripts<br>no server process required"]
+    end
+    llm("🤖 LLM API<br><small>external provider, OpenAI-compatible<br>used for consolidate only</small>")
+    fs("💾 Host Filesystem<br><small>~/.memex/ — wiki files, SQLite index,<br>transcripts, logs</small>")
 
-    Person(user, "User", "Human operator running the agent")
-    System_Boundary(memex, "Memex Memory Harness") {
-        System(memex_core, "Memex", "Filesystem wiki memory harness.\nManages wiki pages, BM25 index, and transcripts.\nNo server process required.")
-    }
-    System(ext_llm, "LLM API", "External LLM provider (OpenAI-compatible).\nUsed for consolidate operation only.")
-    System(ext_filesystem, "Host Filesystem", "Local disk at ~/.memex/.\nHolds wiki files, SQLite index, transcripts, and logs.")
+    user -->|"runs agent with memex library"| core
+    core -->|"calls for consolidation summarization"| llm
+    core -->|"reads/writes wiki, SQLite DB, transcripts"| fs
 
-    Rel(user, memex_core, "Runs agent with memex library")
-    Rel(memex_core, ext_llm, "Calls for consolidation summarization")
-    Rel(memex_core, ext_filesystem, "Reads/writes wiki files, SQLite DB, transcript logs")
-
-    UpdateRelStyle(user, memex_core, $textColor="#2d6a4f", $lineColor="#2d6a4f")
-    UpdateRelStyle(memex_core, ext_llm, $textColor="#9d4edd", $lineColor="#9d4edd")
-    UpdateRelStyle(memex_core, ext_filesystem, $textColor="#0077b6", $lineColor="#0077b6")
+    linkStyle 0 stroke:#2d6a4f,color:#2d6a4f
+    linkStyle 1 stroke:#9d4edd,color:#9d4edd
+    linkStyle 2 stroke:#0077b6,color:#0077b6
+    classDef external fill:#f1f5f9,stroke:#94a3b8
+    class llm,fs external
 ```
 
 ### Level 2 — Container
 
 ```mermaid
-C4Container
-    title Container Diagram — Memex Components
+flowchart TB
+    lib["<b>Memex Library</b><br>Python package — WikiStore · IndexManager · BM25Retriever<br>LinkManager · WikiConsolidator · NodeExtractor<br>TranscriptHook · RecencyDecay · IndexWatcher"]
+    cli["<b>CLI</b><br>write · recall · consolidate · forget<br>ingest-transcript · rebuild-index<br>backup · restore · export · import"]
+    mcp["<b>MCP Server</b><br>optional stdio<br>exposes memex operations<br>as MCP tools"]
 
-    Container_Boundary(memex, "Memex (~/.memex/)") {
-        Container(wiki_files, "Wiki Filesystem", "Markdown .md files", "Stores all memory nodes as human-readable wiki pages with YAML front matter.\nLocation: ~/.memex/wiki/")
-        Container(wiki_entities, "entities/", "Directory", "Entity nodes: people, tools, concepts")
-        Container(wiki_prefs, "preferences/", "Directory", "User preference nodes")
-        Container(wiki_procs, "procedures/", "Directory", "How-to / rule nodes")
-        Container(wiki_summaries, "summaries/", "Directory", "Synthesized overview nodes")
-        Container(wiki_episodes, "episodes/", "Directory", "Session episode nodes (one per session)")
+    subgraph dir ["~/.memex/"]
+        subgraph wiki ["wiki/ — Markdown .md files (front matter + body)"]
+            went["entities/"]
+            wprefs["preferences/"]
+            wprocs["procedures/"]
+            wsum["summaries/"]
+            wep["episodes/"]
+        end
+        db[("mem.db<br>SQLite + FTS5<br>secondary index only — BM25, freshness,<br>access counts, link adjacency; rebuildable")]
+        tr["transcripts/<br>JSONL + .meta.json per session"]
+        cfg[["memex.toml<br>LLM · BM25 · namespaces"]]
+        logs["logs/<br>operation audit trail"]
+    end
 
-        Container(mem_db, "mem.db", "SQLite + FTS5", "Secondary index only.\nBM25 full-text search over wiki content.\nTracks freshness, access counts, link adjacency.\nRebuildable from wiki files.")
-        Container(transcripts, "transcripts/", "JSONL files", "Raw conversation logs.\nOne .jsonl + .meta.json per session.\nLocation: ~/.memex/transcripts/")
-        Container(memex_toml, "memex.toml", "TOML config", "Configuration file.\nLLM provider, BM25 parameters, namespace defaults.")
-        Container(memex_logs, "logs/", "Text files", "Application logs.\nDebug traces and operation audit trail.")
+    llm("LLM API<br>consolidation only")
 
-        Container(memex_lib, "Memex Library", "Python package", "Core engine:\nWikiStore, IndexManager, BM25Retriever,\nLinkManager, WikiConsolidator, NodeExtractor,\nTranscriptHook, RecencyDecay, IndexWatcher.\nProvides Python API.")
-        Container(memex_cli, "CLI", "Python CLI", "Command-line interface: write, recall,\nconsolidate, forget, ingest-transcript,\nrebuild-index, backup, restore, export, import.")
-        Container(mcp_server, "MCP Server", "Python + stdio", "Optional stdio MCP server.\nExposes memex operations as MCP tools.")
-    }
+    lib -->|"reads/writes .md files"| wiki
+    lib -->|"BM25 query, index update"| db
+    lib --> tr
+    lib --> cfg
+    lib --> logs
+    cli -->|"calls Python API"| lib
+    mcp -->|"calls Python API"| lib
+    lib -.->|"consolidate only"| llm
 
-    Rel(memex_lib, wiki_files, "Reads/writes .md files")
-    Rel(memex_lib, mem_db, "BM25 query, index update")
-    Rel(memex_lib, transcripts, "Stores/reads transcript files")
-    Rel(memex_lib, memex_toml, "Loads configuration")
-    Rel(memex_lib, memex_logs, "Writes operation logs")
-    Rel(memex_cli, memex_lib, "Calls Python API")
-    Rel(mcp_server, memex_lib, "Calls Python API")
-    Rel(memex_lib, ext_llm, "Calls LLM API for consolidation")
+    classDef truth fill:#ccfbf1,stroke:#0f766e
+    classDef index fill:#e0f2fe,stroke:#0077b6
+    class wiki truth
+    class db index
 ```
 
 ### Level 3 — Component
 
 ```mermaid
-C4Component
-    title Component Diagram — Memex Library Internal Structure
+flowchart TB
+    subgraph lib ["Memex Library (Python package)"]
+        facade["<b>Memory Facade</b><br>memex/core (application/memory)<br>routes write/recall/consolidate/forget,<br>hides implementation detail"]
+        store["<b>WikiStore</b><br>wiki_store.py<br>filesystem CRUD, valid front matter,<br>slug derivation, content hash"]
+        idx["<b>IndexManager</b><br>index_manager.py<br>FTS5 index: build · update · rebuild,<br>wiki_index / wiki_fts / wiki_links"]
+        bm25["<b>BM25Retriever</b><br>bm25_retriever.py<br>FTS5 MATCH, bm25() scoring,<br>ranked RecallHits"]
+        links["<b>LinkManager</b><br>link_manager.py<br>[[slug]] adjacency, backlinks"]
+        cons["<b>WikiConsolidator</b><br>consolidator.py<br>LLM consolidation: episodes →<br>entity/summary nodes (§11 prompt)"]
+        ext["<b>NodeExtractor</b><br>extractor.py<br>rule-based cue-phrase extraction,<br>no LLM"]
+        hook["<b>TranscriptHook</b><br>transcript_hook.py<br>transcript storage, episode nodes,<br>provenance tracing"]
+        decay["<b>RecencyDecay</b><br>decay.py<br>importance × exp(−λ·days)"]
+        watcher["<b>IndexWatcher</b><br>watcher.py<br>mtime polling, incremental re-index"]
+        config["<b>ConfigLoader</b><br>config.py<br>memex.toml + env overrides"]
+        backup["<b>BackupRestore</b><br>backup.py<br>tar.gz backup/restore/verify"]
+        io["<b>ImportExport</b><br>import_export.py<br>JSON node portability"]
+    end
 
-    Container(memex_lib, "Memex Library (Python Package)") {
-        Component(memory_facade, "Memory Facade", "memex/core.py", "Unified API surface. Routes write/recall/consolidate/forget to the appropriate internal component. Hides implementation detail from callers.")
-        Component(wiki_store, "WikiStore", "memex/wiki_store.py", "Filesystem CRUD for wiki .md files.\nread(slug), write(node), list(node_type), delete(slug), move(slug, new_type). Ensures valid YAML front matter + Markdown body.")
-        Component(index_mgr, "IndexManager", "memex/index_manager.py", "SQLite FTS5 index management.\nbuild(), update_record(slug), remove_record(slug), rebuild_from_wiki(), get_meta(key). Manages wiki_index, wiki_fts, wiki_links, index_meta tables.")
-        Component(bm25_retriever, "BM25Retriever", "memex/bm25_retriever.py", "BM25 retrieval via FTS5 MATCH queries.\nretrieve(query, top_k) → list[RecallHit]. Scores and ranks using SQLite bm25() function.")
-        Component(link_mgr, "LinkManager", "memex/link_manager.py", "Wiki cross-reference management.\nParses [[slug]] links from .md body text.\nStores adjacency pairs in wiki_links table.\nResolves backlinks (which nodes link to this slug).")
-        Component(wiki_consolidator, "WikiConsolidator", "memex/consolidator.py", "LLM-driven wiki consolidation.\nReads episodic nodes, calls LLM, writes entity/summary nodes.\nUses a concrete prompt template with role, task, rules, existing nodes, episode nodes, and output format.")
-        Component(node_extractor, "NodeExtractor", "memex/extractor.py", "Rule-based extraction from conversation turns.\nUses cue phrases: 'remember that', 'I prefer', 'use X', 'never do Y'.\nReturns structured WriteInput dicts.")
-        Component(transcript_hook, "TranscriptHook", "memex/transcript_hook.py", "Transcript ingestion and linking.\nStores raw transcript to transcripts/ dir.\nCreates episode node in wiki/episodes/ with transcript_ref in front matter.\nTraces provenance from any node back to its originating transcript.")
-        Component(recency_decay, "RecencyDecay", "memex/decay.py", "Time-based importance decay.\nApplies exponential decay to importance score based on time since last access.\nFormula: score *= exp(-λ * days_since_access)")
-        Component(index_watcher, "IndexWatcher", "memex/watcher.py", "Detects external wiki file edits.\nCompares file mtime vs. index_meta.last_index_rebuild.\nRe-indexes changed files without full rebuild.\nCan run in polling mode (no inotify dependency).")
-        Component(config_loader, "ConfigLoader", "memex/config.py", "Loads and validates memex.toml.\nProvides typed access to all config fields with defaults.")
-        Component(backup_restore, "BackupRestore", "memex/backup.py", "Backup: tar.gz archive of wiki/ + transcripts/ + mem.db.\nRestore: extract and rebuild index.\nValidates archive integrity before restore.")
-        Component(import_export, "ImportExport", "memex/import_export.py", "Export wiki nodes as JSON.\nImport JSON nodes to wiki files.\nUsed for backup/restore and migration.")
-    }
+    facade --> store
+    facade --> idx
+    facade --> bm25
+    facade --> cons
+    facade --> hook
+    idx -->|"reads wiki for rebuild"| store
+    idx -->|"FTS query interface"| bm25
+    links -->|"writes wiki_links"| idx
+    links -->|"parses [[slug]] from bodies"| store
+    hook -->|"creates episode nodes"| store
+    decay -->|"updates importance"| store
+    watcher -->|"triggers incremental re-index"| idx
+    config -.->|"injects configuration"| facade
+    backup --> store
+    backup --> idx
+    backup --> hook
+    io --> store
 
-    Rel(memory_facade, wiki_store, "Delegates wiki I/O")
-    Rel(memory_facade, index_mgr, "Delegates indexing")
-    Rel(memory_facade, bm25_retriever, "Delegates retrieval")
-    Rel(memory_facade, wiki_consolidator, "Delegates consolidation")
-    Rel(memory_facade, transcript_hook, "Delegates transcript operations")
-
-    Rel(index_mgr, wiki_store, "Reads wiki files for rebuild")
-    Rel(index_mgr, bm25_retriever, "Provides FTS5 query interface")
-    Rel(link_mgr, index_mgr, "Writes wiki_links entries")
-    Rel(link_mgr, wiki_store, "Reads [[slug]] links from body text")
-    Rel(transcript_hook, wiki_store, "Creates episode nodes")
-    Rel(recency_decay, wiki_store, "Updates importance in front matter")
-    Rel(index_watcher, index_mgr, "Triggers incremental re-index")
-    Rel(config_loader, memory_facade, "Injects configuration")
-    Rel(backup_restore, wiki_store, "Backs up/restores wiki files")
-    Rel(backup_restore, index_mgr, "Backs up/restores mem.db")
-    Rel(backup_restore, transcript_hook, "Backs up transcripts dir")
-    Rel(import_export, wiki_store, "Reads/writes wiki files")
+    classDef hub fill:#ccfbf1,stroke:#0f766e
+    class facade hub
 ```
 
 ### Level 4 — Deployment
 
 ```mermaid
-C4Deployment
-    title Deployment Diagram — Single Machine Local-First
+flowchart TB
+    subgraph machine ["User's Machine — Linux / macOS / Windows (Python 3.12+)"]
+        subgraph dir ["~/.memex/"]
+            subgraph wiki ["wiki/ — Markdown pages (PRIMARY STORE)"]
+                wep["episodes/"]
+                went["entities/"]
+                wpref["preferences/"]
+                wproc["procedures/"]
+                wsum["summaries/"]
+            end
+            tr["transcripts/<br>raw .jsonl + .meta.json"]
+            db[("mem.db<br>SQLite, WAL — rebuildable")]
+            cfg[["memex.toml"]]
+            logs["logs/"]
+        end
+        proc["<b>Agent Process</b><br>Python 3.12+ with memex loaded"]
+        stdlib["Python stdlib<br>sqlite3 · pathlib · json · tomllib · tarfile"]
+        llm("LLM API — HTTPS, consolidate only")
+    end
 
-    Deployment_Node(user_machine, "User's Machine", "Linux / macOS / Windows (Python 3.11+)") {
-        Container(memex_dir, "~/.memex/", "Directory", "Root data directory") {
-            Container(wiki_dir, "wiki/", "Directory tree", "Markdown wiki pages (primary store)")
-            Container(episodes_dir, "  episodes/", "Directory", "Episode nodes (session records)")
-            Container(entities_dir, "  entities/", "Directory", "Entity nodes")
-            Container(prefs_dir, "  preferences/", "Directory", "Preference nodes")
-            Container(procs_dir, "  procedures/", "Directory", "Procedure nodes")
-            Container(summaries_dir, "  summaries/", "Directory", "Summary nodes")
-            Container(transcripts_dir, "transcripts/", "Directory", "Raw transcript files")
-            Container(mem_db_file, "mem.db", "SQLite file", "Secondary BM25 index (rebuildable)")
-            Container(config_file, "memex.toml", "TOML file", "Configuration")
-            Container(logs_dir, "logs/", "Directory", "Application logs")
-        }
-        Container(memex_process, "Agent Process", "Python 3.11+", "Running agent with memex library loaded")
-        Container(python_stdlib, "Python stdlib", "stdlib modules", "sqlite3, pathlib, json, datetime, uuid, tomllib, tarfile, gzip, pathlib.Path")
-        Container(llm_api, "LLM API", "HTTP/REST", "OpenAI-compatible API endpoint (optional, used only for consolidate)")
-    }
+    proc -->|"read/write .md"| wiki
+    proc -->|"SQLite (WAL)"| db
+    proc -->|"write .jsonl + meta"| tr
+    proc --> cfg
+    proc --> stdlib
+    proc -.-> llm
 
-    Rel(memex_process, wiki_dir, "read/write .md files")
-    Rel(memex_process, mem_db_file, "SQLite queries (WAL mode)")
-    Rel(memex_process, transcripts_dir, "write .jsonl + .meta.json")
-    Rel(memex_process, config_file, "read memex.toml")
-    Rel(memex_process, python_stdlib, "uses sqlite3, pathlib, json, tomllib")
-    Rel(memex_process, llm_api, "HTTPS calls (consolidate only)")
+    classDef truth fill:#ccfbf1,stroke:#0f766e
+    class wiki truth
 ```
 
 ---
@@ -1809,7 +1817,7 @@ Each row maps a design decision to a claim ID or `[pragmatic]`.
 | **Backup/restore** | ⚠️ SQLite dump | ⚠️ SQLite dump | ✅ tar.gz (wiki + transcripts + index) |
 | **MCP server** | ✅ Optional | ✅ Optional | ✅ Optional stdio |
 | **CLI** | ✅ Yes | ✅ Yes | ✅ Yes |
-| **C4 diagrams** | ❌ No | ❌ No | ✅ All 4 levels |
+| **Architecture diagrams** | ❌ No | ❌ No | ✅ All 4 levels |
 | **Index type** | Primary | Primary | Secondary (rebuildable) |
 | **Wiki link format** | ❌ No | ❌ No | ✅ `[[slug]]` |
 | **Front matter** | ❌ No | ❌ No | ✅ YAML |
