@@ -104,3 +104,13 @@ rule, and the OpenAI SDK is the single LLM client.
   low-effort model can be configured under `[consolidation]`, inheriting
   `[llm]` credentials. Failures degrade to partial reports and never
   block the hook.
+
+- **Harness-as-LLM-provider + seamless install.** `claude`, `codex`,
+  and `pi` are valid `[consolidation]` providers: consolidation runs
+  through the harness CLI's print mode (its model, credentials,
+  billing) instead of a configured HTTP endpoint. `memex install`
+  replaces `harness install` as the primary command, resolves the
+  marketplace from the bundled package copy, provisions `[consolidation]`
+  for harness installs, and `custom` initializes `~/.memex` only.
+  `--data-dir` now locates `memex.toml` too, making redirected runs
+  self-contained.

@@ -199,8 +199,17 @@ memex hook transcript --harness H [--path FILE]
 
 ### Adapters
 
-Install any of them with `memex harness install <name> --from ./marketplace`
-(idempotent; existing configs are backed up).
+Install any of them with `memex install <name>` — the marketplace ships
+inside the package, so no source checkout is needed (`memex install`
+with no argument opens an interactive picker; installs are idempotent
+and back up existing configs). `memex install custom` initializes
+`~/.memex` only: directory tree plus a starter `memex.toml` with plain
+LLM config, for harnesses memex doesn't know yet.
+
+Installing `claude`, `codex`, or `pi` also provisions `memex.toml`
+(absent one) with `[consolidation] provider = "<harness>"` — so
+distillation rides the coding harness's own model, credentials, and
+billing via its CLI print mode, with no separate API key.
 
 **pi** — the reference adapter. A TypeScript extension injects repo-level
 memories on the first turn and prompt-relevant memories on every turn, and
@@ -226,8 +235,9 @@ transcript can distill the fresh episode immediately — enabled per call with
 `--consolidate`, or globally with `MEMEX_AUTO_CONSOLIDATE=1` (works for the
 pi, Claude Code, and Codex adapters unchanged, since they all invoke the
 same hook). Off by default: it spends tokens and needs credentials. Point
-`[consolidation]` at a low-effort model (a local Ollama model, a mini-tier
-endpoint) to keep it cheap. Failure never blocks the hook — a missing key
+`[consolidation]` at a low-effort model — a local Ollama model, a
+mini-tier endpoint, or a coding harness itself (`provider = "codex"`)
+so distillation rides the same model your agent already uses. Failure never blocks the hook — a missing key
 reports the reason, an unreachable model returns an empty consolidation
 result.
 
@@ -296,8 +306,9 @@ max_tokens = 4096
 [consolidation]
 # Optional: distill episodes on a cheaper low-effort model.
 # Every field falls back to [llm] when unset.
-provider = "openai"        # e.g. ollama with a local model for zero-cost runs
-model = "gpt-4o-mini"
+provider = "openai"        # openai | ollama | lmstudio | openrouter | custom
+                           # ...or a coding harness: "claude" | "codex" | "pi"
+model = "gpt-4o-mini"      # harness providers: passed as the CLI's --model
 
 [bm25]
 default_top_k = 10         # k1/b are reserved: SQLite FTS5 bm25() is not SQL-tunable

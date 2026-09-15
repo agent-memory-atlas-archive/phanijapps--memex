@@ -12,9 +12,63 @@ import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 
-SUPPORTED = ("pi", "claude", "codex", "copilot")
+SUPPORTED = ("pi", "claude", "codex", "copilot", "custom")
 
 _MEMEX_MARKER = "memex"
+
+TOML_TEMPLATE = """# memex configuration — see the user guide (docs/guide.md)
+[llm]
+# provider = "openai"     # openai | ollama | lmstudio | openrouter | custom
+# model = "gpt-4o"
+# api_key: prefer the MEMEX_API_KEY environment variable over storing it here
+
+[consolidation]
+# Distill episodes on a cheaper model; every field falls back to [llm].
+{consolidation}
+"""
+
+
+def default_marketplace(explicit: Path | None = None) -> Path:
+    """Resolve the marketplace directory: --from flag, repo checkout, or the
+    copy bundled inside the installed package (wheel installs)."""
+    if explicit is not None:
+        return explicit
+    cwd_candidate = Path.cwd() / "marketplace"
+    if cwd_candidate.is_dir():
+        return cwd_candidate
+    bundled = Path(__file__).parent / "marketplace"
+    if bundled.is_dir():
+        return bundled
+    raise FileNotFoundError(
+        "marketplace directory not found (looked in ./marketplace and the package)"
+    )
+
+
+def init_memex(data_dir: Path, *, consolidation_provider: str | None = None) -> InstallReport:
+    """Initialize ~/.memex: directory tree plus a memex.toml when absent.
+
+    With ``consolidation_provider`` (a harness name), the generated config
+    rides that harness's own model for distillation.
+    """
+    report = InstallReport(harness="custom")
+    (data_dir / "wiki").mkdir(parents=True, exist_ok=True)
+    (data_dir / "transcripts").mkdir(parents=True, exist_ok=True)
+    (data_dir / "logs").mkdir(parents=True, exist_ok=True)
+    config_path = data_dir / "memex.toml"
+    if config_path.exists():
+        report.notes.append("memex.toml already present; left untouched")
+    else:
+        if consolidation_provider:
+            block = (
+                f'provider = "{consolidation_provider}"'
+                f"  # ride the {consolidation_provider} CLI's own model\n"
+                '# model = "<cheap model>"'
+            )
+        else:
+            block = '# provider = "openai"\n# model = "gpt-4o-mini"'
+        config_path.write_text(TOML_TEMPLATE.format(consolidation=block), encoding="utf-8")
+        report.files_written.append(str(config_path))
+    return report
 
 
 @dataclass(slots=True)
@@ -162,9 +216,13 @@ _INSTALLERS = {
     "copilot": _install_copilot,
 }
 
+_HARNESS_PROVIDERS = {"pi": "pi", "claude": "claude", "codex": "codex"}
+
 
 def install_harness(harness: str, marketplace: Path, *, home: Path, project: Path) -> InstallReport:
     """Install one harness adapter from the marketplace directory."""
+    if harness == "custom":
+        return init_memex(_memex_data_dir())
     try:
         installer = _INSTALLERS[harness]
     except KeyError:
@@ -173,4 +231,15 @@ def install_harness(harness: str, marketplace: Path, *, home: Path, project: Pat
         raise FileNotFoundError(f"marketplace directory not found: {marketplace}")
     report = InstallReport(harness=harness)
     installer(marketplace, home, project, report)
+    if harness in _HARNESS_PROVIDERS:
+        # Seamless consolidation: point new installs at the harness's model.
+        init = init_memex(_memex_data_dir(), consolidation_provider=_HARNESS_PROVIDERS[harness])
+        report.files_written.extend(init.files_written)
+        report.notes.extend(init.notes)
     return report
+
+
+def _memex_data_dir() -> Path:
+    import os
+
+    return Path(os.environ.get("MEMEX_DATA_DIR", str(Path.home() / ".memex"))).expanduser()

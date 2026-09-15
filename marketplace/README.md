@@ -38,8 +38,11 @@ internal.
 ## Install
 
 ```bash
-memex harness install <pi|claude|codex|copilot> --from ./marketplace
+memex install <pi|claude|codex|copilot|custom>
 ```
+
+The marketplace is bundled inside the memex package; `--from` is only
+needed to install from a modified checkout.
 
 Idempotent; existing configs are backed up (`*.memex-bak`) before any
 merge. The L3 gate runs anywhere: `memex verify [--since ISO]

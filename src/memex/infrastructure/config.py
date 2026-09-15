@@ -9,7 +9,18 @@ from pathlib import Path
 
 from memex.domain.errors import ConfigError
 
-PROVIDERS: tuple[str, ...] = ("openai", "ollama", "lmstudio", "openrouter", "custom")
+PROVIDERS: tuple[str, ...] = (
+    "openai",
+    "ollama",
+    "lmstudio",
+    "openrouter",
+    "custom",
+    # Coding-harness providers: consolidation rides the harness's own
+    # model via its CLI print mode instead of a configured HTTP endpoint.
+    "claude",
+    "codex",
+    "pi",
+)
 PROVIDER_BASE_URLS: dict[str, str] = {
     "openai": "https://api.openai.com/v1",
     "ollama": "http://localhost:11434/v1",
@@ -36,7 +47,7 @@ class LLMConfig:
             return self.api_base
         if self.provider == "custom":
             raise ConfigError("llm.api_base is required when provider is 'custom'")
-        return PROVIDER_BASE_URLS[self.provider]
+        return PROVIDER_BASE_URLS.get(self.provider, "")  # harness providers: no HTTP
 
 
 @dataclass(frozen=True, slots=True)
@@ -149,9 +160,14 @@ def _or[T](value: T | None, default: T) -> T:
 class ConfigLoader:
     """Loads memex.toml, applies env overrides, and validates the result."""
 
-    def load(self, config_path: Path | None = None) -> MemexConfig:
-        data_dir = Path(os.environ.get("MEMEX_DATA_DIR", str(Path.home() / ".memex"))).expanduser()
-        path = config_path or data_dir / "memex.toml"
+    def load(self, config_path: Path | None = None, *, data_dir: Path | None = None) -> MemexConfig:
+        """Load config; ``data_dir`` (flag or env) locates both memex.toml
+        and the data directory, so a --data-dir run is self-contained."""
+        base = (
+            data_dir
+            or Path(os.environ.get("MEMEX_DATA_DIR", str(Path.home() / ".memex"))).expanduser()
+        )
+        path = config_path or base / "memex.toml"
         raw: dict[str, object] = {}
         if path.exists():
             try:
@@ -160,11 +176,11 @@ class ConfigLoader:
             except tomllib.TOMLDecodeError as exc:
                 raise ConfigError(f"invalid TOML in {path}: {exc}") from exc
 
-        data_dir = self._data_dir(raw, data_dir)
-        llm = self._llm(raw, data_dir)
+        resolved = self._data_dir(raw, base)
+        llm = self._llm(raw, resolved)
         return MemexConfig(
             app_name=str(_get(_table(raw, "app"), "name", str, "app") or "memex"),
-            data_dir=data_dir,
+            data_dir=resolved,
             llm=llm,
             consolidation=self._consolidation(raw),
             bm25=BM25Config(
@@ -200,7 +216,7 @@ class ConfigLoader:
                 ),
                 slug_algo=str(_or(_get(_table(raw, "wiki"), "slug_algo", str, "wiki"), "kebab")),
             ),
-            logging=self._logging(raw, data_dir),
+            logging=self._logging(raw, resolved),
         )
 
     def _data_dir(self, raw: dict[str, object], default: Path) -> Path:

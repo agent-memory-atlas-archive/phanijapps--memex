@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import dataclasses
 import json
 import os
 import sys
@@ -24,7 +23,11 @@ from memex.domain.models import (
 )
 from memex.domain.operations import summary
 from memex.infrastructure.config import ConfigLoader
-from memex.infrastructure.harness_installer import SUPPORTED, install_harness
+from memex.infrastructure.harness_installer import (
+    SUPPORTED,
+    default_marketplace,
+    install_harness,
+)
 from memex.infrastructure.harness_transcripts import (
     HARNESSES,
     parse_transcript,
@@ -104,7 +107,22 @@ def _build_parser() -> argparse.ArgumentParser:
     verify_cmd.add_argument("--require-recall", action="store_true")
     verify_cmd.add_argument("--require-write", action="store_true")
 
-    harness = sub.add_parser("harness", help="Harness integration management")
+    install = sub.add_parser(
+        "install", help="Install a harness adapter (claude, codex, pi, copilot, custom)"
+    )
+    install.add_argument("harness", nargs="?", choices=list(SUPPORTED))
+    install.add_argument(
+        "--from",
+        dest="marketplace",
+        type=Path,
+        default=None,
+        help="Marketplace directory (default: bundled, then ./marketplace)",
+    )
+    install.add_argument(
+        "--home", type=Path, default=None, help="Override HOME for install targets (testing)"
+    )
+
+    harness = sub.add_parser("harness", help="Harness integration management (alias of install)")
     harness_sub = harness.add_subparsers(dest="harness_command", required=True)
     harness_install = harness_sub.add_parser("install", help="Install a harness adapter")
     harness_install.add_argument("name", choices=list(SUPPORTED))
@@ -198,17 +216,19 @@ def _load_turns(path: Path) -> list[TurnStreamEntry]:
 
 
 def _make_memex(args: argparse.Namespace) -> Memex:
-    config = ConfigLoader().load()
-    if args.data_dir is not None:
-        config = dataclasses.replace(config, data_dir=args.data_dir.expanduser())
-    return Memex(config)
+    data_dir = args.data_dir.expanduser() if args.data_dir is not None else None
+    return Memex(ConfigLoader().load(data_dir=data_dir))
 
 
-def _run_harness(args: argparse.Namespace) -> int:
+def _run_install(args: argparse.Namespace) -> int:
+    name = args.harness if args.command == "install" else args.name
+    if name is None:
+        name = _pick_harness()
+        if name is None:
+            return 1
+    marketplace = default_marketplace(getattr(args, "marketplace", None))
     home = args.home if args.home is not None else Path.home()
-    report = install_harness(
-        args.name, args.marketplace.expanduser(), home=home, project=Path.cwd()
-    )
+    report = install_harness(name, marketplace, home=home, project=Path.cwd())
     _emit(
         {
             "harness": report.harness,
@@ -218,6 +238,24 @@ def _run_harness(args: argparse.Namespace) -> int:
         }
     )
     return 0
+
+
+def _pick_harness() -> str | None:
+    """Interactive picker when no harness is named."""
+    print("Install memex for which harness?")
+    for index, option in enumerate(SUPPORTED, start=1):
+        label = {"custom": "custom — initialize ~/.memex only (plain LLM config)"}.get(
+            option, option
+        )
+        print(f"  {index}. {label}")
+    try:
+        choice = input("Choice [1-5]: ").strip()
+    except EOFError:
+        return None
+    if choice.isdigit() and 1 <= int(choice) <= len(SUPPORTED):
+        return SUPPORTED[int(choice) - 1]
+    print("memex: invalid choice", file=sys.stderr)
+    return None
 
 
 def _transcript_path_from_stdin() -> Path | None:
@@ -328,8 +366,8 @@ def _run(args: argparse.Namespace) -> int:
     if args.command == "hook":
         return _run_hook(args)
 
-    if args.command == "harness":
-        return _run_harness(args)
+    if args.command in ("harness", "install"):
+        return _run_install(args)
 
     memex = _make_memex(args)
     try:
