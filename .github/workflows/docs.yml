@@ -20,6 +20,8 @@ jobs:
       - run: uv run mkdocs build --strict
       - uses: actions/upload-pages-artifact@v3
         if: github.ref == 'refs/heads/main'
+        with:
+          path: site
 
   deploy:
     needs: build
