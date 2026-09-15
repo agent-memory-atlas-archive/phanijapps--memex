@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from memex.application.dto import to_jsonable
 from memex.domain.models import (
     IngestTranscriptInput,
     ProvenanceReport,
@@ -68,6 +69,10 @@ class TranscriptHook:
             raise FileExistsError(f"transcript already exists: {jsonl_path.name}")
 
         with jsonl_path.open("w", encoding="utf-8") as handle:
+            if input.header is not None:
+                header = input.header
+                header.session_id = input.session_id
+                handle.write(json.dumps(to_jsonable(header)) + "\n")
             for turn in input.turns:
                 handle.write(json.dumps(self._turn_to_json(turn)) + "\n")
 
@@ -232,8 +237,8 @@ class TranscriptHook:
         }
 
     @staticmethod
-    def _turn_to_json(turn: TurnStreamEntry) -> dict[str, str | int]:
-        data: dict[str, str | int] = {
+    def _turn_to_json(turn: TurnStreamEntry) -> dict[str, object]:
+        data: dict[str, object] = {
             "role": turn.role,
             "content": turn.content,
             "turn": turn.turn,
@@ -246,6 +251,8 @@ class TranscriptHook:
             data["result"] = turn.result
         if turn.query is not None:
             data["query"] = turn.query
+        if turn.token_usage is not None:
+            data["token_usage"] = turn.token_usage
         return data
 
 

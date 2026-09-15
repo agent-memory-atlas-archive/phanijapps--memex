@@ -114,3 +114,13 @@ rule, and the OpenAI SDK is the single LLM client.
   for harness installs, and `custom` initializes `~/.memex` only.
   `--data-dir` now locates `memex.toml` too, making redirected runs
   self-contained.
+
+- **Transcript session headers.** The first line of a transcript JSONL
+  is now a `memex_session_header`. The Codex parser is built against
+  real rollout data (`session_meta`, `turn_context`,
+  `token_usage_record` with `turn_token_usage`/`thread_token_usage`):
+  totals take the latest records — cumulative values are never summed —
+  per-turn usage attaches to the agent turn it billed, resumed sessions
+  (re-emitted `session_meta`) refresh cwd/git and set `resumed`, and
+  model changes collect into ordered `models`/`reasoning_efforts` lists.
+  Readers skip headers; turn-only transcripts stay readable.

@@ -201,6 +201,7 @@ class TestWireSchemas:
             "tool_name",
             "result",
             "query",
+            "token_usage",
         }
         assert turn["properties"]["role"]["enum"] == ["user", "agent", "tool"]
         assert set(turn["required"]) == {"role", "content", "turn"}

@@ -169,6 +169,15 @@ memex ingest-transcript --session-id sess-abc --turns-file turns.jsonl
 {"role": "tool", "tool_name": "bash", "result": "ruff installed", "ts": "2026-09-15T10:00:02Z", "turn": 3}
 ```
 
+The first transcript line is an optional session header
+(`type: memex_session_header`) carrying identity and totals — for Codex
+captures: session id, CLI version, provider, cwd, git branch/commit,
+models and reasoning efforts used, timestamps, duration, and token
+usage (latest `thread_token_usage` for the session, latest
+`turn_token_usage` per completed turn — never summed). Older turn-only
+transcripts remain readable; repeated captures rewrite the header with
+current totals.
+
 Ingestion writes `transcripts/sess-abc.jsonl` + `.meta.json`, creates
 `wiki/episodes/sess-abc.md` with a `transcript_ref`, and indexes it. From
 Python or MCP, `get_provenance(slug)` / `memex_provenance` reports how a

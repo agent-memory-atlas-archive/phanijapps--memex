@@ -33,7 +33,7 @@ from memex.domain.models import (
 )
 from memex.infrastructure.config import MemexConfig
 
-__version__ = "0.1.2"
+__version__ = "0.1.3"
 
 __all__ = [
     "BackupError",

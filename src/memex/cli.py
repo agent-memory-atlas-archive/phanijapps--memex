@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import time
 from collections.abc import Sequence
@@ -34,6 +35,8 @@ from memex.infrastructure.harness_transcripts import (
     suggest_session_id,
 )
 from memex.infrastructure.workspace_context import session_query
+
+_SESSION_ID_CHARS = re.compile(r"[^A-Za-z0-9._-]+")
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -209,13 +212,20 @@ def _prompt_from_stdin() -> str:
 
 
 def _load_turns(path: Path) -> list[TurnStreamEntry]:
+    """Turns from a JSONL file; session-header lines are skipped."""
     turns: list[TurnStreamEntry] = []
     for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
         if not line.strip():
             continue
         try:
-            turns.append(TurnStreamEntry.from_dict(json.loads(line)))
-        except (json.JSONDecodeError, ValueError) as exc:
+            entry = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"{path.name}:{line_number}: {exc}") from exc
+        if not isinstance(entry, dict) or "role" not in entry:
+            continue
+        try:
+            turns.append(TurnStreamEntry.from_dict(entry))
+        except ValueError as exc:
             raise ValueError(f"{path.name}:{line_number}: {exc}") from exc
     return turns
 
@@ -323,13 +333,20 @@ def _hook_transcript(args: argparse.Namespace) -> int:
     if not path.exists():
         print(f"memex: transcript not found: {path}", file=sys.stderr)
         return 1
-    turns = parse_transcript(args.harness, path)
-    session_id = args.session_id or suggest_session_id(args.harness, path)
+    parsed = parse_transcript(args.harness, path)
+    turns = parsed.turns
+    session_id = args.session_id or (
+        parsed.header.session_id if parsed.header else suggest_session_id(args.harness, path)
+    )
+    # session ids must be filename-safe; codex ids already satisfy the charset
+    session_id = _SESSION_ID_CHARS.sub("-", session_id).strip("-.")[:80] or suggest_session_id(
+        args.harness, path
+    )
 
     memex = _make_memex(args)
     try:
         report = memex.ingest_transcript(
-            IngestTranscriptInput(session_id=session_id, turns=turns),
+            IngestTranscriptInput(session_id=session_id, turns=turns, header=parsed.header),
             overwrite=not args.no_overwrite,
         )
     except FileExistsError:

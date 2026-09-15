@@ -73,7 +73,9 @@ class TurnStreamEntry:
     """One conversation turn in a transcript (spec §4.1).
 
     An empty ``ts`` means the timestamp is unknown; it is omitted from the
-    stored JSONL rather than fabricated.
+    stored JSONL rather than fabricated. ``token_usage`` carries the
+    harness-reported usage for the completed turn that produced this
+    entry, when available (never summed or estimated).
     """
 
     role: str
@@ -83,6 +85,7 @@ class TurnStreamEntry:
     tool_name: str | None = None
     result: str | None = None
     query: str | None = None
+    token_usage: dict[str, int] | None = None
 
     def __post_init__(self) -> None:
         if self.role not in TURN_ROLES:
@@ -96,7 +99,11 @@ class TurnStreamEntry:
 
     @classmethod
     def from_dict(cls, data: Mapping[str, object]) -> TurnStreamEntry:
-        """Build a turn from untrusted JSON, validating required fields."""
+        """Build a turn from untrusted JSON, validating required fields.
+
+        A ``memex_session_header`` line (or any line without a role) is a
+        ValueError; readers filter headers before calling this.
+        """
         try:
             role = data["role"]
             content = data["content"]
@@ -112,7 +119,29 @@ class TurnStreamEntry:
                 if not isinstance(value, str):
                     raise ValueError(f"turn field {key} must be a string")
                 optional[key] = value
-        return cls(role=role, content=content, turn=turn, **optional)
+        usage = data.get("token_usage")
+        token_usage = (
+            {str(k): int(v) for k, v in usage.items()} if isinstance(usage, dict) else None
+        )
+        return cls(role=role, content=content, turn=turn, token_usage=token_usage, **optional)
+
+
+@dataclass(slots=True)
+class SessionHeader:
+    """First line of a transcript JSONL: session identity and totals.
+
+    Universal fields are typed; harness-specific detail (git, models,
+    reasoning efforts, provider metadata) lives in ``meta`` verbatim.
+    """
+
+    type: str = "memex_session_header"
+    harness: str = ""
+    session_id: str = ""
+    captured_at: str = field(default_factory=utc_now_iso)
+    started_at: str | None = None
+    ended_at: str | None = None
+    duration_s: float | None = None
+    meta: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -260,11 +289,16 @@ class ConsolidationReport:
 
 @dataclass(slots=True)
 class IngestTranscriptInput:
-    """Transcript ingest contract (spec §4.4)."""
+    """Transcript ingest contract (spec §4.4).
+
+    ``header`` is optional: when present it is written as the first line
+    of the transcript JSONL; older turn-only inputs keep working.
+    """
 
     session_id: str
     turns: list[TurnStreamEntry]
     metadata: dict[str, str] = field(default_factory=dict)
+    header: SessionHeader | None = None
 
     def __post_init__(self) -> None:
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", self.session_id):

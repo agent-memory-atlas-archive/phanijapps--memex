@@ -1,9 +1,16 @@
-"""Parsers from harness-native session files to transcript turns.
+"""Parsers from harness-native session files to memex transcripts.
 
-Each parser is tolerant: conversational messages map to TurnStreamEntry,
-unrecognized lines are skipped, and unparseable timestamps become ""
-(TurnStreamEntry's "unknown" marker). Codex's rollout shape is the least
-stable across versions; unknown entry types never raise.
+Every parser returns a ParsedTranscript: an optional SessionHeader
+(extracted where the harness records session metadata) plus
+conversational turns. Parsers are tolerant — unrecognized lines are
+skipped and unparseable timestamps become "" (unknown).
+
+The Codex parser is built against real rollout data: session_meta
+(identity, cwd, git, provider, cli version), turn_context (model and
+reasoning effort per turn), and token_usage_record payloads carrying
+turn_token_usage / thread_token_usage. Session totals come from the
+latest thread_token_usage; per-turn usage from the latest
+turn_token_usage per turn — cumulative records are never summed.
 """
 
 from __future__ import annotations
@@ -11,15 +18,26 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from memex.domain.models import TurnStreamEntry
+from memex.domain.models import SessionHeader, TurnStreamEntry
 
 HARNESSES: tuple[str, ...] = ("pi", "claude", "codex")
 
+HEADER_TYPE = "memex_session_header"
+
 _SESSION_ID_CHARS = re.compile(r"[^A-Za-z0-9._-]+")
+
+
+@dataclass(frozen=True)
+class ParsedTranscript:
+    """Parser output: optional session header plus conversational turns."""
+
+    header: SessionHeader | None
+    turns: list[TurnStreamEntry]
 
 
 def normalize_ts(value: object) -> str:
@@ -95,12 +113,18 @@ def _finalize(turns: list[dict[str, object]]) -> list[TurnStreamEntry]:
                 tool_name=_opt_str(turn, "tool_name"),
                 result=_opt_str(turn, "result"),
                 query=_opt_str(turn, "query"),
+                token_usage=turn.get("token_usage")  # type: ignore[arg-type]
+                if isinstance(turn.get("token_usage"), dict)
+                else None,
             )
         )
     return entries
 
 
-def parse_pi_session(path: Path) -> list[TurnStreamEntry]:
+# ---------------------------------------------------------------- pi
+
+
+def parse_pi_session(path: Path) -> ParsedTranscript:
     """Parse a pi session JSONL (format v3) into turns.
 
     Message order follows file order, which is append order along the
@@ -146,10 +170,13 @@ def parse_pi_session(path: Path) -> list[TurnStreamEntry]:
                     "ts": ts,
                 }
             )
-    return _finalize(turns)
+    return ParsedTranscript(header=None, turns=_finalize(turns))
 
 
-def parse_claude_transcript(path: Path) -> list[TurnStreamEntry]:
+# ---------------------------------------------------------------- claude
+
+
+def parse_claude_transcript(path: Path) -> ParsedTranscript:
     """Parse a Claude Code transcript JSONL into turns.
 
     Assistant tool_use blocks become tool turns; user tool_result blocks
@@ -198,57 +225,186 @@ def parse_claude_transcript(path: Path) -> list[TurnStreamEntry]:
                         "ts": ts,
                     }
                 )
-    return _finalize(turns)
+    return ParsedTranscript(header=None, turns=_finalize(turns))
 
 
-def parse_codex_rollout(path: Path) -> list[TurnStreamEntry]:
-    """Parse a Codex rollout JSONL into turns (tolerant best effort).
+# ---------------------------------------------------------------- codex
 
-    Maps response_item message payloads (input_text/output_text) to
-    user/agent turns and function_call payloads to tool turns. The
-    rollout schema evolves between Codex versions; unknown payloads are
-    skipped, never raised.
+
+def _usage_dict(value: object) -> dict[str, int] | None:
+    if not isinstance(value, dict):
+        return None
+    usage: dict[str, int] = {}
+    for key, item in value.items():
+        if isinstance(item, int):
+            usage[str(key)] = item
+    return usage or None
+
+
+def _parse_iso_epoch(ts: str) -> float | None:
+    try:
+        return datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return None
+
+
+def parse_codex_rollout(path: Path) -> ParsedTranscript:
+    """Parse a Codex rollout JSONL into header + turns (tolerant).
+
+    Header extraction (real rollout shapes):
+    - session_meta: session id, cwd, git (branch/commit/repo), provider,
+      cli version, start timestamp. Resumed sessions re-emit session_meta;
+      identity comes from the first, cwd/git refresh from the latest.
+    - turn_context: model and reasoning effort per turn; ordered unique
+      sets capture mid-session model changes.
+    - token_usage_record: the latest thread_token_usage is the session
+      total (never summed); the latest turn_token_usage per turn is
+      attached to the agent turn it billed (records follow the response
+      they describe in file order).
     """
     turns: list[dict[str, object]] = []
+    meta: dict[str, object] = {}
+    first_meta: dict[str, Any] | None = None
+    latest_meta: dict[str, Any] | None = None
+    started = ""
+    ended = ""
+    thread_usage: dict[str, int] | None = None
+    last_agent_index: int | None = None
+    models: list[str] = []
+    efforts: list[str] = []
+
     for entry in _read_jsonl(path):
-        payload: dict[str, Any] = (
-            entry["payload"] if isinstance(entry.get("payload"), dict) else entry
-        )
-        if payload.get("type") != "message":
+        ts = normalize_ts(entry.get("timestamp"))
+        if ts:
+            ended = ts
+        entry_type = entry.get("type")
+        payload = entry.get("payload") if isinstance(entry.get("payload"), dict) else None
+
+        if entry_type == "session_meta" and payload is not None:
+            if first_meta is None:
+                first_meta = payload
+                started = normalize_ts(payload.get("timestamp")) or ts
+            latest_meta = payload
             continue
-        ts = normalize_ts(entry.get("timestamp") or payload.get("timestamp"))
-        role = payload.get("role")
-        content = payload.get("content")
-        texts: list[str] = []
-        if isinstance(content, list):
-            texts = [
-                str(block.get("text", ""))
-                for block in content
-                if isinstance(block, dict)
-                and block.get("type") in ("input_text", "output_text", "text")
-            ]
-        elif isinstance(content, str):
-            texts = [content]
-        text = "\n".join(part for part in texts if part)
-        if not text.strip():
+        if entry_type == "turn_context" and payload is not None:
+            model = payload.get("model")
+            if isinstance(model, str) and model and model not in models:
+                models.append(model)
+            settings = payload.get("collaboration_mode")
+            effort = None
+            if isinstance(settings, dict):
+                inner = settings.get("settings")
+                if isinstance(inner, dict) and isinstance(inner.get("reasoning_effort"), str):
+                    effort = inner["reasoning_effort"]
+            if effort is None and isinstance(payload.get("reasoning_effort"), str):
+                effort = payload["reasoning_effort"]
+            if effort and effort not in efforts:
+                efforts.append(effort)
             continue
-        if role == "user":
-            turns.append({"role": "user", "content": text, "ts": ts})
-        elif role in ("assistant", "agent"):
-            turns.append({"role": "agent", "content": text, "ts": ts})
-    return _finalize(turns)
+        if entry_type == "token_usage_record" and payload is not None:
+            thread = _usage_dict(payload.get("thread_token_usage"))
+            if thread is not None:
+                thread_usage = thread  # latest wins; cumulative never summed
+            turn_usage = _usage_dict(payload.get("turn_token_usage"))
+            if turn_usage is not None and last_agent_index is not None:
+                turns[last_agent_index]["token_usage"] = turn_usage
+            continue
+        if entry_type != "response_item" or payload is None:
+            continue
+
+        if payload.get("type") == "message":
+            role = payload.get("role")
+            content = payload.get("content")
+            texts: list[str] = []
+            if isinstance(content, list):
+                texts = [
+                    str(block.get("text", ""))
+                    for block in content
+                    if isinstance(block, dict)
+                    and block.get("type") in ("input_text", "output_text", "text")
+                ]
+            elif isinstance(content, str):
+                texts = [content]
+            text = "\n".join(part for part in texts if part)
+            if not text.strip():
+                continue
+            if role == "user":
+                turns.append({"role": "user", "content": text, "ts": ts})
+            elif role in ("assistant", "agent"):
+                turns.append({"role": "agent", "content": text, "ts": ts})
+                last_agent_index = len(turns) - 1
+
+    if first_meta is not None:
+        source = latest_meta if latest_meta is not None else first_meta
+        git = source.get("git")
+        meta = {
+            "cli_version": source.get("cli_version"),
+            "provider": source.get("model_provider"),
+            "cwd": source.get("cwd"),
+            "originator": source.get("originator"),
+            "git": git if isinstance(git, dict) else None,
+            "models": models,
+            "reasoning_efforts": efforts,
+            "token_usage": thread_usage,
+        }
+        if latest_meta is not None and latest_meta is not first_meta:
+            meta["resumed"] = True
+        meta = {key: value for key, value in meta.items() if value is not None}
+
+    session_id = ""
+    if first_meta is not None:
+        raw_id = first_meta.get("session_id") or first_meta.get("id")
+        if isinstance(raw_id, str):
+            session_id = raw_id
+
+    duration_s: float | None = None
+    start_epoch = _parse_iso_epoch(started)
+    end_epoch = _parse_iso_epoch(ended)
+    if start_epoch is not None and end_epoch is not None and end_epoch >= start_epoch:
+        duration_s = round(end_epoch - start_epoch, 3)
+
+    header = SessionHeader(
+        harness="codex",
+        session_id=session_id or suggest_session_id("codex", path),
+        started_at=started or None,
+        ended_at=ended or None,
+        duration_s=duration_s,
+        meta=meta,
+    )
+    return ParsedTranscript(header=header, turns=_finalize(turns))
 
 
-PARSERS: dict[str, Callable[[Path], list[TurnStreamEntry]]] = {
+PARSERS: dict[str, Callable[[Path], ParsedTranscript]] = {
     "pi": parse_pi_session,
     "claude": parse_claude_transcript,
     "codex": parse_codex_rollout,
 }
 
 
-def parse_transcript(harness: str, path: Path) -> list[TurnStreamEntry]:
+def parse_transcript(harness: str, path: Path) -> ParsedTranscript:
     try:
         parser = PARSERS[harness]
     except KeyError:
         raise ValueError(f"unknown harness {harness!r}; expected one of {HARNESSES}") from None
     return parser(path)
+
+
+def read_transcript_turns(path: Path) -> list[TurnStreamEntry]:
+    """Read a memex transcript JSONL: header line(s) are skipped, older
+    turn-only files read unchanged."""
+    turns: list[TurnStreamEntry] = []
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(entry, dict) or "role" not in entry:
+            continue  # session header or foreign line
+        try:
+            turns.append(TurnStreamEntry.from_dict(entry))
+        except ValueError:
+            continue
+    return turns

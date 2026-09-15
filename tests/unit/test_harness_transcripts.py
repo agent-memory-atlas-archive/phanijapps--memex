@@ -18,7 +18,7 @@ FIXTURES = Path(__file__).parent.parent / "fixtures"
 
 
 def test_pi_session_parses_roles_and_tools() -> None:
-    turns = parse_pi_session(FIXTURES / "pi_session.jsonl")
+    turns = parse_pi_session(FIXTURES / "pi_session.jsonl").turns
 
     assert [turn.role for turn in turns] == ["user", "agent", "tool", "tool"]
     assert turns[0].content == "I prefer ruff for linting"
@@ -34,7 +34,7 @@ def test_pi_session_parses_roles_and_tools() -> None:
 
 
 def test_claude_transcript_parses_tool_use_and_results() -> None:
-    turns = parse_claude_transcript(FIXTURES / "claude_transcript.jsonl")
+    turns = parse_claude_transcript(FIXTURES / "claude_transcript.jsonl").turns
 
     assert [turn.role for turn in turns] == ["user", "agent", "tool", "tool"]
     assert turns[0].content == "Remember the deploy uses blue-green"
@@ -45,7 +45,9 @@ def test_claude_transcript_parses_tool_use_and_results() -> None:
 
 
 def test_codex_rollout_parses_messages_and_skips_unknown() -> None:
-    turns = parse_codex_rollout(FIXTURES / "codex_rollout.jsonl")
+    parsed = parse_codex_rollout(FIXTURES / "codex_rollout.jsonl")
+    turns = parsed.turns
+    assert parsed.header is not None  # fixture carries session_meta
 
     assert [turn.role for turn in turns] == ["user", "agent"]
     assert turns[0].content == "use postgres for the cache"
@@ -58,9 +60,9 @@ def test_empty_and_garbage_files_yield_no_turns(tmp_path: Path) -> None:
     garbage = tmp_path / "garbage.jsonl"
     garbage.write_text("{\nnot json\n[]\n", encoding="utf-8")
 
-    assert parse_pi_session(empty) == []
-    assert parse_claude_transcript(garbage) == []
-    assert parse_codex_rollout(empty) == []
+    assert parse_pi_session(empty).turns == []
+    assert parse_claude_transcript(garbage).turns == []
+    assert parse_codex_rollout(empty).turns == []
 
 
 def test_normalize_ts_variants() -> None:
@@ -81,8 +83,8 @@ def test_suggest_session_id_charset() -> None:
 
 
 def test_parse_transcript_dispatch_and_unknown_harness(tmp_path: Path) -> None:
-    turns = parse_transcript("pi", FIXTURES / "pi_session.jsonl")
-    assert turns and isinstance(turns[0], TurnStreamEntry)
+    parsed = parse_transcript("pi", FIXTURES / "pi_session.jsonl")
+    assert parsed.turns and isinstance(parsed.turns[0], TurnStreamEntry)
 
     with pytest.raises(ValueError, match="unknown harness"):
         parse_transcript("vscode", tmp_path / "x.jsonl")

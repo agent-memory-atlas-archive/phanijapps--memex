@@ -164,6 +164,7 @@ class TurnDict(TypedDict):
     tool_name: NotRequired[str]
     result: NotRequired[str]
     query: NotRequired[str]
+    token_usage: NotRequired[dict[str, int]]
 
 
 class WriteResultDict(TypedDict, total=False):
