@@ -192,6 +192,18 @@ def _build_parser() -> argparse.ArgumentParser:
         "--no-overwrite", action="store_true", help="Fail quietly if already ingested"
     )
     hook_transcript.add_argument(
+        "--enrich",
+        action="store_true",
+        help="Piggyback on the harness CLI (codex/claude/pi) to LLM-summarize "
+        "the episode body. Skipped when already enriched. On by default when "
+        "the harness is known.",
+    )
+    hook_transcript.add_argument(
+        "--no-enrich",
+        action="store_true",
+        help="Skip harness-LLM enrichment even when available.",
+    )
+    hook_transcript.add_argument(
         "--consolidate",
         action="store_true",
         help="Distill the fresh episode via LLM after capture "
@@ -447,6 +459,30 @@ def _hook_transcript(args: argparse.Namespace) -> int:
         "turn_count": report.turn_count,
         "harness": args.harness,
     }
+
+    # Harness-piggybacked enrichment: ride the already-running CLI's model
+    # to summarize the session. Idempotent — already-enriched episodes skip.
+    enrich = args.enrich or not args.no_enrich
+    if enrich and parsed.header and parsed.header.harness:
+        from memex.infrastructure.episode_enrichment import (
+            enrich_episode,
+            enriched_body,
+            is_enriched,
+        )
+
+        episode_node = memex.wiki_store.read(report.episode_node)
+        if episode_node and not is_enriched(episode_node.body):
+            summary = enrich_episode(parsed.header.harness, turns)
+            if summary:
+                episode_node.body = enriched_body(summary, episode_node.body)
+                stored_ep = memex.wiki_store.write(episode_node)
+                memex.index_manager.update_record(stored_ep)
+                result["enriched"] = True
+            else:
+                result["enriched"] = False
+        else:
+            result["enriched"] = "already" if episode_node else False
+
     auto = os.environ.get("MEMEX_AUTO_CONSOLIDATE") == "1"
     if args.consolidate or auto:
         result["consolidation"] = _consolidate_episode(memex, report.episode_node)
