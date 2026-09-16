@@ -219,7 +219,7 @@ def _type_badge(node_type: str, status: str) -> str:
     return f'<span class="badge {node_type}">{_esc(node_type)}</span>'
 
 
-def _meta_line(node: object) -> str:
+def _meta_line(node: WikiNode) -> str:
     parts = [_esc(getattr(node, "type", ""))]
     if getattr(node, "tags", None):
         parts.append(" ".join(f"#{_esc(t)}" for t in node.tags[:4]))
@@ -282,9 +282,9 @@ class VizHandler(BaseHTTPRequestHandler):
 
     def _frag_overview(self) -> str:
         stats = self._m().status()
-        total = int(stats.get("index_total", 0) or 0)
-        pending = int(stats.get("pending", 0) or 0)
-        stale = int(stats.get("index_stale_rows", 0) or 0)
+        total = int(str(stats.get("index_total", "0") or "0"))
+        pending = int(str(stats.get("pending", "0") or "0"))
+        stale = int(str(stats.get("index_stale_rows", "0") or "0"))
 
         health = '<span class="dot ok"></span>' if stale == 0 else '<span class="dot warn"></span>'
 
@@ -310,7 +310,7 @@ class VizHandler(BaseHTTPRequestHandler):
   <div class="kpi"><div class="value">{total}</div><div class="label">Memory pages</div></div>
   <div class="kpi"><div class="value">{pending}</div><div class="label">Pending approval</div></div>
   <div class="kpi"><div class="value">{stale}</div><div class="label">Stale index rows</div></div>
-  <div class="kpi"><div class="value">{int(stats.get("zero_yield_streak", 0) or 0)}</div><div class="label" title="Consecutive consolidations that produced zero new nodes">Zero-yield streak</div></div>
+  <div class="kpi"><div class="value">{int(str(stats.get("zero_yield_streak", "0") or "0"))}</div><div class="label" title="Consecutive consolidations that produced zero new nodes">Zero-yield streak</div></div>
 </div>
 <div class="search-bar">
   <input type="search" placeholder="Search memories…" autocomplete="off"
@@ -323,15 +323,11 @@ class VizHandler(BaseHTTPRequestHandler):
 
     def _frag_health(self) -> str:
         stats = self._m().status()
-        stale_raw = stats.get("index_stale_rows", "0")
-        stale = int(stale_raw) if isinstance(stale_raw, (int, float, str)) else 0
+        stale = int(str(stats.get("index_stale_rows", "0") or "0"))
         dot = '<span class="dot ok"></span>' if stale == 0 else '<span class="dot warn"></span>'
-        pending_raw = stats.get("pending", "0")
-        pending = int(pending_raw) if isinstance(pending_raw, (int, float, str)) else 0
-        total_raw = stats.get("index_total", "0")
-        total = int(total_raw) if isinstance(total_raw, (int, float, str)) else 0
-        streak_raw = stats.get("zero_yield_streak", "0")
-        streak = int(streak_raw) if isinstance(streak_raw, (int, float, str)) else 0
+        pending = int(str(stats.get("pending", "0") or "0"))
+        total = int(str(stats.get("index_total", "0") or "0"))
+        streak = int(str(stats.get("zero_yield_streak", "0") or "0"))
         link = ' · <a href="#">run memex verify</a>' if stale > 0 else ""
         return (
             f'{dot}<span class="metric"><b>{total}</b><span>pages</span></span>'
