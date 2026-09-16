@@ -155,7 +155,7 @@ class VizHandler(BaseHTTPRequestHandler):
 
     def _fragment_health(self) -> str:
         stats = self._m().status()
-        stale = int(stats.get("index_stale_rows", 0) or 0)
+        stale = int(str(stats.get("index_stale_rows", "0") or "0"))
         color = "#0f766e" if stale == 0 else "#b45309"
         return f"""<div class="card" style="border-left:3px solid {color}">
 <b>Index:</b> {stats["index_total"]} pages, {stale} stale &nbsp;
