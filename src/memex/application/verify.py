@@ -57,6 +57,11 @@ def verify(
     warnings: list[str] = []
     recall_evidence = False
     write_evidence = False
+    from memex.infrastructure.run_log import read_runs, zero_yield_streak
+
+    streak = zero_yield_streak(read_runs(memex.data_dir))
+    if streak >= 3:
+        warnings.append(f"{streak} consecutive zero-yield consolidations")
     if since is not None:
         for slug in memex.index_manager.get_all_slugs():
             row = memex.index_manager.get(slug)

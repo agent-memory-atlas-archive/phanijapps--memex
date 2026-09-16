@@ -109,6 +109,7 @@ def _build_parser() -> argparse.ArgumentParser:
     merge_cmd.add_argument("source")
 
     sub.add_parser("info", help="Show data directory and index statistics")
+    sub.add_parser("status", help="Memory health: freshness, captures, pending, zero-yield")
 
     watch = sub.add_parser("watch", help="Poll for external wiki edits and re-index")
     watch.add_argument("--poll-interval", type=int, default=60)

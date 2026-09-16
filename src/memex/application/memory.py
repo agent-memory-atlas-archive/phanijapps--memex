@@ -467,6 +467,36 @@ class Memex:
     def list_sessions(self) -> list[SessionSummary]:
         return self.transcript_hook.list_sessions()
 
+    def status(self) -> dict[str, object]:
+        """One-command health: index freshness, captures, pending, zero-yield."""
+        from memex.infrastructure.run_log import read_runs, zero_yield_streak
+
+        stale = 0
+        from memex.infrastructure.wiki_store import hash_body
+
+        for node in self.wiki_store.scan_all():
+            row = self.index_manager.get(node.slug)
+            if row is None or str(row["content_hash"]) != hash_body(node.body):
+                stale += 1
+        runs = read_runs(self.data_dir)
+        last_capture: dict[str, str | None] = {}
+        for run in runs:
+            if run.get("kind") == "capture" and isinstance(run.get("harness"), str):
+                last_capture.setdefault(run["harness"], str(run.get("ts")))
+        counts = {"pending": 0, "archived": 0, "superseded": 0}
+        for node in self.wiki_store.scan_all():
+            if node.status in counts:
+                counts[node.status] += 1
+        return {
+            "index_stale_rows": stale,
+            "index_total": self.index_manager.count(),
+            "last_capture": last_capture,
+            "pending": counts["pending"],
+            "archived": counts["archived"],
+            "superseded": counts["superseded"],
+            "zero_yield_streak": zero_yield_streak(runs),
+        }
+
     def apply_decay(self, *, dry_run: bool = False) -> list[tuple[str, float, float]]:
         """Recompute importance for every node via half-life decay.
 
