@@ -73,14 +73,22 @@ def _node() -> WikiNode:
 
 
 class TestSchemaV2AutoRebuild:
-    def test_needs_rebuild_on_version_mismatch(self, data_dir: Path) -> None:
+    def test_needs_rebuild_on_v1_column_shape(self, data_dir: Path) -> None:
         store = WikiStore(data_dir)
         store.write(_node())
         index = IndexManager(data_dir / "mem.db")
         index.update_record(store.read("plain") or store.list()[0])
-        # Forge a v1 marker.
-        index.set_meta("schema_version", "1")
-        assert index.needs_rebuild() is True
+        index.close()
+        # Forge a v1-shaped table: drop the new columns.
+        import sqlite3 as sq
+
+        con = sq.connect(data_dir / "mem.db")
+        con.execute("ALTER TABLE wiki_index DROP COLUMN status")
+        con.commit()
+        con.close()
+
+        index = IndexManager(data_dir / "mem.db")
+        assert index.needs_rebuild() is True  # column check, not meta stamp
         index.drop_for_rebuild()
         assert index.needs_rebuild() is False
         assert index.get_meta("schema_version") == SCHEMA_VERSION

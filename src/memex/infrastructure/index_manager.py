@@ -183,18 +183,24 @@ class IndexManager:
         return self._conn
 
     def needs_rebuild(self) -> bool:
-        """True when the on-disk index predates the current schema.
+        """True when the on-disk table shape predates the current schema.
 
-        mem.db is disposable by charter: a mismatch is resolved by dropping
-        the stale tables and rebuilding from the wiki, never by DDL migration.
+        Checks real columns, not the meta stamp: initialize() writes the
+        current stamp on every open, so the stamp cannot detect an upgrade
+        from a store the new code just opened. mem.db is disposable by
+        charter: a mismatch drops and rebuilds from the wiki, never DDL.
         """
         try:
-            row = self._conn.execute(
-                "SELECT value FROM index_meta WHERE key = 'schema_version'"
-            ).fetchone()
+            columns = {
+                row["name"]
+                for row in self._conn.execute("PRAGMA table_info(wiki_index)").fetchall()
+            }
         except sqlite3.OperationalError:
-            return True  # no tables at all
-        return row is None or str(row["value"]) != SCHEMA_VERSION
+            return True  # no table at all
+        if not columns:
+            return True
+        expected = {"status", "occurred_at", "source", "harness", "confidence"}
+        return not expected <= columns
 
     def drop_for_rebuild(self) -> None:
         with self._lock:
