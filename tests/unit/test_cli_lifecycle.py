@@ -87,7 +87,8 @@ class TestApprovalGate:  # AC-0007
         m.close()
 
     def test_invalid_approval_rejected(self, tmp_path: Path) -> None:
-        from memex.infrastructure.config import ConfigError, ConfigLoader
+        from memex.domain.errors import ConfigError
+        from memex.infrastructure.config import ConfigLoader
 
         cfg = tmp_path / "memex.toml"
         cfg.write_text('[governance]\napproval = "sometimes"\n', encoding="utf-8")
