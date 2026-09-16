@@ -46,6 +46,7 @@ docs = [
 
 [tool.hatch.build.targets.wheel.force-include]
 "marketplace" = "memex/marketplace"
+"src/memex/infrastructure/htmx.min.js" = "memex/infrastructure/htmx.min.js"
 
 [tool.ruff]
 target-version = "py312"
