@@ -19,7 +19,7 @@ from pathlib import Path
 from memex.domain.errors import IndexManagerError
 from memex.domain.models import WikiNode, utc_now_iso
 
-SCHEMA_VERSION = "1"
+SCHEMA_VERSION = "2"
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS index_meta (
@@ -34,6 +34,11 @@ CREATE TABLE IF NOT EXISTS wiki_index (
     title         TEXT NOT NULL,
     node_type     TEXT NOT NULL,
     importance    REAL NOT NULL DEFAULT 0.5,
+    status        TEXT NOT NULL DEFAULT 'active',
+    occurred_at   TEXT,
+    source        TEXT,
+    harness       TEXT,
+    confidence    TEXT,
     tags          TEXT NOT NULL DEFAULT '[]',
     created       TEXT NOT NULL,
     updated       TEXT NOT NULL,
@@ -94,11 +99,11 @@ _UPSERT = """
 INSERT INTO wiki_index (
     id, slug, file_path, title, node_type, importance, tags, created, updated,
     access_count, last_access, expires_at, valid_from, valid_to,
-    content_hash, transcript_ref, body
+    content_hash, transcript_ref, body, status, occurred_at, source, harness, confidence
 ) VALUES (
     :id, :slug, :file_path, :title, :node_type, :importance, :tags, :created, :updated,
     :access_count, :last_access, :expires_at, :valid_from, :valid_to,
-    :content_hash, :transcript_ref, :body
+    :content_hash, :transcript_ref, :body, :status, :occurred_at, :source, :harness, :confidence
 )
 ON CONFLICT(slug) DO UPDATE SET
     id = excluded.id,
@@ -113,7 +118,12 @@ ON CONFLICT(slug) DO UPDATE SET
     valid_to = excluded.valid_to,
     content_hash = excluded.content_hash,
     transcript_ref = excluded.transcript_ref,
-    body = excluded.body
+    body = excluded.body,
+    status = excluded.status,
+    occurred_at = excluded.occurred_at,
+    source = excluded.source,
+    harness = excluded.harness,
+    confidence = excluded.confidence
 """
 
 
@@ -137,6 +147,11 @@ def node_record(node: WikiNode) -> dict[str, object]:
         "content_hash": node.content_hash,
         "transcript_ref": node.transcript_ref,
         "body": node.body,
+        "status": node.status,
+        "occurred_at": node.occurred_at,
+        "source": node.source,
+        "harness": node.harness,
+        "confidence": node.confidence,
     }
 
 
@@ -166,6 +181,31 @@ class IndexManager:
     def connection(self) -> sqlite3.Connection:
         """Shared connection for collaborators (LinkManager, watcher)."""
         return self._conn
+
+    def needs_rebuild(self) -> bool:
+        """True when the on-disk index predates the current schema.
+
+        mem.db is disposable by charter: a mismatch is resolved by dropping
+        the stale tables and rebuilding from the wiki, never by DDL migration.
+        """
+        try:
+            row = self._conn.execute(
+                "SELECT value FROM index_meta WHERE key = 'schema_version'"
+            ).fetchone()
+        except sqlite3.OperationalError:
+            return True  # no tables at all
+        return row is None or str(row["value"]) != SCHEMA_VERSION
+
+    def drop_for_rebuild(self) -> None:
+        with self._lock:
+            self._conn.executescript(
+                "DROP TABLE IF EXISTS wiki_links;"
+                "DROP TABLE IF EXISTS wiki_fts;"
+                "DROP TABLE IF EXISTS wiki_index;"
+                "DROP TABLE IF EXISTS index_meta;"
+            )
+            self._conn.commit()
+        self.initialize()
 
     def initialize(self) -> None:
         with self._lock:

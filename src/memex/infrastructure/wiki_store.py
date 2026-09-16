@@ -12,7 +12,7 @@ from pathlib import Path
 
 from memex.domain.errors import WikiStoreError
 from memex.domain.frontmatter import parse_front_matter, serialize_front_matter
-from memex.domain.models import NODE_TYPES, WikiNode, new_id, utc_now_iso
+from memex.domain.models import NODE_TYPES, PAGE_STATUSES, WikiNode, new_id, utc_now_iso
 from memex.domain.slugs import derive_slug, unique_slug
 
 TYPE_DIRS: dict[str, str] = {
@@ -40,6 +40,11 @@ _FRONT_MATTER_KEYS: tuple[str, ...] = (
     "session_id",
     "links",
     "content_hash",
+    "status",
+    "occurred_at",
+    "source",
+    "harness",
+    "confidence",
 )
 
 _STR_FIELDS: tuple[str, ...] = (
@@ -264,6 +269,11 @@ def _node_to_dict(node: WikiNode) -> dict[str, object]:
         "session_id": node.session_id,
         "links": node.links,
         "content_hash": node.content_hash,
+        "status": node.status,
+        "occurred_at": node.occurred_at,
+        "source": node.source,
+        "harness": node.harness,
+        "confidence": node.confidence,
     }
 
 
@@ -288,6 +298,13 @@ def _list_value(data: dict[str, object], key: str) -> list[str]:
     if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
         raise WikiStoreError(f"front matter field {key!r} must be a list of strings")
     return value
+
+
+def _status_value(data: dict[str, object]) -> str:
+    value = data.get("status", "active")
+    if isinstance(value, str) and value in PAGE_STATUSES:
+        return value
+    raise WikiStoreError(f"invalid page status: {value!r} (expected one of {PAGE_STATUSES})")
 
 
 def _node_from_dict(data: dict[str, object], body: str) -> WikiNode:
@@ -321,4 +338,9 @@ def _node_from_dict(data: dict[str, object], body: str) -> WikiNode:
         session_id=_str_value(data, "session_id"),
         links=_list_value(data, "links"),
         content_hash=_str_value(data, "content_hash") or "",
+        status=_status_value(data),
+        occurred_at=_str_value(data, "occurred_at"),
+        source=_str_value(data, "source"),
+        harness=_str_value(data, "harness"),
+        confidence=_str_value(data, "confidence"),
     )

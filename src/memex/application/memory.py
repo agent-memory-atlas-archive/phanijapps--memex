@@ -34,6 +34,7 @@ from memex.infrastructure.index_manager import IndexManager
 from memex.infrastructure.link_manager import LinkManager
 from memex.infrastructure.llm_clients import client_from_config
 from memex.infrastructure.logging import setup_logging
+from memex.infrastructure.run_log import append_run
 from memex.infrastructure.transcript_hook import TranscriptHook
 from memex.infrastructure.wiki_store import WikiStore, hash_body
 
@@ -57,6 +58,9 @@ class Memex:
     def _open_storage(self) -> None:
         self.wiki_store = WikiStore(self.data_dir, slug_algo=self.config.wiki.slug_algo)
         self.index_manager = IndexManager(self.config.db_path)
+        if self.index_manager.needs_rebuild():
+            # mem.db is disposable: a stale schema rebuilds from the wiki.
+            self.index_manager.drop_for_rebuild()
         self.link_manager = LinkManager(self.index_manager.connection, self.wiki_store.wiki_dir)
         self.retriever = BM25Retriever(
             self.config.db_path,
@@ -202,6 +206,16 @@ class Memex:
                 self.config,
             )
         report = self._consolidator.consolidate(input)
+        append_run(
+            self.data_dir,
+            {
+                "ts": utc_now_iso(),
+                "kind": "consolidation",
+                "mode": report.mode,
+                "episodes_processed": report.episodes_processed,
+                "nodes_created": len(report.nodes_created),
+            },
+        )
         self.logger.info(
             "operation=consolidate mode=%s episodes=%d nodes=%d",
             report.mode,
@@ -276,6 +290,17 @@ class Memex:
             ValueError: ``session_id`` or a turn entry is invalid.
         """
         report = self.transcript_hook.ingest(input, overwrite=overwrite)
+        append_run(
+            self.data_dir,
+            {
+                "ts": utc_now_iso(),
+                "kind": "capture",
+                "session_id": input.session_id,
+                "harness": input.header.harness if input.header else None,
+                "turn_count": report.turn_count,
+                "cwd_recorded": bool(input.header and input.header.meta.get("cwd")),
+            },
+        )
         self.logger.info(
             "operation=ingest_transcript session=%s turns=%d",
             input.session_id,
