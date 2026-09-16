@@ -25,6 +25,7 @@ from memex.domain.models import (
     WriteInput,
     utc_now_iso,
 )
+from memex.domain.scrub import scrub
 from memex.infrastructure.backup import BackupRestore
 from memex.infrastructure.bm25_retriever import BM25Retriever
 from memex.infrastructure.config import ConfigLoader, MemexConfig
@@ -106,10 +107,13 @@ class Memex:
             raise ValueError(
                 f"body exceeds wiki.max_body_chars ({self.config.wiki.max_body_chars})"
             )
+        clean_body, scrub_kinds = scrub(input.body)
+        if scrub_kinds:
+            self.logger.warning("operation=write scrubbed=%s", ",".join(scrub_kinds))
         node = WikiNode(
             type=input.type,
             title=input.title,
-            body=input.body,
+            body=clean_body,
             id="",
             tags=input.tags,
             importance=input.importance,
