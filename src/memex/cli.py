@@ -540,6 +540,10 @@ def _run(args: argparse.Namespace) -> int:
             _emit(memex.import_export.export(args.output))
         elif args.command == "import":
             _emit(memex.import_export.import_file(args.input))
+        elif args.command == "approve":
+            _emit(memex.approve(args.slug))
+        elif args.command == "merge":
+            _emit(memex.merge(args.target, args.source))
         elif args.command == "verify":
             report = run_verify(
                 memex,
