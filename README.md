@@ -115,7 +115,7 @@ Exit 1 fails the build. Ready-made workflow: [marketplace/copilot/memex-verify.y
 | Command | Purpose |
 |---|---|
 | `write` / `recall` | Store and search memory nodes (BM25, filters, snippets, expiry semantics) |
-| `forget` | `hard` delete, `soft` retire, or `decay` a memory |
+| `forget` | `hard` delete, `soft` retire, `decay`, or `archive` a memory |
 | `consolidate` | LLM distillation of episodes into durable nodes — any OpenAI-compatible endpoint, **or the coding harness itself** (`claude`/`codex`/`pi` as provider) |
 | `ingest-transcript` | Store a session JSONL + create the linked episode node |
 | `hook session-start \| prompt \| transcript` | Harness hook contract: context injection + transcript capture |
