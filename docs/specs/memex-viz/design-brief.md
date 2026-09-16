@@ -2,7 +2,7 @@
 
 **Source:** research subagent (Hindsight docs + Letta staging + training knowledge)
 **Purpose:** adversarial review cycle — 5 rounds to convergence
-**Status:** round 2 revisions applied
+**Status:** round 3 revisions applied
 
 ---
 
@@ -25,14 +25,14 @@
 
 ### P0 — Correctness (fix before anything else)
 
-**Test obligation:** every P0 fix ships with a regression test — XSS probe (`<svg/onload=…>` in tags → assert escaped), malformed meta.json (string `total_tokens` AND string `turn_count` AND null `started_at` → assert /tokens and /sessions both survive), chart at 76 sessions (assert no clipping), search snippet (assert `<mark>` element present, no literal `<mark>` text), `/pages?type=bogus` (assert styled error, not dropped connection). No fix lands unverified.
+**Test obligation:** every P0 fix ships with a regression test — XSS probe (`<svg/onload=…>` in tags → assert escaped), malformed meta.json (string `total_tokens` (TypeError at division) AND null-or-non-numeric `turn_count` (TypeError at int()) AND non-string `started_at` e.g. integer (TypeError at sort) → assert /tokens and /sessions both survive), chart at 76 sessions (assert no clipping), search snippet (assert `<mark>` element present, no literal `<mark>` text), `/pages?type=bogus` (assert styled 200 error, not dropped connection — keep 200 to avoid HTMX 4xx swap trap), zero-token session (assert 1px tick, not 2px bar), error-vs-empty (force recall exception → assert error message, not 'No results'). No fix lands unverified.
 
 | Issue | Severity | Detail |
 |---|---|---|
 | Dead search highlighting | 🔴 | `html.escape(hit.snippet)` escapes the FTS5 `<mark>` markup, so snippets show literal `<mark>…</mark>` text; the `mark` CSS rule never applies. Fix: escape content, then re-inject safe `<mark>` markers |
 | XSS gap | 🔴 | Tags, session IDs, dates interpolated unescaped — a hostile tag like `<svg/onload=alert(1)>` in a memory page executes in the dashboard (tag normalization replaces spaces but preserves slashes and angle brackets) |
 | Chart overflow | 🔴 | `bar_w = max(600//len, 8)` — 76+ sessions silently exceed the 600px viewBox (76×8=608; newest bar starts outside viewBox, hidden) |
-| Zero-token lie | 🟡 | `max(int(h), 2)` renders zero-token sessions as 2px bars |
+| Zero-token lie | 🟡 | `max(int(h), 2)` renders zero-token sessions as 2px bars. Target: zero-token sessions render as a 1px baseline tick, not a bar |
 | Malformed meta.json kills /tokens AND /sessions | 🔴 | String `total_tokens` (TypeError at division), string/null `turn_count` (ValueError at int()), non-string `started_at` (TypeError at sort) — one bad file permanently breaks both panels |
 | Error-as-empty | 🟡 | Search exceptions render "No results" — indistinguishable from empty store |
  Missing `<meta charset>`, `<meta viewport>`, `lang="en"`; h1 says "memex" (title tag already correct) |
