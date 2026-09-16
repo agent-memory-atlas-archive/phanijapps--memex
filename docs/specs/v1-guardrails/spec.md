@@ -1,6 +1,6 @@
 # Spec: v1 guardrails — memory contracts, provenance, and approval
 
-- **Status:** Approved <!-- Draft | Approved | Implementing | Shipped | Archived -->
+- **Status:** Shipped <!-- Draft | Approved | Implementing | Shipped | Archived -->
 - **Owner:** phanijapps
 - **Plan:** [`plan.md`](plan.md)
 - **Constrained by:** [`docs/v1_enhance.md`](../../v1_enhance.md) wave 1 + C1 (evidence-mined enhancement signals; hindsight/letta/memorywire briefs)
@@ -134,55 +134,55 @@ Every objective outcome pairs with a mode:
 
 ## Acceptance Criteria
 
-- [ ] **AC-0001.** `memex recall --max-tokens 500` returns hits whose combined page
+- [x] **AC-0001.** `memex recall --max-tokens 500` returns hits whose combined page
       text fits 500 tokens by the estimator, and hook injection packs to the
       same contract with a default budget of 4096 tokens; when the top hit alone exceeds
       the budget it is returned whole and alone; metadata fields are excluded
       from the accounting. (Test: packer unit + CLI E2E)
-- [ ] **AC-0002.** `memex hook prompt` emits nothing when the best hit's BM25 rank
+- [x] **AC-0002.** `memex hook prompt` emits nothing when the best hit's BM25 rank
       is below the configured floor, while `memex recall` with the same query
       returns it. (Test: hook unit with floor config)
-- [ ] **AC-0003.** `occurred_at` round-trips through write/read/backup/restore and
+- [x] **AC-0003.** `occurred_at` round-trips through write/read/backup/restore and
       appears in `RecallHit`; capture fills it from the source event
       timestamp when the harness records one. (Test: WikiStore round-trip +
       codex parser fixture)
-- [ ] **AC-0004.** pages with `status` other than `active` are excluded from recall
+- [x] **AC-0004.** pages with `status` other than `active` are excluded from recall
       and hook injection by default; `--include-inactive` (CLI) and
       `include_inactive` (MCP/API) return them with their status in the hit.
       A missing status field reads as `active`. (Test: filter matrix)
-- [ ] **AC-0005.** `memex forget <slug> --mode archive` sets `status: archived`
+- [x] **AC-0005.** `memex forget <slug> --mode archive` sets `status: archived`
       in place of deleting; the file remains on disk and is excluded by AC-0004's
       default. (Test: CLI + store)
-- [ ] **AC-0006.** `memex merge <target> <source>` moves `source`'s body into
+- [x] **AC-0006.** `memex merge <target> <source>` moves `source`'s body into
       `target` as an appended section, sets `source` to
       `status: superseded` with a `superseded_by` link, and syncs the index.
       (Test: CLI E2E)
-- [ ] **AC-0007.** with `[governance] approval = "manual"`, consolidation-created
+- [x] **AC-0007.** with `[governance] approval = "manual"`, consolidation-created
       pages land `status: pending`; `memex approve <slug>` flips status to
       `active` and re-indexes; with `approval = "auto"` (default) behavior is
       unchanged from today. (Test: FakeLLM consolidation both modes)
-- [ ] **AC-0008.** `memex write --meta source=x --meta harness=y --meta confidence=0.99` is
+- [x] **AC-0008.** `memex write --meta source=x --meta harness=y --meta confidence=0.99` is
       rejected with an actionable error naming the reserved namespaces; capture and
       consolidation set them automatically and correctly. (Test: write
       boundary unit)
-- [ ] **AC-0009.** a fixture corpus of secret-shaped strings (OpenAI/Anthropic/GitHub
+- [x] **AC-0009.** a fixture corpus of secret-shaped strings (OpenAI/Anthropic/GitHub
       tokens, AWS keys, PEM block, DB URL, JWT) written through every
       boundary (CLI, MCP tool, ingest, consolidate) is stored with
       `[REDACTED:<kind>]` markers and the originals appear nowhere under
       `~/.memex`. (Test: scrubber matrix + fs grep)
-- [ ] **AC-0010.** a cloned fixture repo containing `memex.toml`, `.memex.toml`,
+- [x] **AC-0010.** a cloned fixture repo containing `memex.toml`, `.memex.toml`,
       and hook-shaped files produces zero capture or injection; `memex
       status` reads config from the home scope only. (Test: invariant test)
-- [ ] **AC-0011.** `memex status` emits JSON with: index freshness vs page hashes,
+- [x] **AC-0011.** `memex status` emits JSON with: index freshness vs page hashes,
       last capture timestamp per harness, pending and archived counts, and
       consecutive zero-yield consolidation count. (Test: seeded-store shape
       assert)
-- [ ] **AC-0012.** `memex verify` exits nonzero with a zero-yield warning when the
+- [x] **AC-0012.** `memex verify` exits nonzero with a zero-yield warning when the
       capture log shows ≥3 consecutive consolidations with zero nodes; exits
       zero otherwise. (Test: log fixture)
-- [ ] **AC-0013.** every hook-injected block begins with the five-line memory
+- [x] **AC-0013.** every hook-injected block begins with the five-line memory
       constitution header, asserted verbatim. (Test: content pin)
-- [ ] **AC-0014.** the opt-in ollama integration test runs one real consolidation
+- [x] **AC-0014.** the opt-in ollama integration test runs one real consolidation
       against `glm-5.3-flash:cloud` end-to-end and is skipped, not failed,
       when the model is unreachable. (Test: integration, marked)
 

@@ -1,7 +1,7 @@
 # Plan: v1 guardrails — memory contracts, provenance, and approval
 
 - **Spec:** [`spec.md`](spec.md)
-- **Status:** Approved
+- **Status:** Done
 - **Repository anchors:** `AGENTS.md` (layered `src/memex` mandate, shared
   domain services, security rules); `src/memex/infrastructure/wiki_store.py`
   (closed front-matter key set — extension point for every new field);
