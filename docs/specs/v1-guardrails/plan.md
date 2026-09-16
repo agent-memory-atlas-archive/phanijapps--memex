@@ -1,7 +1,7 @@
 # Plan: v1 guardrails — memory contracts, provenance, and approval
 
 - **Spec:** [`spec.md`](spec.md)
-- **Status:** Drafting
+- **Status:** Approved
 - **Repository anchors:** `AGENTS.md` (layered `src/memex` mandate, shared
   domain services, security rules); `src/memex/infrastructure/wiki_store.py`
   (closed front-matter key set — extension point for every new field);
@@ -83,22 +83,24 @@ cannot silently disable redaction because the catalog is a frozen tuple.
 - **Mode:** TDD
 - **Tests:** round-trip suite in `tests/unit/test_frontmatter_v1.py` mirroring
   `test_session_headers.py` patterns — each new field, missing-field
-  defaults (`status`→`active`), backup/restore parity; parser cwd-attribution fixtures per AC-0015 live in
-  `tests/unit/test_run_log.py`'s capture cases. Verifies AC-0003, AC-0004.
+  defaults (`status`→`active`), backup/restore parity; parser cwd-attribution guard fixtures live in
+  `tests/unit/test_run_log.py`'s capture cases (non-AC characterization). Verifies AC-0003, AC-0004.
 - **Approach:** extend `domain/models.py`, `WriteInput`, `wiki_store`
-  `_FRONT_MATTER_KEYS` + `_node_from_dict`; index manager gains the columns; existing `mem.db` stores migrate via
-  `SCHEMA_VERSION` bump to "2" with additive `ALTER TABLE ... ADD COLUMN`
-  (nullable defaults) on open, so upgraded stores recall without a manual
-  rebuild.
+  `_FRONT_MATTER_KEYS` + `_node_from_dict`; index manager gains the columns and bumps `SCHEMA_VERSION` to "2"; on
+  open, a version mismatch drops the stale index and auto-rebuilds from
+  the wiki files (one log line) — `mem.db` is disposable by charter, so
+  no DDL migration path exists. Guard: open a v1-fixture store and assert
+  transparent rebuild.
 - **Depends on:** none
 
 ### T1b: Consolidation/capture run log
-- **Spec map:** Obj 5; AC-0011, AC-0012, AC-0015
+- **Spec map:** Obj 5; AC-0011, AC-0012 (+ non-AC guard: recorded-cwd
+  attribution fixtures)
 - **Mode:** TDD
 - **Tests:** `tests/unit/test_run_log.py` — append/read round-trip for
   `~/.memex/logs/runs.jsonl` (timestamp, kind=consolidation|capture, harness,
   nodes_created, cwd recorded or null); skip-count field. Verifies the data
-  source AC-0011/AC-0012/AC-0015 read.
+  source AC-0011/AC-0012 read.
 - **Approach:** small append-only writer called from the consolidator and
   transcript hook; no schema, one JSON line per run.
 - **Depends on:** none
@@ -217,5 +219,8 @@ cannot silently disable redaction because the catalog is a frozen tuple.
 
 ## Changelog
 
+- 2026-09-16: owner review resolved three residual concerns — constitution
+  trimmed to three lines; schema change is auto-rebuild-on-mismatch (no DDL);
+  AC-0015 demoted to guard tests (behavior already ships). Approved.
 - 2026-09-16: drafted from `docs/v1_enhance.md` wave 1 + C1 per user scope
   confirmation; MCP annotations dropped (already shipped).

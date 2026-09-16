@@ -1,6 +1,6 @@
 # Spec: v1 guardrails — memory contracts, provenance, and approval
 
-- **Status:** Draft <!-- Draft | Approved | Implementing | Shipped | Archived -->
+- **Status:** Approved <!-- Draft | Approved | Implementing | Shipped | Archived -->
 - **Owner:** phanijapps
 - **Plan:** [`plan.md`](plan.md)
 - **Constrained by:** [`docs/v1_enhance.md`](../../v1_enhance.md) wave 1 + C1 (evidence-mined enhancement signals; hindsight/letta/memorywire briefs)
@@ -47,8 +47,8 @@ human approval gate, enforced by deterministic checks:
    pending-approval and archived counts, and consecutive zero-yield
    consolidations; `memex verify` warns on a zero-yield
    streak. No file inside a cloned repository can enable capture or injection, and
-   session-to-repository attribution comes only from the harness-recorded
-   cwd — never guessed from file or directory names.
+   session-to-repository attribution uses only the harness-recorded cwd
+   (existing behavior, pinned by guard tests).
 
 ## Durable Outputs
 
@@ -60,7 +60,8 @@ human approval gate, enforced by deterministic checks:
   scrubber.
 - **Decision rationale** — `docs/implementation-notes.md`: entries for each
   shipped guardrail citing its signal source (A3/A4/B4/B5/C1/C2/D1/D2/E2/F2/F4/G2); E2's
-  attribution invariant ships as AC-0015.
+  attribution invariant stays covered by plan-level guard tests (not a
+  criterion — the behavior already ships; the guards make regressions red).
 - **Reusable learning** — none beyond implementation notes (patterns catalog
   is code + tests, not prose).
 
@@ -123,11 +124,8 @@ Every objective outcome pairs with a mode:
   plausible config files (`memex.toml`, `.memex.toml`, hooks) asserts the
   installer and runtime ignore all of them; only `$HOME`-scoped config is read.
 - **Constitution header (Obj 1, injection; AC-0013)** — content pin: the session-start
-  block's five-line header is asserted verbatim once (wording is content, not
+  block's three-line header is asserted verbatim once (wording is content, not
   logic).
-- **Recorded-cwd attribution (Obj 5; AC-0015)** — TDD: parser fixtures
-  (codex/pi/claude) with and without a recorded cwd assert repo attribution
-  from the recording only, skip-and-count otherwise.
 - **LLM integration (whole; AC-0014)** — goal-based, opt-in: one end-to-end
   consolidation against local ollama (`glm-5.3-flash:cloud`), asserting a
   valid JSON node parses and stores; skipped (not failed) when ollama or the
@@ -184,10 +182,6 @@ Every objective outcome pairs with a mode:
       zero otherwise. (Test: log fixture)
 - [ ] **AC-0013.** every hook-injected block begins with the five-line memory
       constitution header, asserted verbatim. (Test: content pin)
-- [ ] **AC-0015.** Transcript capture attributes a session to a repository only
-      from the harness-recorded cwd; sessions whose recordings carry no cwd
-      are skipped and counted in the run log, never guessed from filenames.
-      (Test: parser fixtures with/without recorded cwd)
 - [ ] **AC-0014.** the opt-in ollama integration test runs one real consolidation
       against `glm-5.3-flash:cloud` end-to-end and is skipped, not failed,
       when the model is unreachable. (Test: integration, marked)
