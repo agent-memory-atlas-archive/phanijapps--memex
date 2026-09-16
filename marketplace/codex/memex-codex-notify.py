@@ -56,7 +56,12 @@ def _log(event: str, session_id: str, category: str, detail: str = "") -> None:
 
 
 def _event_name(payload: dict[str, object]) -> str:
-    raw = str(payload.get("type") or payload.get("event") or "")
+    # Codex lifecycle hooks send `hook_event_name` ("SessionEnd",
+    # "PostCompact", ...); the notify channel sends `type`
+    # ("agent-turn-complete").
+    raw = str(
+        payload.get("hook_event_name") or payload.get("type") or payload.get("event") or ""
+    )
     return raw.strip().lower().replace("_", "-")
 
 
@@ -150,7 +155,10 @@ def main() -> int:
     elif "session-end" in event or "sessionend" in event:
         kind = "detached"
     else:
-        return 0  # unrelated event: never block
+        # Observability: log what this Codex build actually delivers so
+        # wiring can be tuned; still never block.
+        _log(event or "unknown", session_id, "unhandled_event")
+        return 0
 
     args = _capture_args(event, payload)
     if args is None:

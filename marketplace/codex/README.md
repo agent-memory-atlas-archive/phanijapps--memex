@@ -19,11 +19,26 @@ What it does:
 
 ### Capture events
 
-| Event | Behavior |
-|---|---|
-| `agent-turn-complete` | synchronous capture of the rollout (session-addressed via the payload's `session_id`/`transcript_path`) |
-| `PostCompact` | same synchronous capture; the merge logic preserves pre-compaction turns already captured and appends later ones |
-| `SessionEnd` | **fast handoff** — Codex allows 1–3s of teardown, so memex is spawned detached and the hook returns immediately; capture completes moments later |
+| Event | Channel | Behavior |
+|---|---|---|
+| `agent-turn-complete` | `notify` (wired by install, line 3) | synchronous capture of the rollout (session-addressed via the payload's `session_id`/`transcript_path`) |
+| `PostCompact` | lifecycle hooks | same synchronous capture; dispatched on `hook_event_name` |
+| `SessionEnd` | lifecycle hooks | **fast handoff** — Codex allows 1–3s of teardown, so memex is spawned detached and the hook returns immediately |
+
+**Event delivery, honestly:** Codex 0.154 has a full lifecycle-hooks
+system (`PostCompact`, `SessionEnd`, ...) whose stdin JSON carries
+`session_id` + `transcript_path`, and this wrapper speaks that schema
+(it dispatches on `hook_event_name` and logs every event it receives,
+including unrecognized ones, in `~/.memex/logs/codex-capture.log`).
+Registering hooks is gated behind Codex's plugin / TUI trust flow —
+plain `config.toml` entries are not sufficient. Until you enable the
+wrapper as a Codex hook (via `/hooks` in the TUI or a memex Codex
+plugin), compaction coverage is already complete without `PostCompact`:
+rollout files are append-only, so the next `agent-turn-complete`
+capture re-reads pre-compaction turns too, and the merge logic keeps
+earlier turns even if Codex starts a fresh rollout. `SessionEnd` adds
+the no-further-turn case; the recovery command below covers it in the
+meantime.
 
 Repeated checkpoints of one session are idempotent: one episode node, no
 duplicate turns. Failures are nonblocking for Codex and always leave a
