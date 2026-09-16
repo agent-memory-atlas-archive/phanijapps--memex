@@ -296,6 +296,7 @@ class VizHandler(BaseHTTPRequestHandler):
             if cards
             else '<div class="empty">No distilled memories yet — run <code>memex consolidate</code></div>'
         )
+        token_chart = self._frag_tokens()
 
         return f"""
 <div class="statusbar" id="health" hx-get="/health" hx-trigger="every 5s" hx-swap="innerHTML">
