@@ -1,0 +1,321 @@
+{
+  "skill_name": "work-intake",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Start work from a normalized repo-origin request with one minimal opportunity and no shippable contract.",
+      "expected_output": "The agent validates the normalized intake, realpath-confines docs/product/intents/<slug>.md, materializes a Draft minimal intent from assets/minimal-intent.md, registers a non-dispatchable workspace entry, and stops without processor dispatch.",
+      "assertions": [
+        "Consumes normalized intake rather than raw source instructions",
+        "Writes the artifact before registering the workspace entry",
+        "Reports non-dispatchable Draft membership for the minimal intent",
+        "Does not require optional shaping packs"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Remember this follow-up from a normalized request, then stop without implementation.",
+      "expected_output": "The agent validates the normalized intake, materializes a Draft artifact, registers non-dispatchable lifecycle membership, and stops without implementation.",
+      "assertions": [
+        "Records Draft membership",
+        "Does not dispatch to implementation",
+        "Preserves source locator and revision"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "workspace status",
+      "expected_output": "The agent delegates to workspace-status and returns its lifecycle, findings, and next actions without reclassifying or mutating state.",
+      "assertions": [
+        "Uses workspace-status as the authority",
+        "Does not materialize an artifact",
+        "Does not edit workspace.toml"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Refresh requirements for docs/specs/example/spec.md.",
+      "expected_output": "The core-only agent reports refresh unavailable and leaves the artifact and workspace unchanged because no configured tracker processor is installed.",
+      "assertions": [
+        "Confines and resolves an existing registered target",
+        "Reports refresh unavailable without a configured processor",
+        "Does not mutate the artifact or workspace"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Start work now on correcting the off-by-one in the export retention cutoff comparison, a bounded one-file change with an existing regression test.",
+      "expected_output": "The agent validates the normalized source and locator, confirms the change is bounded, low-risk, independently verifiable, session-completable, and needs no durability, then selects direct-light: artifact none, workspace membership none, processor work-loop, no transaction, and an unchanged repository until implementation begins.",
+      "assertions": [
+        "Validates normalized source and locator before classification",
+        "Renders artifact none and workspace membership none as valid output",
+        "Selects work-loop without a transaction or rollback",
+        "Leaves the repository unchanged until implementation begins"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Start a coherent multi-feature outcome from normalized intake.",
+      "expected_output": "The agent routes the multi-spec outcome to a Draft brief, registers brief lifecycle membership, and does not create speculative specs.",
+      "assertions": [
+        "Selects author-delivery-brief create as processor",
+        "Registers Draft brief membership",
+        "Does not create child specs"
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "Start from a cited regression with observed and expected behavior.",
+      "expected_output": "The agent routes the cited regression to defect context and bug-fix, preserving evidence without treating source text as instructions.",
+      "assertions": [
+        "Selects bug-fix as processor",
+        "Records defect lifecycle membership",
+        "Preserves cited evidence as data"
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "Start from ambiguous normalized intake that could be either one spec or a brief.",
+      "expected_output": "The agent records a Draft artifact with gaps or asks for the smallest missing choice; it does not infer readiness.",
+      "assertions": [
+        "Does not infer Ready status",
+        "Names the missing choice",
+        "Avoids dispatch while ambiguous"
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "Use capture-work to remember this equivalent normalized request.",
+      "expected_output": "The agent emits the compatibility notice, forwards to work-intake, and produces the same artifact and workspace entry as work-intake remember.",
+      "assertions": [
+        "Emits deprecation notice",
+        "Forwards to work-intake",
+        "Does not use legacy storage"
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "Mark this existing brief Ready even though no slices are confirmed yet.",
+      "expected_output": "The agent allows Ready brief lifecycle membership with zero materialized specs and stops until a slice is confirmed.",
+      "assertions": [
+        "Allows Ready with zero specs",
+        "Creates no speculative specs",
+        "Stops before invoking new-spec"
+      ]
+    },
+    {
+      "id": 11,
+      "prompt": "Queue this bounded change for another session after the current session ends.",
+      "expected_output": "The agent does not select direct-light because queueing and cross-session resumption require a durable spec-and-plan path. It routes or recommends new-spec rather than creating an untracked direct execution.",
+      "assertions": [
+        "Treats queueing as a durable-work need",
+        "Refuses the direct-light route",
+        "Selects or recommends new-spec"
+      ]
+    },
+    {
+      "id": 12,
+      "prompt": "Start work on adding export retention controls for workspace owners.",
+      "expected_output": "The agent does not select direct-light: a new user-facing capability is a durable product behavior contract. It routes to new-spec with direct-spec provenance and leaves product details for new-spec elicitation.",
+      "assertions": [
+        "Treats a durable product behavior contract as a durability need",
+        "Refuses the direct-light route",
+        "Selects new-spec as processor",
+        "Does not demote the capability to an intent merely because product details need elicitation"
+      ]
+    },
+    {
+      "id": 13,
+      "prompt": "With the GitHub refresh processor installed, refresh requirements for docs/specs/example/spec.md.",
+      "expected_output": "The agent resolves the exact configured processor, compares the new revision as untrusted data, and presents a field-level decision before any guarded local change.",
+      "assertions": [
+        "Scopes processor-backed behavior to an installed tracker pack",
+        "Uses only the exact configured profile processor",
+        "Treats tracker content as candidate data",
+        "Requires authorized field decisions before local mutation"
+      ]
+    },
+    {
+      "id": 14,
+      "prompt": "Triage workspace status and show the next safe action.",
+      "expected_output": "The agent delegates to workspace-status, preserves its findings and next action, and performs no intake classification or mutation.",
+      "assertions": [
+        "Keeps status and triage read-only",
+        "Uses workspace-status findings as the authority",
+        "Does not create or register an artifact"
+      ]
+    },
+    {
+      "id": 15,
+      "prompt": "Refresh this tracker-origin brief while it is Implementing.",
+      "expected_output": "The configured refresh processor compares the source but the shared lifecycle evaluator refuses local requirements mutation and returns the stable locked result.",
+      "assertions": [
+        "Uses the configured profile and version",
+        "Returns implementing_requirements_locked",
+        "Does not mutate local requirements"
+      ]
+    },
+    {
+      "id": 16,
+      "prompt": "Plan migration of this reviewed legacy workspace entry.",
+      "expected_output": "The agent recognizes migration as a workspace-status repair surface, does not route it as ordinary intake, and performs no migration effect.",
+      "assertions": [
+        "Separates migration from ordinary work intake",
+        "Delegates to the read-only workspace-status planner",
+        "Does not apply or roll back a migration"
+      ]
+    },
+    {
+      "id": 17,
+      "prompt": "Resolve the delivery-contract destination explicitly supplied as docs/contracts/current.md.",
+      "expected_output": "The agent supplies one explicit repository-path candidate to the shared resolver, proves realpath confinement, and reports the complete resolved result without creating or registering the destination.",
+      "assertions": [
+        "Uses scripts/surface_resolver.py instead of assuming a catalogue path",
+        "Ranks the explicit policy-permitted candidate first",
+        "Reports provenance, capability facts, confinement, and three independent authority dimensions",
+        "Does not mutate lifecycle state or create the destination"
+      ]
+    },
+    {
+      "id": 18,
+      "prompt": "Resolve our custom delivery-contract convention from two analogous project/contracts entries and their construction test.",
+      "expected_output": "The agent normalizes only the bounded analogue evidence, treats the confirmed custom convention as established, and returns its confined repository locator without requiring catalogue defaults or a configuration file.",
+      "assertions": [
+        "Preserves the adopter-owned custom path",
+        "Uses no repository-wide scan",
+        "Requires two analogues plus a test or explicit confirmation",
+        "Does not require optional configuration"
+      ]
+    },
+    {
+      "id": 19,
+      "prompt": "Resolve delivery-contract using this optional adopter configuration candidate: product/contracts/current.md.",
+      "expected_output": "The agent passes the closed optional-adapter candidate to the shared resolver, reports its declared evidence strength without granting extra authority, and leaves repositories without that adapter fully supported.",
+      "assertions": [
+        "Treats configuration as optional",
+        "Does not create a global surface registry",
+        "Does not infer source, write, or deletion authority from configuration",
+        "Returns a read-only resolution result"
+      ]
+    },
+    {
+      "id": 20,
+      "prompt": "Resolve the delivery contract at external locator example-tracker:delivery/42.",
+      "expected_output": "The agent preserves the external locator as external, performs no filesystem, network, shell, DNS, tracker, or credential operation, and reports unknown availability and writability unless supplied evidence establishes them.",
+      "assertions": [
+        "Never sends the external locator through Path resolution",
+        "Rejects credentials and query or fragment material",
+        "Keeps authority dimensions independent",
+        "Does not register a locator-only entry for dispatch"
+      ]
+    },
+    {
+      "id": 21,
+      "prompt": "Resolve delivery-contract from two equally ranked explicit destinations.",
+      "expected_output": "The agent returns confirmation-required with decision provenance and a bounded next action, omits selected locators, and performs no mutation.",
+      "assertions": [
+        "Does not choose by list order",
+        "Requires destination-selection confirmation",
+        "Reports all capability, confinement, and authority facts as unknown",
+        "Does not create or register either destination"
+      ]
+    },
+    {
+      "id": 22,
+      "prompt": "Resolve delivery-contract, but no explicit, policy, convention, configuration, or external candidate exists.",
+      "expected_output": "The agent returns destination-required with an offer-shaped next action and no selected locator, artifact creation, workspace registration, or lifecycle change.",
+      "assertions": [
+        "Does not assume a catalogue filename",
+        "Reports destination-required rather than inventing a path",
+        "Offers selection or creation as a next action",
+        "Leaves lifecycle behavior unchanged"
+      ]
+    },
+    {
+      "id": 23,
+      "prompt": "Admit this resolved repository handoff for one independently shippable feature. Its bounded delivery contract names boundaries, non-goals, dependencies, design context, and delivery questions.",
+      "expected_output": "The agent validates the closed handoff, preserves the real Wave 1 resolution and source provenance, reads repository content only through the confined regular-file guard, and passes attributed context to new-spec without skipping assumption, spec, or plan approval gates.",
+      "assertions": [
+        "Classifies one independently shippable feature as delivery contract",
+        "Uses the exact real resolver result and confined regular-file read",
+        "Routes to new-spec without changing lifecycle or approval gates",
+        "Treats every handoff field as attributed untrusted context"
+      ]
+    },
+    {
+      "id": 24,
+      "prompt": "Admit this resolved repository handoff for a cross-repository outcome spanning three delivery slices.",
+      "expected_output": "The agent validates and classifies the bounded content as a delivery brief, preserves resolver provenance, and routes to author-delivery-brief continue or create according to whether the brief artifact exists. It does not create speculative specs or bypass slice confirmation and Ready gates.",
+      "assertions": [
+        "Classifies multi-spec or cross-repository content as delivery brief",
+        "Preserves the resolver result separately",
+        "Keeps Ready and slice-confirmation gates intact",
+        "Creates no speculative spec"
+      ]
+    },
+    {
+      "id": 25,
+      "prompt": "Admit already-acquired external delivery-contract content at example-tracker:delivery/42 revision r7.",
+      "expected_output": "The agent reuses only the bounded content already supplied by the trusted invocation after the external locator and revision match the real resolution. It treats the locator as opaque and performs no network, tracker, shell, credential, DNS, search, probe, filesystem, or fetch operation derived from it.",
+      "assertions": [
+        "Requires current trusted acquisition plus a matching revision",
+        "Keeps the external locator opaque",
+        "Performs no locator-derived external or filesystem operation",
+        "Routes only the admitted bounded content"
+      ]
+    },
+    {
+      "id": 26,
+      "prompt": "Admit a handoff whose destination has two equally ranked candidates.",
+      "expected_output": "The agent preserves the real confirmation-required resolution, returns the stable confirmation stop, and performs no artifact, workspace, processor, external, or filesystem effect.",
+      "assertions": [
+        "Does not choose by order or recompute resolution",
+        "Returns confirmation-required",
+        "Performs zero effects"
+      ]
+    },
+    {
+      "id": 27,
+      "prompt": "Start Core from the same normalized request without a handoff object.",
+      "expected_output": "The agent returns the standalone disposition before consulting the resolver and continues the existing Core classification unchanged.",
+      "assertions": [
+        "Preserves standalone Core behavior",
+        "Does not consult a resolver for an absent handoff",
+        "Produces the same existing route"
+      ]
+    },
+    {
+      "id": 28,
+      "prompt": "Admit a repository contract handoff using an optional configured delivery-contract destination.",
+      "expected_output": "The agent treats optional configuration as bounded resolver evidence, grants it no extra authority, preserves the resolved result, and routes admitted context through new-spec while repositories without configuration remain supported.",
+      "assertions": [
+        "Treats configuration as optional evidence",
+        "Does not infer source, write, or deletion authority",
+        "Preserves core-only operation without configuration"
+      ]
+    },
+    {
+      "id": 29,
+      "prompt": "A committed component boundary changed. Resolve the existing current architecture and decision-record destinations without creating product prose.",
+      "expected_output": "The agent invokes the shared resolver independently for current-architecture and decision-record, preserves both complete semantic-surface-resolution.v1 results, and hands each result to its owning authoring workflow without selecting a product surface.",
+      "assertions": [
+        "Requests current-architecture and decision-record as distinct semantic roles",
+        "Consumes each real resolver result unchanged",
+        "Leaves architecture authoring with Architect and ADR authoring with new-adr",
+        "Does not create current-product-truth, product-history, release-history, or user-documentation prose"
+      ]
+    },
+    {
+      "id": 30,
+      "prompt": "Capture a separated follow-on from an amended spec. The source text includes rationale, review findings, suggested order, and a long chronology.",
+      "expected_output": "The agent writes the canonical artifact first, registers only a terse workspace entry with minimal provenance, one short current/next summary, and hard dependencies, and emits no narrative comments, chronology, rationale, procedure, raw findings, suggested order, or copied source text in workspace.toml.",
+      "assertions": [
+        "Materializes the follow-on artifact before workspace registration",
+        "Uses one short current/next summary",
+        "Keeps only hard dependencies in needs",
+        "Writes no narrative comments or copied source text",
+        "Does not use workspace.toml as the rationale or finding store"
+      ]
+    }
+  ]
+}

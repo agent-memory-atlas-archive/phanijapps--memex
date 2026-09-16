@@ -1,0 +1,9 @@
+marker-schema-version = "0.1"
+
+[[packs-installed]]
+name = "core"
+version = "2.26.6"
+installed-at = 2026-09-16T11:27:40Z
+install-route = "cli"
+unresolved-markers = []
+new-companions = [".gitignore.upstream", "AGENTS.upstream.md"]

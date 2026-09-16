@@ -50,7 +50,7 @@ docs = [
 [tool.ruff]
 target-version = "py312"
 line-length = 100
-exclude = [".agents", "docs", "marketplace"]
+exclude = [".agents", "docs", "marketplace", "tools", ".codex"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "S", "SIM", "RUF"]

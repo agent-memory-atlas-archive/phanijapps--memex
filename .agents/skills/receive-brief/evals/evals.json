@@ -1,0 +1,16 @@
+{
+  "skill_name": "receive-brief",
+  "evals": [
+    {
+      "id": "delegates-continue-with-canonical-receipt",
+      "prompt": "Invoke receive-brief on this existing repository Draft.",
+      "expected_output": "Emit one deprecation notice, delegate once to author-delivery-brief continue, and return its canonical receipt with invoked_alias receive-brief.",
+      "assertions": [
+        "Emits exactly one concise notice",
+        "Delegates only to author-delivery-brief continue",
+        "Does not review, decompose, or write independently",
+        "The receipt is canonical and records only invoked_alias receive-brief"
+      ]
+    }
+  ]
+}
