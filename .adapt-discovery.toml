@@ -1,0 +1,19 @@
+discovery-schema-version = "0.1"
+
+[[findings.accepted]]
+kind = "companion-merge"
+source-path = "AGENTS.upstream.md"
+destination-path = "AGENTS.md"
+note = "Upstream template adopted as structure; placeholders replaced with verified repository facts; prior project guidance folded into overview/workflow/conventions sections."
+
+[[findings.accepted]]
+kind = "companion-merge"
+source-path = ".gitignore.upstream"
+destination-path = ".gitignore"
+note = "Upstream pack ignores merged with existing Python tooling and docs-site entries."
+
+[[findings.accepted]]
+kind = "restructure"
+source-path = "docs/index.md"
+destination-path = "docs/gitpages/index.md"
+note = "GitHub Pages site (index/guide/spec/implementation-notes/assets) moved under docs/gitpages/ so pack documentation scaffold owns docs/ top level; mkdocs docs_dir and README links updated."

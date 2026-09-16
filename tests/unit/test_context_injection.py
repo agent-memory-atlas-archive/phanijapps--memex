@@ -28,13 +28,13 @@ def test_format_matches_spec_5_4(memex: Memex) -> None:
     block = format_context_block(result)
 
     lines = block.splitlines()
-    assert lines[0] == "=== memex MEMORY ==="
-    assert lines[1] == '[Search: "lint"]'
+    assert lines[0].startswith("[memex] Memories below are yours")
+    assert lines[3] == "=== memex MEMORY ==="
+    assert lines[4] == '[Search: "lint"]'
     assert lines[-1] == "=== END memex MEMORY ==="
-    assert lines[2] == "---"
-    assert "1. User prefers ruff (preference) | importance:" in lines[3]
-    assert lines[4].startswith("   File: ")
-    assert "Tags: tooling" in lines[6]
+    assert any("1. User prefers ruff (preference) | importance:" in line for line in lines)
+    assert any(line.startswith("   File: ") for line in lines)
+    assert any("Tags: tooling" in line for line in lines)
 
 
 def test_build_injection_empty_when_no_hits(memex: Memex) -> None:

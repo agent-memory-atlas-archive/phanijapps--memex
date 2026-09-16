@@ -1,0 +1,16 @@
+{
+  "skill_name": "author-brief",
+  "evals": [
+    {
+      "id": "delegates-create-with-canonical-receipt",
+      "prompt": "Invoke author-brief on this bounded multi-slice request.",
+      "expected_output": "Emit one deprecation notice, delegate once to author-delivery-brief create, and return its canonical receipt with invoked_alias author-brief.",
+      "assertions": [
+        "Emits exactly one concise notice",
+        "Delegates only to author-delivery-brief create",
+        "Does not author, classify, or write independently",
+        "The receipt is canonical and records only invoked_alias author-brief"
+      ]
+    }
+  ]
+}

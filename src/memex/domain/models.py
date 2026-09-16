@@ -15,6 +15,7 @@ from datetime import UTC, datetime
 from typing import Literal
 
 NODE_TYPES: tuple[str, ...] = ("entity", "preference", "procedure", "summary", "episode")
+PAGE_STATUSES: tuple[str, ...] = ("active", "pending", "superseded", "archived")
 NON_EPISODE_TYPES: tuple[str, ...] = tuple(t for t in NODE_TYPES if t != "episode")
 TURN_ROLES: tuple[str, ...] = ("user", "agent", "tool")
 FORGET_MODES: tuple[str, ...] = ("hard", "soft", "decay")
@@ -159,6 +160,12 @@ class WriteInput:
     expires_at: str | None = None
     valid_from: str | None = None
     valid_to: str | None = None
+    # v1-guardrails fields: lifecycle + provenance (all optional, default active)
+    status: str = "active"
+    occurred_at: str | None = None
+    source: str | None = None
+    harness: str | None = None
+    confidence: str | None = None
 
     def __post_init__(self) -> None:
         if self.type not in NODE_TYPES:
@@ -169,6 +176,10 @@ class WriteInput:
             raise ValueError("importance must be within [0.0, 1.0]")
         self.tags = _norm_tags(self.tags)
         self.links = _norm_slugs(self.links, "links")
+        if self.status not in PAGE_STATUSES:
+            raise ValueError(f"status must be one of {PAGE_STATUSES}, got {self.status!r}")
+        if self.occurred_at is not None:
+            _check_iso(self.occurred_at, "occurred_at")
         if self.type == "episode" and not (self.session_id or "").strip():
             raise ValueError("session_id is required for episode nodes")
         if self.session_id is not None and not self.session_id.strip():
@@ -204,6 +215,11 @@ class WikiNode:
     session_id: str | None = None
     links: list[str] = field(default_factory=list)
     content_hash: str = ""
+    status: str = "active"
+    occurred_at: str | None = None
+    source: str | None = None
+    harness: str | None = None
+    confidence: str | None = None
 
     def __post_init__(self) -> None:
         if self.type not in NODE_TYPES:
@@ -212,6 +228,10 @@ class WikiNode:
             raise ValueError("title must be non-empty")
         if not 0.0 <= self.importance <= 1.0:
             raise ValueError("importance must be within [0.0, 1.0]")
+        if self.status not in PAGE_STATUSES:
+            raise ValueError(f"status must be one of {PAGE_STATUSES}, got {self.status!r}")
+        if self.occurred_at is not None:
+            _check_iso(self.occurred_at, "occurred_at")
 
 
 @dataclass(slots=True)
@@ -233,6 +253,7 @@ class RecallHit:
     last_access: str | None
     transcript_ref: str | None
     links: list[str]
+    status: str = "active"
 
 
 @dataclass(slots=True)

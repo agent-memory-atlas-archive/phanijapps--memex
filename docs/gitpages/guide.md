@@ -145,6 +145,36 @@ Requires LLM credentials (`MEMEX_API_KEY` or `[llm]` in `memex.toml`). Works
 with any OpenAI-compatible endpoint — OpenAI, Ollama, LM Studio, OpenRouter
 — via one `openai`-SDK client pointed at the configured base URL.
 
+### Token budgets and injection floor
+
+Recall and hook injection pack to a token budget (`--max-tokens`, default
+4096): page text counts against the budget, metadata is free, a hit that
+does not fit is skipped in favor of smaller ones, and the top hit is always
+returned whole. Hook injection also stays silent when the best match ranks
+below the floor — weak matches inject nothing rather than noise. Every
+injected block opens with the three-line memory constitution.
+
+### Page status and approval
+
+Pages carry `status: active | pending | superseded | archived`. Recall and
+injection see `active` pages only (pass `--include-inactive` /
+`include_inactive` to see the rest). `memex forget <slug> --mode archive`
+retires in place instead of deleting. `memex merge <target> <source>`
+appends the source body into the target and marks the source superseded
+with a backlink. With `[governance] approval = "manual"` in `memex.toml`,
+consolidation-created pages land `pending`; `memex approve <slug>` makes
+them recallable. `memex status` reports index freshness, last capture per
+harness, pending/archived counts, and consecutive zero-yield
+consolidations (memex verify warns on a streak of three).
+
+### Secret scrubbing
+
+Every write boundary — CLI, MCP, transcript ingest, consolidation —
+redacts a catalog of credential patterns (API keys, tokens, private keys,
+database URLs, JWTs) before anything is stored, replacing matches with
+typed `[REDACTED:<kind>]` markers. Redaction categories are logged; matched
+text never is.
+
 ### Maintenance
 
 ```bash

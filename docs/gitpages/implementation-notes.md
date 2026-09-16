@@ -137,3 +137,17 @@ rule, and the OpenAI SDK is the single LLM client.
   from ~/.memex/wiki/ to ~/.memex/docs/ (pure memory layer, not a
   wiki): existing installs migrate in place on first open, old backups
   with wiki/ remain restorable.
+
+- **v1 guardrails shipped (wave 1 + C1).** Token-budget recall with
+  skip-and-continue packing and a top-1-whole guarantee (A3); injection
+  floor — weak matches inject silence (A4); `occurred_at` dual timestamp
+  (B4); page `status` lifecycle with archive/merge and recall filtering
+  (B5); HITL approval via `[governance] approval = "manual"` + `memex
+  approve` (C1); reserved provenance namespaces source/harness/confidence
+  (C2); 10-pattern secret scrubber at every write boundary (D1, adapted
+  from Hindsight's 45-pattern catalog to anchored stdlib regexes);
+  enablement invariant pinned — no repo-carried config enables capture
+  (D2); `memex status` + verify zero-yield warning over the new
+  `logs/runs.jsonl` run log (F2/F4); three-line memory constitution on
+  every injected block (G2). Schema v2: stale `mem.db` auto-rebuilds from
+  the wiki on open — no DDL migration path exists.

@@ -17,7 +17,7 @@ def test_initialize_is_idempotent(data_dir: Path) -> None:
     index = IndexManager(data_dir / "mem.db")
     index.initialize()
     index.initialize()
-    assert index.get_meta("schema_version") == "1"
+    assert index.get_meta("schema_version") == "2"
 
 
 def test_upsert_updates_existing_row(data_dir: Path) -> None:

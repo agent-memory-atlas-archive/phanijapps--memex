@@ -25,6 +25,7 @@ from memex.domain.models import (
     WriteInput,
     utc_now_iso,
 )
+from memex.domain.scrub import scrub
 from memex.infrastructure.backup import BackupRestore
 from memex.infrastructure.bm25_retriever import BM25Retriever
 from memex.infrastructure.config import ConfigLoader, MemexConfig
@@ -34,6 +35,7 @@ from memex.infrastructure.index_manager import IndexManager
 from memex.infrastructure.link_manager import LinkManager
 from memex.infrastructure.llm_clients import client_from_config
 from memex.infrastructure.logging import setup_logging
+from memex.infrastructure.run_log import append_run
 from memex.infrastructure.transcript_hook import TranscriptHook
 from memex.infrastructure.wiki_store import WikiStore, hash_body
 
@@ -57,6 +59,9 @@ class Memex:
     def _open_storage(self) -> None:
         self.wiki_store = WikiStore(self.data_dir, slug_algo=self.config.wiki.slug_algo)
         self.index_manager = IndexManager(self.config.db_path)
+        if self.index_manager.needs_rebuild():
+            # mem.db is disposable: a stale schema rebuilds from the wiki.
+            self.index_manager.drop_for_rebuild()
         self.link_manager = LinkManager(self.index_manager.connection, self.wiki_store.wiki_dir)
         self.retriever = BM25Retriever(
             self.config.db_path,
@@ -98,14 +103,18 @@ class Memex:
                 fails field validation.
             WikiStoreError: The wiki directory is not writable.
         """
+        self._guard_reserved(input)
         if len(input.body) > self.config.wiki.max_body_chars:
             raise ValueError(
                 f"body exceeds wiki.max_body_chars ({self.config.wiki.max_body_chars})"
             )
+        clean_body, scrub_kinds = scrub(input.body)
+        if scrub_kinds:
+            self.logger.warning("operation=write scrubbed=%s", ",".join(scrub_kinds))
         node = WikiNode(
             type=input.type,
             title=input.title,
-            body=input.body,
+            body=clean_body,
             id="",
             tags=input.tags,
             importance=input.importance,
@@ -131,6 +140,8 @@ class Memex:
         time_range: tuple[str, str] | None = None,
         tags: list[str] | None = None,
         include_expired: bool = False,
+        include_inactive: bool = False,
+        max_tokens: int | None = None,
     ) -> RecallResult:
         """BM25 search over the index; each hit records access statistics.
 
@@ -167,7 +178,12 @@ class Memex:
             time_range=time_range,
             tags=tags,
             include_expired=include_expired,
+            include_inactive=include_inactive,
         )
+        if max_tokens is not None:
+            from memex.application.context_injection import pack_to_budget
+
+            result.hits = pack_to_budget(result.hits, max_tokens)
         self.logger.info(
             "operation=recall hits=%d total_indexed=%d", len(result.hits), result.total_indexed
         )
@@ -202,6 +218,16 @@ class Memex:
                 self.config,
             )
         report = self._consolidator.consolidate(input)
+        append_run(
+            self.data_dir,
+            {
+                "ts": utc_now_iso(),
+                "kind": "consolidation",
+                "mode": report.mode,
+                "episodes_processed": report.episodes_processed,
+                "nodes_created": len(report.nodes_created),
+            },
+        )
         self.logger.info(
             "operation=consolidate mode=%s episodes=%d nodes=%d",
             report.mode,
@@ -234,12 +260,18 @@ class Memex:
             FileNotFoundError: No page exists for ``slug``.
             ValueError: ``mode`` is invalid.
         """
-        if mode not in FORGET_MODES:
+        if mode not in (*FORGET_MODES, "archive"):
             raise ValueError(f"mode must be one of {FORGET_MODES}, got {mode!r}")
         node = self.wiki_store.read(slug)
         if node is None:
             raise FileNotFoundError(f"no wiki page for slug: {slug!r}")
 
+        if mode == "archive":
+            node.status = "archived"
+            stored = self.wiki_store.write(node)
+            self.index_manager.update_record(stored)
+            self.logger.info("operation=forget mode=archive slug=%s", slug)
+            return ForgetResult(slug=slug, forgotten=True, mode=mode, file_path=stored.file_path)
         if mode == "hard":
             self.wiki_store.delete(slug)
             self.index_manager.remove_record(slug)
@@ -276,6 +308,17 @@ class Memex:
             ValueError: ``session_id`` or a turn entry is invalid.
         """
         report = self.transcript_hook.ingest(input, overwrite=overwrite)
+        append_run(
+            self.data_dir,
+            {
+                "ts": utc_now_iso(),
+                "kind": "capture",
+                "session_id": input.session_id,
+                "harness": input.header.harness if input.header else None,
+                "turn_count": report.turn_count,
+                "cwd_recorded": bool(input.header and input.header.meta.get("cwd")),
+            },
+        )
         self.logger.info(
             "operation=ingest_transcript session=%s turns=%d",
             input.session_id,
@@ -365,11 +408,94 @@ class Memex:
         self.logger.info("operation=restore warnings=%d", len(report.warnings))
         return report
 
+    @staticmethod
+    def _guard_reserved(input: object) -> None:
+        """User-supplied source/harness/confidence is a forgery attempt."""
+        reserved = {
+            key: value
+            for key, value in (
+                ("source", getattr(input, "source", None)),
+                ("harness", getattr(input, "harness", None)),
+                ("confidence", getattr(input, "confidence", None)),
+            )
+            if value is not None
+        }
+        if reserved:
+            raise ValueError(
+                "source/harness/confidence are reserved namespaces set by "
+                f"capture and consolidation, not user input: {sorted(reserved)}"
+            )
+
+    def approve(self, slug: str) -> dict[str, object]:
+        """Flip a pending page to active and re-index it."""
+        node = self.wiki_store.read(slug)
+        if node is None:
+            raise FileNotFoundError(f"no wiki page for slug: {slug!r}")
+        if node.status != "pending":
+            raise ValueError(f"page {slug!r} is {node.status!r}, not pending")
+        node.status = "active"
+        stored = self.wiki_store.write(node)
+        self.index_manager.update_record(stored)
+        self.logger.info("operation=approve slug=%s", slug)
+        return {"slug": slug, "status": "active"}
+
+    def merge(self, target: str, source: str) -> dict[str, object]:
+        """Append source's body into target; source becomes superseded."""
+        target_node = self.wiki_store.read(target)
+        if target_node is None:
+            raise FileNotFoundError(f"no wiki page for slug: {target!r}")
+        source_node = self.wiki_store.read(source)
+        if source_node is None:
+            raise FileNotFoundError(f"no wiki page for slug: {source!r}")
+        target_node.body = (
+            target_node.body.rstrip() + f"\n\n## Merged from [[{source}]]\n\n{source_node.body}"
+        )
+        target_node = self.wiki_store.write(target_node)
+        self.index_manager.update_record(target_node)
+        self.link_manager.sync_node(target_node)
+
+        source_node.status = "superseded"
+        source_node.links = sorted({*source_node.links, target})
+        source_node = self.wiki_store.write(source_node)
+        self.index_manager.update_record(source_node)
+        self.logger.info("operation=merge target=%s source=%s", target, source)
+        return {"target": target, "source": source, "source_status": "superseded"}
+
     def get_provenance(self, slug: str) -> ProvenanceReport | None:
         return self.transcript_hook.get_provenance(slug)
 
     def list_sessions(self) -> list[SessionSummary]:
         return self.transcript_hook.list_sessions()
+
+    def status(self) -> dict[str, object]:
+        """One-command health: index freshness, captures, pending, zero-yield."""
+        from memex.infrastructure.run_log import read_runs, zero_yield_streak
+
+        stale = 0
+        from memex.infrastructure.wiki_store import hash_body
+
+        for node in self.wiki_store.scan_all():
+            row = self.index_manager.get(node.slug)
+            if row is None or str(row["content_hash"]) != hash_body(node.body):
+                stale += 1
+        runs = read_runs(self.data_dir)
+        last_capture: dict[str, str | None] = {}
+        for run in runs:
+            if run.get("kind") == "capture" and isinstance(run.get("harness"), str):
+                last_capture.setdefault(run["harness"], str(run.get("ts")))
+        counts = {"pending": 0, "archived": 0, "superseded": 0}
+        for node in self.wiki_store.scan_all():
+            if node.status in counts:
+                counts[node.status] += 1
+        return {
+            "index_stale_rows": stale,
+            "index_total": self.index_manager.count(),
+            "last_capture": last_capture,
+            "pending": counts["pending"],
+            "archived": counts["archived"],
+            "superseded": counts["superseded"],
+            "zero_yield_streak": zero_yield_streak(runs),
+        }
 
     def apply_decay(self, *, dry_run: bool = False) -> list[tuple[str, float, float]]:
         """Recompute importance for every node via half-life decay.

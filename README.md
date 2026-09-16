@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/assets/logo-wordmark.svg" width="260" alt="memex"/>
+<img src="docs/gitpages/assets/logo-wordmark.svg" width="260" alt="memex"/>
 
 **A durable, local-first memory layer for AI coding agents.**
 
@@ -12,7 +12,7 @@ The filesystem is the memory · the index is disposable · every session is prov
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-3776AB.svg)](pyproject.toml)
 [![Docs site](https://img.shields.io/website?url=https%3A%2F%2Fphanijapps.github.io%2Fmemex%2F&label=docs)](https://phanijapps.github.io/memex/)
 
-[Documentation](https://phanijapps.github.io/memex/) · [User guide](docs/guide.md) · [Specification](docs/spec.md) · [Harness adapters](marketplace/)
+[Documentation](https://phanijapps.github.io/memex/) · [User guide](docs/gitpages/guide.md) · [Specification](docs/gitpages/spec.md) · [Harness adapters](marketplace/)
 
 </div>
 
@@ -115,7 +115,7 @@ Exit 1 fails the build. Ready-made workflow: [marketplace/copilot/memex-verify.y
 | Command | Purpose |
 |---|---|
 | `write` / `recall` | Store and search memory nodes (BM25, filters, snippets, expiry semantics) |
-| `forget` | `hard` delete, `soft` retire, or `decay` a memory |
+| `forget` | `hard` delete, `soft` retire, `decay`, or `archive` a memory |
 | `consolidate` | LLM distillation of episodes into durable nodes — any OpenAI-compatible endpoint, **or the coding harness itself** (`claude`/`codex`/`pi` as provider) |
 | `ingest-transcript` | Store a session JSONL + create the linked episode node |
 | `hook session-start \| prompt \| transcript` | Harness hook contract: context injection + transcript capture |
@@ -130,9 +130,9 @@ Exit 1 fails the build. Ready-made workflow: [marketplace/copilot/memex-verify.y
 | | |
 |---|---|
 | 📖 [Documentation site](https://phanijapps.github.io/memex/) | Guide, specification, implementation notes |
-| 🚀 [User guide](docs/guide.md) | Concepts, every operation, harness integration, config reference |
-| 📐 [Specification](docs/spec.md) | Memory model, schemas, C4 diagrams, acceptance tests |
-| 📝 [Implementation notes](docs/implementation-notes.md) | Spec deviations and the reasoning |
+| 🚀 [User guide](docs/gitpages/guide.md) | Concepts, every operation, harness integration, config reference |
+| 📐 [Specification](docs/gitpages/spec.md) | Memory model, schemas, C4 diagrams, acceptance tests |
+| 📝 [Implementation notes](docs/gitpages/implementation-notes.md) | Spec deviations and the reasoning |
 | 🧩 [Harness adapters](marketplace/) | pi · Claude Code · Codex · GitHub Copilot |
 
 ## Contributing

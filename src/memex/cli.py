@@ -66,6 +66,8 @@ def _build_parser() -> argparse.ArgumentParser:
     recall.add_argument("--type", default=None)
     recall.add_argument("--tag", action="append", default=None)
     recall.add_argument("--include-expired", action="store_true")
+    recall.add_argument("--include-inactive", action="store_true")
+    recall.add_argument("--max-tokens", type=int, default=None)
 
     consolidate = sub.add_parser("consolidate", help=summary("memex_consolidate"))
     consolidate.add_argument("--mode", choices=["full", "dry-run"], default="full")
@@ -73,7 +75,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     forget = sub.add_parser("forget", help=summary("memex_forget"))
     forget.add_argument("slug")
-    forget.add_argument("--mode", choices=["hard", "soft", "decay"], default="hard")
+    forget.add_argument("--mode", choices=["hard", "soft", "decay", "archive"], default="hard")
     forget.add_argument("--valid-to", default=None)
 
     ingest = sub.add_parser("ingest-transcript", help=summary("memex_ingest_transcript"))
@@ -97,12 +99,25 @@ def _build_parser() -> argparse.ArgumentParser:
     import_cmd = sub.add_parser("import", help=summary("memex_import"))
     import_cmd.add_argument("--input", type=Path, required=True)
 
+    approve_cmd = sub.add_parser("approve", help="Approve a pending page (flip status to active)")
+    approve_cmd.add_argument("slug")
+
+    merge_cmd = sub.add_parser(
+        "merge", help="Merge source page into target; source becomes superseded"
+    )
+    merge_cmd.add_argument("target")
+    merge_cmd.add_argument("source")
+
     sub.add_parser("info", help="Show data directory and index statistics")
+    sub.add_parser("status", help="Memory health: freshness, captures, pending, zero-yield")
 
     watch = sub.add_parser("watch", help="Poll for external wiki edits and re-index")
     watch.add_argument("--poll-interval", type=int, default=60)
 
     sub.add_parser("serve-mcp", help="Run the stdio MCP server")
+
+    viz_cmd = sub.add_parser("viz", help="Start the on-demand HTMX dashboard (localhost)")
+    viz_cmd.add_argument("--port", type=int, default=7171)
 
     verify_cmd = sub.add_parser(
         "verify", help="Deterministic gate: memory health and activity evidence"
@@ -178,6 +193,18 @@ def _build_parser() -> argparse.ArgumentParser:
     hook_transcript.add_argument("--session-id", default=None)
     hook_transcript.add_argument(
         "--no-overwrite", action="store_true", help="Fail quietly if already ingested"
+    )
+    hook_transcript.add_argument(
+        "--enrich",
+        action="store_true",
+        help="Piggyback on the harness CLI (codex/claude/pi) to LLM-summarize "
+        "the episode body. Skipped when already enriched. On by default when "
+        "the harness is known.",
+    )
+    hook_transcript.add_argument(
+        "--no-enrich",
+        action="store_true",
+        help="Skip harness-LLM enrichment even when available.",
     )
     hook_transcript.add_argument(
         "--consolidate",
@@ -435,6 +462,30 @@ def _hook_transcript(args: argparse.Namespace) -> int:
         "turn_count": report.turn_count,
         "harness": args.harness,
     }
+
+    # Harness-piggybacked enrichment: ride the already-running CLI's model
+    # to summarize the session. Idempotent — already-enriched episodes skip.
+    enrich = args.enrich or not args.no_enrich
+    if enrich and parsed.header and parsed.header.harness:
+        from memex.infrastructure.episode_enrichment import (
+            enrich_episode,
+            enriched_body,
+            is_enriched,
+        )
+
+        episode_node = memex.wiki_store.read(report.episode_node)
+        if episode_node and not is_enriched(episode_node.body):
+            summary = enrich_episode(parsed.header.harness, turns)
+            if summary:
+                episode_node.body = enriched_body(summary, episode_node.body)
+                stored_ep = memex.wiki_store.write(episode_node)
+                memex.index_manager.update_record(stored_ep)
+                result["enriched"] = True
+            else:
+                result["enriched"] = False
+        else:
+            result["enriched"] = "already" if episode_node else False
+
     auto = os.environ.get("MEMEX_AUTO_CONSOLIDATE") == "1"
     if args.consolidate or auto:
         result["consolidation"] = _consolidate_episode(memex, report.episode_node)
@@ -465,6 +516,13 @@ def _run(args: argparse.Namespace) -> int:
         from memex.mcp_server import run_server
 
         run_server()
+        return 0
+
+    if args.command == "viz":
+        from memex.infrastructure.viz import serve
+
+        data_dir = args.data_dir.expanduser() if args.data_dir else None
+        serve(data_dir=data_dir, port=args.port)
         return 0
 
     if args.command == "hook":
@@ -499,6 +557,8 @@ def _run(args: argparse.Namespace) -> int:
                     node_type=args.type,
                     tags=args.tag,
                     include_expired=args.include_expired,
+                    include_inactive=args.include_inactive,
+                    max_tokens=args.max_tokens,
                 )
             )
         elif args.command == "consolidate":
@@ -526,6 +586,10 @@ def _run(args: argparse.Namespace) -> int:
             _emit(memex.import_export.export(args.output))
         elif args.command == "import":
             _emit(memex.import_export.import_file(args.input))
+        elif args.command == "approve":
+            _emit(memex.approve(args.slug))
+        elif args.command == "merge":
+            _emit(memex.merge(args.target, args.source))
         elif args.command == "verify":
             report = run_verify(
                 memex,
@@ -535,6 +599,8 @@ def _run(args: argparse.Namespace) -> int:
             )
             _emit(report)
             return 0 if report.ok else 1
+        elif args.command == "status":
+            _emit(memex.status())
         elif args.command == "info":
             _emit(_info(memex))
         elif args.command == "watch":

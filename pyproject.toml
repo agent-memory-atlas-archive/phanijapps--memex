@@ -46,11 +46,12 @@ docs = [
 
 [tool.hatch.build.targets.wheel.force-include]
 "marketplace" = "memex/marketplace"
+"src/memex/infrastructure/htmx.min.js" = "memex/infrastructure/htmx.min.js"
 
 [tool.ruff]
 target-version = "py312"
 line-length = 100
-exclude = [".agents", "docs", "marketplace"]
+exclude = [".agents", "docs", "marketplace", "tools", ".codex"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "S", "SIM", "RUF"]
@@ -60,6 +61,7 @@ select = ["E", "F", "I", "B", "UP", "S", "SIM", "RUF"]
 "src/memex/infrastructure/index_manager.py" = ["E501"]
 "src/memex/infrastructure/transcript_hook.py" = ["E501"]
 "src/memex/infrastructure/workspace_context.py" = ["S603"]
+"src/memex/infrastructure/viz.py" = ["E501"]
 "src/memex/infrastructure/llm_clients.py" = ["S603"]
 
 [tool.mypy]
@@ -71,6 +73,7 @@ no_implicit_reexport = true
 
 [tool.pytest.ini_options]
 addopts = ["--strict-markers", "--strict-config", "--cov=memex", "--cov-report=term-missing:skip-covered"]
+markers = ["ollama: opt-in integration tests against a local ollama server"]
 testpaths = ["tests"]
 
 [tool.coverage.run]

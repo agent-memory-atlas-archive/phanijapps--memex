@@ -77,8 +77,10 @@ class TranscriptHook:
                 handle.write(json.dumps(self._turn_to_json(turn)) + "\n")
 
         counts = self._count_roles(input.turns)
+        harness = input.header.harness if input.header else None
         meta: dict[str, object] = {
             "session_id": input.session_id,
+            "harness": harness,
             "started_at": input.turns[0].ts if input.turns else None,
             "ended_at": input.turns[-1].ts if input.turns else None,
             "turn_count": len(input.turns),
@@ -162,9 +164,11 @@ class TranscriptHook:
     def _write_episode(self, input: IngestTranscriptInput) -> WikiNode:
         slug = episode_slug(input.session_id)
         counts = self._count_roles(input.turns)
+        harness = input.header.harness if input.header else None
         episode = WikiNode(
             type="episode",
             title=f"Session {input.session_id}",
+            harness=harness,
             body=self._summary(input, counts),
             id="",
             slug=slug,
@@ -176,19 +180,42 @@ class TranscriptHook:
         self._links.sync_node(stored)
         return stored
 
+    _SYSTEM_NOISE_PREFIXES = ("#", "<", "\u003crecommended", "<recommended", "<environment")
+
     def _summary(self, input: IngestTranscriptInput, counts: dict[str, int]) -> str:
-        excerpt = ""
+        """Deterministic session body: real intent + last outcome + tools.
+
+        Filters system noise (AGENTS.md, environment context, plugin lists)
+        so the episode says what the session was about, not what the host
+        injected before the first user turn.
+        """
+        intent = ""
         for turn in input.turns:
-            if turn.role == "user":
-                excerpt = turn.content[:_SUMMARY_EXCERPT_CHARS]
+            if turn.role == "user" and not any(
+                turn.content.startswith(prefix) for prefix in self._SYSTEM_NOISE_PREFIXES
+            ):
+                intent = turn.content[:_SUMMARY_EXCERPT_CHARS].strip()
                 break
-        parts = [
+
+        outcome = ""
+        for turn in reversed(input.turns):
+            if turn.role == "agent" and turn.content.strip():
+                outcome = turn.content[:_SUMMARY_EXCERPT_CHARS].strip()
+                break
+
+        tools = sorted({turn.tool_name for turn in input.turns if turn.tool_name})[:5]
+
+        lines = [
             f"Session {input.session_id} with {len(input.turns)} turns "
             f"({counts['user']} user, {counts['agent']} agent, {counts['tool']} tool)."
         ]
-        if excerpt:
-            parts.append(f'Opened with: "{excerpt}"')
-        return " ".join(parts)
+        if intent:
+            lines.append(f"\n**Intent:** {intent}")
+        if outcome:
+            lines.append(f"\n**Outcome:** {outcome}")
+        if tools:
+            lines.append(f"\n**Tools:** {', '.join(tools)}")
+        return "\n".join(lines)
 
     def _episode_backlinks(self, slug: str) -> list[str]:
         rows = self._index.connection.execute(

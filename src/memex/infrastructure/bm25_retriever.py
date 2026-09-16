@@ -21,7 +21,7 @@ _SNIPPET_TITLE_COLUMN = 1
 _BASE_SQL = """
 SELECT
     w.slug, w.file_path, w.title, w.node_type, w.importance,
-    w.tags, w.created, w.updated, w.last_access, w.transcript_ref,
+    w.tags, w.created, w.updated, w.last_access, w.transcript_ref, w.status,
     bm25(wiki_fts) AS score,
     snippet(wiki_fts, 2, '<mark>', '</mark>', '...', 32) AS body_snippet,
     snippet(wiki_fts, 1, '<mark>', '</mark>', '...', 32) AS title_snippet
@@ -78,6 +78,7 @@ class BM25Retriever:
         time_range: tuple[str, str] | None = None,
         tags: list[str] | None = None,
         include_expired: bool = False,
+        include_inactive: bool = False,
     ) -> RecallResult:
         """Search the index and return ranked hits with metadata.
 
@@ -129,6 +130,8 @@ class BM25Retriever:
             clauses.append("(w.expires_at IS NULL OR w.expires_at >= :now)")
             clauses.append("(w.valid_to IS NULL OR w.valid_to >= :now)")
             params["now"] = now
+        if not include_inactive:
+            clauses.append("(w.status IS NULL OR w.status = 'active')")
 
         sql = _BASE_SQL
         if clauses:
@@ -179,8 +182,13 @@ class BM25Retriever:
                     (str(row["slug"]),),
                 ).fetchall()
             ]
+        try:
+            status = str(row["status"])
+        except (IndexError, KeyError):
+            status = "active"
         return RecallHit(
             slug=str(row["slug"]),
+            status=status,
             file_path=str(row["file_path"]),
             title=str(row["title"]),
             node_type=str(row["node_type"]),
