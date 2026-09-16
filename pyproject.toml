@@ -60,6 +60,7 @@ select = ["E", "F", "I", "B", "UP", "S", "SIM", "RUF"]
 "src/memex/infrastructure/index_manager.py" = ["E501"]
 "src/memex/infrastructure/transcript_hook.py" = ["E501"]
 "src/memex/infrastructure/workspace_context.py" = ["S603"]
+"src/memex/infrastructure/viz.py" = ["E501"]
 "src/memex/infrastructure/llm_clients.py" = ["S603"]
 
 [tool.mypy]

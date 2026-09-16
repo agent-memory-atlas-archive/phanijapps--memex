@@ -116,6 +116,9 @@ def _build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("serve-mcp", help="Run the stdio MCP server")
 
+    viz_cmd = sub.add_parser("viz", help="Start the on-demand HTMX dashboard (localhost)")
+    viz_cmd.add_argument("--port", type=int, default=7171)
+
     verify_cmd = sub.add_parser(
         "verify", help="Deterministic gate: memory health and activity evidence"
     )
@@ -513,6 +516,13 @@ def _run(args: argparse.Namespace) -> int:
         from memex.mcp_server import run_server
 
         run_server()
+        return 0
+
+    if args.command == "viz":
+        from memex.infrastructure.viz import serve
+
+        data_dir = args.data_dir.expanduser() if args.data_dir else None
+        serve(data_dir=data_dir, port=args.port)
         return 0
 
     if args.command == "hook":
