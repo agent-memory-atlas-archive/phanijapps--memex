@@ -73,18 +73,38 @@ def _field(payload: dict[str, object], *names: str) -> str | None:
     return None
 
 
+def _codex_home() -> Path:
+    return Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex"))).expanduser()
+
+
 def _rollout_for_session(session_id: str) -> str | None:
-    """Newest rollout whose filename embeds the session id (never the
-    globally newest file when a session is identified)."""
-    sessions = Path.home() / ".codex" / "sessions"
-    if not sessions.is_dir():
-        return None
-    matches = sorted(
-        sessions.rglob(f"*{session_id}*.jsonl"),
-        key=lambda path: path.stat().st_mtime,
-        reverse=True,
-    )
-    return str(matches[0]) if matches else None
+    """Locate the rollout for an identified session, never by global
+    recency: filename match under CODEX_HOME/sessions, then the sqlite
+    thread store's rollout_path column."""
+    sessions = _codex_home() / "sessions"
+    if sessions.is_dir():
+        matches = sorted(
+            sessions.rglob(f"*{session_id}*.jsonl"),
+            key=lambda path: path.stat().st_mtime,
+            reverse=True,
+        )
+        if matches:
+            return str(matches[0])
+
+    import sqlite3
+
+    for db in sorted(_codex_home().glob("state_*.sqlite"), reverse=True):
+        try:
+            con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=2)
+            row = con.execute(
+                "SELECT rollout_path FROM threads WHERE id = ?", (session_id,)
+            ).fetchone()
+            con.close()
+        except sqlite3.Error:
+            continue
+        if row and row[0] and Path(row[0]).exists():
+            return row[0]
+    return None
 
 
 def _capture_args(event: str, payload: dict[str, object]) -> list[str] | None:
