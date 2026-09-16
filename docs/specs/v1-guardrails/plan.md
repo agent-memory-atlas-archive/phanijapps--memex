@@ -221,6 +221,6 @@ cannot silently disable redaction because the catalog is a frozen tuple.
 
 - 2026-09-16: owner review resolved three residual concerns — constitution
   trimmed to three lines; schema change is auto-rebuild-on-mismatch (no DDL);
-  AC-0015 demoted to guard tests (behavior already ships). Approved.
+  the former cwd-attribution criterion demoted to guard tests (behavior already ships). Approved.
 - 2026-09-16: drafted from `docs/v1_enhance.md` wave 1 + C1 per user scope
   confirmation; MCP annotations dropped (already shipped).
