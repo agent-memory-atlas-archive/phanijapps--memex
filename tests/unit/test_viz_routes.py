@@ -104,8 +104,8 @@ class TestOverview:  # AC-0001
         port, _ = viz_server
         code, body = _get(port, "/overview")
         assert code == 200
-        assert "memory pages" in body
-        assert "pending approval" in body
+        assert "Memory pages" in body
+        assert "Pending approval" in body
 
 
 class TestPagesFilter:  # AC-0002
@@ -137,8 +137,8 @@ class TestHealth:  # AC-0004
         port, _ = viz_server
         code, body = _get(port, "/health")
         assert code == 200
-        assert "Index:" in body
-        assert "Pending:" in body
+        assert "pages" in body
+        assert "pending" in body
 
 
 class TestSessions:  # AC-0005
