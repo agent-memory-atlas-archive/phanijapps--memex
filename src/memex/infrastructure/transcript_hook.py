@@ -77,8 +77,10 @@ class TranscriptHook:
                 handle.write(json.dumps(self._turn_to_json(turn)) + "\n")
 
         counts = self._count_roles(input.turns)
+        harness = input.header.harness if input.header else None
         meta: dict[str, object] = {
             "session_id": input.session_id,
+            "harness": harness,
             "started_at": input.turns[0].ts if input.turns else None,
             "ended_at": input.turns[-1].ts if input.turns else None,
             "turn_count": len(input.turns),
@@ -162,9 +164,11 @@ class TranscriptHook:
     def _write_episode(self, input: IngestTranscriptInput) -> WikiNode:
         slug = episode_slug(input.session_id)
         counts = self._count_roles(input.turns)
+        harness = input.header.harness if input.header else None
         episode = WikiNode(
             type="episode",
             title=f"Session {input.session_id}",
+            harness=harness,
             body=self._summary(input, counts),
             id="",
             slug=slug,
