@@ -8,6 +8,7 @@ carrying enrichment are skipped.
 
 from __future__ import annotations
 
+import os
 import subprocess
 
 from memex.domain.models import TurnStreamEntry
@@ -70,12 +71,17 @@ def enrich_episode(
 
     prompt = ENRICH_PROMPT.format(turns=text)
     try:
+        # Break the enrichment feedback loop: the subprocess is itself a
+        # harness session that would trigger the notify hook, capturing the
+        # enrichment prompt as a new episode, enriching THAT, forever.
+        env = {**os.environ, "MEMEX_SKIP_CAPTURE": "1"}
         completed = subprocess.run(  # noqa: S603 - harness CLI, argv built locally
             [*base, prompt],
             capture_output=True,
             text=True,
             timeout=_TIMEOUT,
             check=False,
+            env=env,
         )
     except (OSError, subprocess.SubprocessError):
         return None

@@ -152,6 +152,9 @@ def _handoff_detached(event: str, session_id: str, args: list[str]) -> None:
 
 
 def main() -> int:
+    if os.environ.get("MEMEX_SKIP_CAPTURE") == "1":
+        return 0  # enrichment or other internal subprocess — don't capture
+
     raw = sys.stdin.read().strip()
     if not raw:
         # Legacy turn-complete transport: JSON as argv[1].
