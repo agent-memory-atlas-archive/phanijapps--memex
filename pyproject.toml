@@ -71,6 +71,7 @@ no_implicit_reexport = true
 
 [tool.pytest.ini_options]
 addopts = ["--strict-markers", "--strict-config", "--cov=memex", "--cov-report=term-missing:skip-covered"]
+markers = ["ollama: opt-in integration tests against a local ollama server"]
 testpaths = ["tests"]
 
 [tool.coverage.run]
