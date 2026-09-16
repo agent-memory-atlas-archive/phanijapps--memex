@@ -2,7 +2,7 @@
 
 **Source:** research subagent (Hindsight docs + Letta staging + training knowledge)
 **Purpose:** adversarial review cycle — 5 rounds to convergence
-**Status:** round 3 revisions applied
+**Status:** round 4 — ready for final review
 
 ---
 
@@ -33,9 +33,8 @@
 | XSS gap | 🔴 | Tags, session IDs, dates interpolated unescaped — a hostile tag like `<svg/onload=alert(1)>` in a memory page executes in the dashboard (tag normalization replaces spaces but preserves slashes and angle brackets) |
 | Chart overflow | 🔴 | `bar_w = max(600//len, 8)` — 76+ sessions silently exceed the 600px viewBox (76×8=608; newest bar starts outside viewBox, hidden) |
 | Zero-token lie | 🟡 | `max(int(h), 2)` renders zero-token sessions as 2px bars. Target: zero-token sessions render as a 1px baseline tick, not a bar |
-| Malformed meta.json kills /tokens AND /sessions | 🔴 | String `total_tokens` (TypeError at division), string/null `turn_count` (ValueError at int()), non-string `started_at` (TypeError at sort) — one bad file permanently breaks both panels |
+| Malformed meta.json kills /tokens AND /sessions | 🔴 | String `total_tokens` (TypeError at division), string/null `turn_count` (TypeError at int()), non-string `started_at` (TypeError at sort) — one bad file permanently breaks both panels |
 | Error-as-empty | 🟡 | Search exceptions render "No results" — indistinguishable from empty store |
- Missing `<meta charset>`, `<meta viewport>`, `lang="en"`; h1 says "memex" (title tag already correct) |
 
 ### P1 — Structure (the big win)
 
@@ -43,10 +42,10 @@
 
 | Change | Rationale |
 |---|---|
-| Nav + swapped pane (Overview / Memories / Sessions / Tokens / Search) | Rule 3: dashboard ≠ report; one screen per view |
-| Merge stats grid + health card → single status bar (fields: ● state dot + pages + pending + index freshness; zero-yield moves to P2 tooltip, not a top-level KPI) | Current duplication: same 4 numbers appear twice |
-| Search in header as primary action | Search IS the app for a memory tool |
-| Memory titles → `/page/<id>` real links | Rule 7: click-through to evidence |
+| Nav + swapped pane (Overview / Memories / Sessions / Tokens) | Rule 3: dashboard ≠ report; one screen per view |
+| Merge stats grid + health card → single status bar (fields: ● state dot + pages + pending + index freshness; archived and zero-yield shown in P2 tooltip, not top-level KPIs) | Current duplication: same 4 numbers appear twice |
+| Search input in header (persistent) swaps results into the main pane; nav omits a Search tab — the header IS search | Search IS the app for a memory tool |
+| Memory titles → `/page/<slug>` real links | Rule 7: click-through to evidence |
 | `hx-push-url` on nav + filters | Real URLs, back-button works |
 
 
