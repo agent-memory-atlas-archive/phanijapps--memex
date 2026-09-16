@@ -38,7 +38,7 @@ internal.
 ## Install
 
 ```bash
-memex install <pi|claude|codex|copilot|custom>
+memex install            # interactive: pi | claude | codex | copilot | custom
 ```
 
 The marketplace is bundled inside the memex package; `--from` is only

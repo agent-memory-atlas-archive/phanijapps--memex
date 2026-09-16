@@ -19,7 +19,7 @@ All three are silent on empty results and never block on failure.
 Automatic (merges into `~/.claude/settings.json`, backs up first):
 
 ```bash
-memex harness install claude --from /path/to/memex/marketplace
+memex install claude   # from any directory; add --from only for a modified checkout
 ```
 
 Manual: merge [`settings-hooks.json`](settings-hooks.json) into

@@ -15,7 +15,7 @@ memory ops stay human/maintainer driven.
 ## Install
 
 ```bash
-memex harness install copilot --from /path/to/memex/marketplace
+memex install copilot  # from any directory; add --from only for a modified checkout
 ```
 
 Copies the instructions snippet into `.github/copilot-instructions.md`

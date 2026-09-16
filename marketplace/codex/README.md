@@ -8,7 +8,7 @@ captures every rollout transcript deterministically.
 ## Install
 
 ```bash
-memex harness install codex --from /path/to/memex/marketplace
+memex install codex    # from any directory; add --from only for a modified checkout
 ```
 
 What it does:

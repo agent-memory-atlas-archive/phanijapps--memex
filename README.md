@@ -51,7 +51,8 @@ One contract, every harness:
 | [GitHub Copilot](marketplace/copilot/) | CI carries it | remote (future) | `memex verify` workflow |
 
 ```bash
-memex harness install pi --from ./marketplace   # claude | codex | copilot
+memex install              # interactive: pick a harness
+memex install claude        # or codex, pi, copilot, custom
 ```
 
 ## Quickstart

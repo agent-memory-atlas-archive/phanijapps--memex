@@ -36,7 +36,8 @@ Agents forget to call tools. Memex does not rely on them remembering:
 | Codex | AGENTS.md contract + notify | stdio MCP | rollout |
 | Copilot | CI carries it | remote (future) | verify workflow |
 
-Install any adapter with `memex harness install <name> --from ./marketplace`.
+Install any adapter with `memex install <name>` (the marketplace ships inside
+the package).
 
 ## Provenance by construction
 
