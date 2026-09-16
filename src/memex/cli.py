@@ -280,7 +280,35 @@ def _pick_harness() -> str | None:
     return None
 
 
-def _merge_turns(old: list[TurnStreamEntry], new: list[TurnStreamEntry]) -> list[TurnStreamEntry]:
+def _load_turn_usage(meta_path: Path) -> dict[int, dict[str, int]]:
+    """Per-turn usage from an existing meta.json, keyed by turn number."""
+    if not meta_path.exists():
+        return {}
+    try:
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    entries = meta.get("turn_token_usage")
+    if not isinstance(entries, list):
+        return {}
+    usage: dict[int, dict[str, int]] = {}
+    for entry in entries:
+        if (
+            isinstance(entry, dict)
+            and isinstance(entry.get("turn"), int)
+            and isinstance(entry.get("usage"), dict)
+        ):
+            usage[entry["turn"]] = {
+                str(k): v for k, v in entry["usage"].items() if isinstance(v, int)
+            }
+    return usage
+
+
+def _merge_turns(
+    old: list[TurnStreamEntry],
+    new: list[TurnStreamEntry],
+    old_usage: dict[int, dict[str, int]] | None = None,
+) -> list[TurnStreamEntry]:
     """Compaction-safe capture merge for repeated checkpoints.
 
     Normal growth: the new parse extends the old one, so it wins. After
@@ -296,6 +324,13 @@ def _merge_turns(old: list[TurnStreamEntry], new: list[TurnStreamEntry]) -> list
 
     seen = {key(turn) for turn in old}
     merged = list(old) + [turn for turn in new if key(turn) not in seen]
+    # Preserve usage from the previous meta sidecar for turns whose new
+    # parse carries none (e.g. pre-compaction turns in a fresh rollout);
+    # positions are stable, so turn numbers key exactly.
+    if old_usage:
+        for position, turn in enumerate(merged, start=1):
+            if turn.token_usage is None and position in old_usage:
+                turn.token_usage = old_usage[position]
     return [
         TurnStreamEntry(
             role=turn.role,
@@ -378,10 +413,16 @@ def _hook_transcript(args: argparse.Namespace) -> int:
     memex = _make_memex(args)
     try:
         existing_path = memex.data_dir / "transcripts" / f"{session_id}.jsonl"
+        old_usage = _load_turn_usage(memex.data_dir / "transcripts" / f"{session_id}.meta.json")
         if existing_path.exists():
-            turns = _merge_turns(read_transcript_turns(existing_path), turns)
+            turns = _merge_turns(read_transcript_turns(existing_path), turns, old_usage=old_usage)
         report = memex.ingest_transcript(
-            IngestTranscriptInput(session_id=session_id, turns=turns, header=parsed.header),
+            IngestTranscriptInput(
+                session_id=session_id,
+                turns=turns,
+                header=parsed.header,
+                token_usage=parsed.session_usage,
+            ),
             overwrite=not args.no_overwrite,
         )
     except FileExistsError:

@@ -77,7 +77,7 @@ class TranscriptHook:
                 handle.write(json.dumps(self._turn_to_json(turn)) + "\n")
 
         counts = self._count_roles(input.turns)
-        meta = {
+        meta: dict[str, object] = {
             "session_id": input.session_id,
             "started_at": input.turns[0].ts if input.turns else None,
             "ended_at": input.turns[-1].ts if input.turns else None,
@@ -88,6 +88,16 @@ class TranscriptHook:
             "agent_version": f"memex/{_version()}",
             "metadata": input.metadata,
         }
+        # Token counts live in this sidecar, never in the transcript JSONL.
+        if input.token_usage:
+            meta["token_usage"] = input.token_usage
+        turn_usage = [
+            {"turn": turn.turn, "usage": turn.token_usage}
+            for turn in input.turns
+            if turn.token_usage is not None
+        ]
+        if turn_usage:
+            meta["turn_token_usage"] = turn_usage
         meta_path.write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
 
         episode = self._write_episode(input)
@@ -251,9 +261,7 @@ class TranscriptHook:
             data["result"] = turn.result
         if turn.query is not None:
             data["query"] = turn.query
-        if turn.token_usage is not None:
-            data["token_usage"] = turn.token_usage
-        return data
+        return data  # token_usage intentionally omitted: meta.json only
 
 
 def _version() -> str:

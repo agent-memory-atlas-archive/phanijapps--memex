@@ -34,10 +34,15 @@ _SESSION_ID_CHARS = re.compile(r"[^A-Za-z0-9._-]+")
 
 @dataclass(frozen=True)
 class ParsedTranscript:
-    """Parser output: optional session header plus conversational turns."""
+    """Parser output: header, turns, and session token totals.
+
+    Token counts travel here (into the .meta.json sidecar), never in the
+    transcript JSONL itself.
+    """
 
     header: SessionHeader | None
     turns: list[TurnStreamEntry]
+    session_usage: dict[str, int] | None = None
 
 
 def normalize_ts(value: object) -> str:
@@ -397,7 +402,6 @@ def parse_codex_rollout(path: Path) -> ParsedTranscript:
             "git": git if isinstance(git, dict) else None,
             "models": models,
             "reasoning_efforts": efforts,
-            "token_usage": thread_usage,
         }
         if latest_meta is not None and latest_meta is not first_meta:
             meta["resumed"] = True
@@ -423,7 +427,7 @@ def parse_codex_rollout(path: Path) -> ParsedTranscript:
         duration_s=duration_s,
         meta=meta,
     )
-    return ParsedTranscript(header=header, turns=_finalize(turns))
+    return ParsedTranscript(header=header, turns=_finalize(turns), session_usage=thread_usage)
 
 
 PARSERS: dict[str, Callable[[Path], ParsedTranscript]] = {

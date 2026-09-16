@@ -299,6 +299,7 @@ class IngestTranscriptInput:
     turns: list[TurnStreamEntry]
     metadata: dict[str, str] = field(default_factory=dict)
     header: SessionHeader | None = None
+    token_usage: dict[str, int] | None = None  # session totals -> meta.json
 
     def __post_init__(self) -> None:
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", self.session_id):

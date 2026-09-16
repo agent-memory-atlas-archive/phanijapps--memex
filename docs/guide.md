@@ -170,13 +170,14 @@ memex ingest-transcript --session-id sess-abc --turns-file turns.jsonl
 ```
 
 The first transcript line is an optional session header
-(`type: memex_session_header`) carrying identity and totals — for Codex
-captures: session id, CLI version, provider, cwd, git branch/commit,
-models and reasoning efforts used, timestamps, duration, and token
-usage (latest `thread_token_usage` for the session, latest
-`turn_token_usage` per completed turn — never summed). Older turn-only
-transcripts remain readable; repeated captures rewrite the header with
-current totals.
+(`type: memex_session_header`) carrying identity — session id, CLI
+version, provider, cwd, git branch/commit, models and reasoning
+efforts used, timestamps, duration. Token counts are metadata, not
+transcript content: the `{session_id}.meta.json` sidecar carries
+session totals (`token_usage`) and per-turn usage
+(`turn_token_usage`), always the latest reported values and never
+summed across cumulative records. Older turn-only transcripts remain
+readable; repeated captures rewrite the sidecar with current totals.
 
 Ingestion writes `transcripts/sess-abc.jsonl` + `.meta.json`, creates
 `docs/episodes/sess-abc.md` with a `transcript_ref`, and indexes it. From

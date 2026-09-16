@@ -18,7 +18,23 @@ FIXTURES = Path(__file__).parent.parent / "fixtures"
 RICH = FIXTURES / "codex_rollout_rich.jsonl"
 
 
+def parsed_session_usage() -> dict[str, int]:
+    usage = parse_codex_rollout(RICH).session_usage
+    assert usage is not None
+    return usage
+
+
 class TestCodexHeaderExtraction:
+    def test_parsed_session_usage_not_in_header(self) -> None:
+        parsed = parse_codex_rollout(RICH)
+        assert parsed.session_usage == {
+            "input_tokens": 71759,
+            "cached_input_tokens": 102144,
+            "output_tokens": 344,
+            "total_tokens": 72103,
+        }
+        assert "token_usage" not in (parsed.header.meta if parsed.header else {})
+
     def test_header_fields(self) -> None:
         header = parse_codex_rollout(RICH).header
         assert header is not None
@@ -43,11 +59,9 @@ class TestCodexHeaderExtraction:
     def test_thread_totals_are_latest_not_summed(self) -> None:
         header = parse_codex_rollout(RICH).header
         assert header is not None
-        usage = header.meta["token_usage"]
-        assert isinstance(usage, dict)
         # Latest thread_token_usage (71759 in), never the sum of records.
-        assert usage["input_tokens"] == 71759
-        assert usage["total_tokens"] == 72103
+        assert parsed_session_usage()["input_tokens"] == 71759
+        assert parsed_session_usage()["total_tokens"] == 72103
 
     def test_per_turn_usage_attached_to_agent_turns(self) -> None:
         turns = parse_codex_rollout(RICH).turns
@@ -82,19 +96,25 @@ class TestTranscriptWriter:
                 session_id=parsed.header.session_id if parsed.header else "s",
                 turns=parsed.turns,
                 header=parsed.header,
+                token_usage=parsed.session_usage,
             )
         )
         return memex, report
 
-    def test_header_is_first_line_and_totals_current(self, data_dir: Path) -> None:
+    def test_usage_in_meta_not_transcript(self, data_dir: Path) -> None:
         _memex, report = self._ingest(data_dir)
-        lines = (data_dir / f"transcripts/{report.session_id}.jsonl").read_text().splitlines()
+        jsonl = data_dir / f"transcripts/{report.session_id}.jsonl"
+        lines = jsonl.read_text().splitlines()
         header = json.loads(lines[0])
         assert header["type"] == "memex_session_header"
         assert header["session_id"] == report.session_id
-        assert header["meta"]["token_usage"]["input_tokens"] == 71759
-        # turns follow, skipping the header
-        assert all("role" in json.loads(line) for line in lines[1:])
+        assert "token_usage" not in header["meta"]  # counts never in the JSONL
+        for line in lines[1:]:
+            assert "token_usage" not in json.loads(line)
+        meta = json.loads((data_dir / f"transcripts/{report.session_id}.meta.json").read_text())
+        assert meta["token_usage"]["input_tokens"] == 71759
+        per_turn = meta["turn_token_usage"]
+        assert {entry["turn"] for entry in per_turn} == {2, 4}  # agent turns billed
 
     def test_recapture_refreshes_header_totals(self, data_dir: Path, tmp_path: Path) -> None:
         # Simulate a later notify: same rollout with one more usage record.
@@ -126,11 +146,12 @@ class TestTranscriptWriter:
                 session_id=report.session_id,
                 turns=parsed.turns,
                 header=parsed.header,
+                token_usage=parsed.session_usage,
             ),
             overwrite=True,
         )
-        lines = (data_dir / f"transcripts/{report.session_id}.jsonl").read_text().splitlines()
-        assert json.loads(lines[0])["meta"]["token_usage"]["input_tokens"] == 90000
+        meta = json.loads((data_dir / f"transcripts/{report.session_id}.meta.json").read_text())
+        assert meta["token_usage"]["input_tokens"] == 90000
         episodes = list((data_dir / "docs/episodes").glob("*.md"))
         assert len(episodes) == 1  # idempotent, no duplicate episode
 

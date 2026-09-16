@@ -43,11 +43,11 @@ class TestParserToolsAndCompaction:
         assert "agent inline message" in contents  # agent_message shape
 
     def test_thread_totals_latest_across_compaction(self) -> None:
-        header = parse_codex_rollout(FIXTURES / "codex_rollout_compacted.jsonl").header
-        assert header is not None
-        usage = header.meta["token_usage"]
-        assert isinstance(usage, dict)
-        assert usage["total_tokens"] == 33  # latest, not sum
+        parsed = parse_codex_rollout(FIXTURES / "codex_rollout_compacted.jsonl")
+        assert parsed.session_usage is not None
+        assert parsed.session_usage["total_tokens"] == 33  # latest, not sum
+        assert parsed.header is not None
+        assert "token_usage" not in parsed.header.meta
 
 
 class TestHookMergeIdempotency:

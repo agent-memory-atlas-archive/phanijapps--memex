@@ -637,13 +637,13 @@ then one JSON object per line, each turn:
 {"type": "memex_session_header", "harness": "codex", "session_id": "…", "captured_at": "…", "started_at": "…", "ended_at": "…", "duration_s": 1652.9, "meta": {"cli_version": "0.154.0", "provider": "openai", "cwd": "…", "git": {"branch": "…", "commit_hash": "…"}, "models": ["gpt-5.6-sol"], "reasoning_efforts": ["medium"], "token_usage": {"input_tokens": 71759, "total_tokens": 72103}}}
 ```
 
-The header is extracted where the harness records session metadata
-(Codex rollouts: session_meta, turn_context, token_usage_record — the
-latest `thread_token_usage` is the session total and the latest
-`turn_token_usage` per turn is attached to that turn; cumulative
-records are never summed). Readers skip header lines; turn-only
-transcripts from older versions remain valid. Turns may carry
-`token_usage` themselves.
+The header carries identity only (session, harness, git, models,
+timestamps). Token counts never appear in the transcript JSONL: session
+totals (`token_usage`, from the latest Codex `thread_token_usage`) and
+per-turn usage (`turn_token_usage`, keyed by turn number) live in the
+`{session_id}.meta.json` sidecar. Cumulative records are never summed.
+Readers skip header lines; turn-only transcripts from older versions
+remain valid.
 
 ```json
 {"role": "user", "content": "Remember that I prefer ruff over flake8.", "ts": "2026-09-15T10:00:00Z", "turn": 1}
