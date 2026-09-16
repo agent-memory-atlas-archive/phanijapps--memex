@@ -413,6 +413,7 @@ class VizHandler(BaseHTTPRequestHandler):
         )
 
     def _frag_tokens(self) -> str:
+        """Token consumption chart with proper axes, labels, and gridlines."""
         metas = []
         for meta_path in sorted(self._m().transcript_hook.transcripts_dir.glob("*.meta.json")):
             try:
@@ -422,60 +423,160 @@ class VizHandler(BaseHTTPRequestHandler):
             except (OSError, json.JSONDecodeError):
                 continue
         if not metas:
-            return '<div class="empty">No token data yet — captures write usage to meta.json</div>'
+            return '<div class="empty">No token data — captures write usage to meta.json</div>'
         metas.sort(key=lambda m: str(m.get("started_at") or ""))
 
-        # Filter to sessions with numeric token data; skip malformed
-        valid = []
+        # Extract valid token data
+        data: list[tuple[str, int, str]] = []  # (label, tokens, started_at)
         for m in metas:
             try:
-                tokens = m.get("token_usage", {}).get("total_tokens", 0)
-                if isinstance(tokens, (int, float)):
-                    valid.append((m, int(tokens)))
-                else:
+                usage = m.get("token_usage", {})
+                if not isinstance(usage, dict):
                     continue
-            except (AttributeError, TypeError):
+                raw = usage.get("total_tokens", 0)
+                if not isinstance(raw, (int, float)):
+                    continue
+                sid = str(m.get("session_id", "?"))
+                started = str(m.get("started_at", "") or "")
+                label = started[:10] if len(started) >= 10 else sid[:10]
+                data.append((label, int(raw), started))
+            except (AttributeError, TypeError, ValueError):
                 continue
 
-        if not valid:
+        if not data:
             return '<div class="empty">No valid token data found</div>'
 
-        # Cap at ~60 bars; bucket by day if more
-        if len(valid) > 60:
+        # Aggregate by day if too many bars
+        if len(data) > 40:
             daily: dict[str, int] = {}
-            for m, tokens in valid:
-                day = str(m.get("started_at", ""))[:10]
-                daily[day] = daily.get(day, 0) + tokens
-            valid = [({"started_at": d, "session_id": d}, t) for d, t in sorted(daily.items())]
+            for label, tokens, _ in data:
+                daily[label] = daily.get(label, 0) + tokens
+            data = [(d, t, d) for d, t in sorted(daily.items())]
 
-        max_tokens = max(t for _, t in valid) or 1
-        chart_h = 140
-        chart_w = min(len(valid) * 10, 1100)
-        bar_w = max(chart_w // len(valid), 4)
+        # Chart geometry
+        n = len(data)
+        max_tokens = max(t for _, t, _ in data) or 1
+        chart_w = 800
+        chart_h = 260
+        margin = {"top": 30, "right": 20, "bottom": 50, "left": 80}
+        plot_w = chart_w - margin["left"] - margin["right"]
+        plot_h = chart_h - margin["top"] - margin["bottom"]
+        bar_w = max(plot_w // max(n, 1) - 2, 3)
+        bar_gap = max(plot_w // max(n, 1) - bar_w, 1)
+
+        def _fmt_tokens(v: int) -> str:
+            if v >= 1_000_000:
+                return f"{v / 1_000_000:.1f}M"
+            if v >= 1_000:
+                return f"{v / 1_000:.0f}k"
+            return str(v)
+
+        def _y_pos(tokens: int) -> float:
+            return margin["top"] + plot_h - (tokens / max_tokens) * plot_h
+
+        # Bars
         bars = []
-        for i, (m, tokens) in enumerate(valid):
-            x = i * bar_w
-            h = 1 if tokens == 0 else max(int(tokens / max_tokens * chart_h), 2)
-            y = chart_h - h
-            sid = str(m.get("session_id", "?"))[:12]
-            bars.append(
-                f'<rect class="bar" x="{x}" y="{y}" width="{max(bar_w - 2, 1)}" height="{h}" rx="2">'
-                f"<title>{_esc(sid)}: {tokens:,} tokens</title></rect>"
+        for i, (label, tokens, started) in enumerate(data):
+            x = margin["left"] + i * (bar_w + bar_gap)
+            h = (tokens / max_tokens) * plot_h
+            y = margin["top"] + plot_h - h
+            if tokens == 0:
+                # Zero-token: 1px baseline tick
+                bars.append(
+                    f'<rect class="bar zero" x="{x:.1f}" y="{margin["top"] + plot_h - 1:.1f}" '
+                    f'width="{bar_w}" height="1" fill="var(--text-dim)"><title>{_esc(label)}: 0 tokens</title></rect>'
+                )
+            else:
+                tooltip = f"{_esc(label)}: {tokens:,} tokens ({_fmt_tokens(tokens)})"
+                bars.append(
+                    f'<rect class="bar" x="{x:.1f}" y="{y:.1f}" width="{bar_w}" height="{h:.1f}" rx="2">'
+                    f"<title>{tooltip}</title></rect>"
+                )
+
+        # Y-axis gridlines + labels (5 ticks: 0, 25%, 50%, 75%, max)
+        gridlines = []
+        for i in range(5):
+            value = int(max_tokens * i / 4)
+            y = _y_pos(value)
+            gridlines.append(
+                f'<line class="grid-line" x1="{margin["left"]}" y1="{y:.1f}" '
+                f'x2="{margin["left"] + plot_w}" y2="{y:.1f}"/>'
             )
-        # Gridlines
-        grid_h = chart_h
-        gridlines = "".join(
-            f'<line class="grid-line" x1="0" y1="{grid_h - i * grid_h // 4}" x2="{chart_w}" y2="{grid_h - i * grid_h // 4}"/>'
-            for i in range(5)
+            gridlines.append(
+                f'<text class="axis-label" x="{margin["left"] - 10}" y="{y + 4:.1f}" '
+                f'text-anchor="end">{_fmt_tokens(value)}</text>'
+            )
+
+        # Y-axis line
+        gridlines.append(
+            f'<line x1="{margin["left"]}" y1="{margin["top"]}" x2="{margin["left"]}" '
+            f'y2="{margin["top"] + plot_h}" stroke="var(--border)" stroke-width="1"/>'
         )
-        return (
-            f'<div class="chart-box"><svg viewBox="0 0 {chart_w} {chart_h + 20}" '
-            f'xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Token consumption per session">'
-            f"{gridlines}{''.join(bars)}"
-            f'<text class="axis-label" x="4" y="{chart_h + 14}">0</text>'
-            f'<text class="axis-label" x="{chart_w - 40}" y="{chart_h + 14}">{max_tokens:,}</text>'
+
+        # X-axis labels (show ~5-8 labels max)
+        x_labels = []
+        if n <= 8:
+            step = 1
+        else:
+            step = max(n // 6, 1)
+        for i in range(0, n, step):
+            x = margin["left"] + i * (bar_w + bar_gap) + bar_w // 2
+            label = data[i][0]
+            # Rotate if labels are long
+            if len(label) > 6:
+                x_labels.append(
+                    f'<text class="axis-label" x="{x:.0f}" y="{margin["top"] + plot_h + 18}" '
+                    f'text-anchor="end" transform="rotate(-35 {x:.0f} {margin["top"] + plot_h + 18})">'
+                    f"{_esc(label)}</text>"
+                )
+            else:
+                x_labels.append(
+                    f'<text class="axis-label" x="{x:.0f}" y="{margin["top"] + plot_h + 18}" '
+                    f'text-anchor="middle">{_esc(label)}</text>'
+                )
+
+        # X-axis line
+        gridlines.append(
+            f'<line x1="{margin["left"]}" y1="{margin["top"] + plot_h}" '
+            f'x2="{margin["left"] + plot_w}" y2="{margin["top"] + plot_h}" '
+            f'stroke="var(--border)" stroke-width="1"/>'
+        )
+
+        # Axis titles
+        axis_titles = (
+            f'<text class="axis-title" x="{margin["left"] + plot_w // 2}" y="{chart_h - 5}" '
+            f'text-anchor="middle">{"Date" if len(data) > 8 else "Session"}</text>'
+            f'<text class="axis-title" x="{-chart_h // 2 + 15}" y="14" text-anchor="middle" '
+            f'transform="rotate(-90)">Tokens</text>'
+        )
+
+        # Chart title
+        title = (
+            f'<text class="chart-title" x="{chart_w // 2}" y="18" text-anchor="middle">'
+            f"Token Consumption ({_fmt_tokens(sum(t for _, t, _ in data))} total)</text>"
+        )
+
+        svg = (
+            f'<div class="chart-box">'
+            f'<svg viewBox="0 0 {chart_w} {chart_h}" xmlns="http://www.w3.org/2000/svg" '
+            f'role="img" aria-label="Token consumption per session, {_fmt_tokens(max_tokens)} max">'
+            f"<defs><style>"
+            f".bar{{fill:var(--accent);opacity:.75;rx:2;transition:opacity .15s}} "
+            f".bar:hover{{opacity:1}} "
+            f".zero{{fill:var(--text-dim);opacity:.4}} "
+            f".grid-line{{stroke:var(--border);stroke-width:.5;opacity:.4}} "
+            f".axis-label{{fill:var(--text-dim);font-size:10px;font-family:var(--mono)}} "
+            f".axis-title{{fill:var(--text-muted);font-size:11px;font-weight:500}} "
+            f".chart-title{{fill:var(--text);font-size:12px;font-weight:600}}"
+            f"</style></defs>"
+            f"{title}"
+            f"{''.join(gridlines)}"
+            f"{''.join(x_labels)}"
+            f"{''.join(axis_titles)}"
+            f"{''.join(bars)}"
             f"</svg></div>"
         )
+        return svg
 
 
 def serve(data_dir: Path | None = None, port: int = DEFAULT_PORT) -> None:
