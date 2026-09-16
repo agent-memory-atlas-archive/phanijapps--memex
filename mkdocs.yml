@@ -1,4 +1,5 @@
 site_name: Memex
+docs_dir: docs/gitpages
 site_description: A durable, local-first memory layer for AI coding agents. Filesystem wiki, disposable BM25 index, hooks + MCP + CI gates.
 site_url: https://phanijapps.github.io/memex/
 
