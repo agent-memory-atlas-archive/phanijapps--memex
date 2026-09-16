@@ -15,13 +15,13 @@ Everything you need to run memex for yourself, your agent, or your team.
 ## Concepts
 
 **The wiki is the filesystem.** Every memory is a Markdown page under
-`~/.memex/wiki/`, with YAML front matter and a Markdown body. Pages are
+`~/.memex/docs/`, with YAML front matter and a Markdown body. Pages are
 human-readable, git-able, and editable by hand in any editor. If you edit a
 page externally, `memex rebuild-index` (or `memex watch`) picks it up.
 
 ```
 ~/.memex/
-├── wiki/
+├── docs/
 │   ├── entities/        # people, tools, concepts
 │   ├── preferences/     # "the user prefers ruff over flake8"
 │   ├── procedures/      # rules and how-tos
@@ -76,7 +76,7 @@ memex write --type preference --title "Deploy on Fridays" \
 memex recall "deploy"
 
 # it's a plain file — read it, edit it, commit it
-cat ~/.memex/wiki/preferences/deploy-on-fridays.md
+cat ~/.memex/docs/preferences/deploy-on-fridays.md
 ```
 
 Version-control your memory if you like:
@@ -179,7 +179,7 @@ transcripts remain readable; repeated captures rewrite the header with
 current totals.
 
 Ingestion writes `transcripts/sess-abc.jsonl` + `.meta.json`, creates
-`wiki/episodes/sess-abc.md` with a `transcript_ref`, and indexes it. From
+`docs/episodes/sess-abc.md` with a `transcript_ref`, and indexes it. From
 Python or MCP, `get_provenance(slug)` / `memex_provenance` reports how a
 node traces back: **direct** (it has a transcript), **inferred** (an episode
 links to it), or **none**.

@@ -13,10 +13,33 @@ memex harness install codex --from /path/to/memex/marketplace
 
 What it does:
 1. Copies [`memex-codex-notify.py`](memex-codex-notify.py) to
-   `~/.codex/` and wires `notify` in `~/.codex/config.toml` — on every
-   `agent-turn-complete`, the rollout session file is ingested
-   (`memex hook transcript --harness codex`), giving each Codex session
-   an episode node with provenance.
+   `~/.codex/` and pins `notify` to line 3 of `~/.codex/config.toml`
+   (the TOML root table — appending after table headers would silently
+   disable it).
+
+### Capture events
+
+| Event | Behavior |
+|---|---|
+| `agent-turn-complete` | synchronous capture of the rollout (session-addressed via the payload's `session_id`/`transcript_path`) |
+| `PostCompact` | same synchronous capture; the merge logic preserves pre-compaction turns already captured and appends later ones |
+| `SessionEnd` | **fast handoff** — Codex allows 1–3s of teardown, so memex is spawned detached and the hook returns immediately; capture completes moments later |
+
+Repeated checkpoints of one session are idempotent: one episode node, no
+duplicate turns. Failures are nonblocking for Codex and always leave a
+diagnostic JSON line in `~/.memex/logs/codex-capture.log` (event,
+session id, category — never transcript text or tool arguments).
+
+### Recovery after a crash
+
+Hooks can miss sessions (crash, kill, timeout). Recover manually:
+
+```bash
+memex hook transcript --harness codex --path ~/.codex/sessions/<date>/rollout-*.jsonl
+```
+
+The session id and header totals are re-extracted from the rollout, so a
+late capture is identical to a live one.
 2. Appends `config.toml`: `[mcp_servers.memex]` → `memex serve-mcp`.
 3. Appends the [memory contract](AGENTS-snippet.md) to the project's
    `AGENTS.md`: recall at task start, write durable facts via `memex write`.

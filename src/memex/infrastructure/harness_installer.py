@@ -61,7 +61,7 @@ def init_memex(data_dir: Path, *, consolidation_provider: str | None = None) -> 
     rides that harness's own model for distillation.
     """
     report = InstallReport(harness="custom")
-    (data_dir / "wiki").mkdir(parents=True, exist_ok=True)
+    (data_dir / "docs").mkdir(parents=True, exist_ok=True)
     (data_dir / "transcripts").mkdir(parents=True, exist_ok=True)
     (data_dir / "logs").mkdir(parents=True, exist_ok=True)
     config_path = data_dir / "memex.toml"

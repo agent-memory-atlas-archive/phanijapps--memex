@@ -72,7 +72,7 @@ def test_wiki_delete(data_dir: Path) -> None:
     store.delete("ruff-linter")
 
     assert store.read("ruff-linter") is None
-    assert not (data_dir / "wiki/entities/ruff-linter.md").exists()
+    assert not (data_dir / "docs/entities/ruff-linter.md").exists()
 
 
 def test_wiki_front_matter_roundtrip(data_dir: Path) -> None:

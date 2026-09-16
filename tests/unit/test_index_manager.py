@@ -22,7 +22,7 @@ def test_initialize_is_idempotent(data_dir: Path) -> None:
 
 def test_upsert_updates_existing_row(data_dir: Path) -> None:
     index = IndexManager(data_dir / "mem.db")
-    node = _node(slug="t", file_path=str(data_dir / "wiki/entities/t.md"))
+    node = _node(slug="t", file_path=str(data_dir / "docs/entities/t.md"))
     index.update_record(node)
     node.importance = 0.9
     index.update_record(node)

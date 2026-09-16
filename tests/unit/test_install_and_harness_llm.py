@@ -65,7 +65,7 @@ class TestMarketplaceResolution:
 class TestInitMemex:
     def test_creates_tree_and_toml(self, tmp_path: Path) -> None:
         init_memex(tmp_path)
-        assert (tmp_path / "wiki").is_dir()
+        assert (tmp_path / "docs").is_dir()
         assert (tmp_path / "transcripts").is_dir()
         assert (tmp_path / "memex.toml").exists()
         assert '# provider = "openai"' in (tmp_path / "memex.toml").read_text()

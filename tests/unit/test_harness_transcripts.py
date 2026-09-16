@@ -49,9 +49,11 @@ def test_codex_rollout_parses_messages_and_skips_unknown() -> None:
     turns = parsed.turns
     assert parsed.header is not None  # fixture carries session_meta
 
-    assert [turn.role for turn in turns] == ["user", "agent"]
+    assert [turn.role for turn in turns] == ["user", "agent", "tool"]
     assert turns[0].content == "use postgres for the cache"
     assert turns[1].content == "Switching the cache driver to postgres."
+    assert turns[2].tool_name == "shell"
+    assert "ls" in (turns[2].query or "")
 
 
 def test_empty_and_garbage_files_yield_no_turns(tmp_path: Path) -> None:

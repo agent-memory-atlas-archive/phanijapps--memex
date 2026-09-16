@@ -25,7 +25,7 @@ decisions from last Tuesday. Vector databases and cloud memory services
 solve this with infrastructure. Memex solves it with a **filesystem**:
 
 - **The wiki is the filesystem.** Every memory is a Markdown page under
-  `~/.memex/wiki/` — human-readable, git-able, editable by hand, portable
+  `~/.memex/docs/` — human-readable, git-able, editable by hand, portable
   forever. No blobs, no lock-in, no server.
 - **The index is disposable.** SQLite FTS5 provides fast BM25 search, and it
   is never the source of truth: delete `mem.db`, run `memex rebuild-index`,
@@ -68,7 +68,7 @@ memex write --type preference --title "Deploy on Fridays" \
 memex recall "deploy"
 
 # read it, edit it by hand, commit it to git
-cat ~/.memex/wiki/preferences/deploy-on-fridays.md
+cat ~/.memex/docs/preferences/deploy-on-fridays.md
 ```
 
 <details>

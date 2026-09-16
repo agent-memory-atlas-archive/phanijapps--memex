@@ -69,7 +69,7 @@ def test_export_import_roundtrip(memex: Memex, data_dir: Path) -> None:
 
     import shutil
 
-    shutil.rmtree(data_dir / "wiki")
+    shutil.rmtree(data_dir / "docs")
     memex.import_export.import_file(export_path)
     assert memex.wiki_store.exists("export-me")
     assert memex.index_manager.get("export-me") is not None
@@ -88,7 +88,7 @@ def test_rebuild_after_manual_edit(memex: Memex) -> None:
 
 
 def data_dir_page(memex: Memex) -> Path:
-    return next((memex.data_dir / "wiki/entities").glob("*.md"))
+    return next((memex.data_dir / "docs/entities").glob("*.md"))
 
 
 def test_apply_decay_via_facade(memex: Memex) -> None:

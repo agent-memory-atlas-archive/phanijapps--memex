@@ -95,7 +95,7 @@ def test_rebuild_index_command(
     assert exit_code == 0
     assert output["nodes_indexed"] == 4
     assert output["nodes_errored"] == 0
-    wiki_files = list((data_dir / "wiki").rglob("*.md"))
+    wiki_files = list((data_dir / "docs").rglob("*.md"))
     assert output["nodes_indexed"] == len(wiki_files)
 
     memex = Memex(config)
@@ -125,7 +125,7 @@ def test_backup_and_restore(config: MemexConfig, data_dir: Path) -> None:
 
     import shutil
 
-    shutil.rmtree(data_dir / "wiki")
+    shutil.rmtree(data_dir / "docs")
     shutil.rmtree(data_dir / "transcripts")
     (data_dir / "mem.db").unlink()
     memex.close()
@@ -156,7 +156,7 @@ def test_backup_restore_skips_missing_mem_db(config: MemexConfig, data_dir: Path
 
     import shutil
 
-    shutil.rmtree(data_dir / "wiki")
+    shutil.rmtree(data_dir / "docs")
     (data_dir / "mem.db").unlink()
 
     restored_memex = Memex(config)

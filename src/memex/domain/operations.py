@@ -35,7 +35,7 @@ Failures arrive on two channels: schema violations (wrong types,
 importance out of range) are rejected by the server with an is_error
 result naming the field; domain rejections return
 {"error": "..."} — check that key before using the result. Side
-effects: writes wiki/{type}/{slug}.md and updates the search index
+effects: writes docs/{type}/{slug}.md and updates the search index
 and link graph.""",
     "memex_recall": """Search stored memories with BM25 full-text ranking.
 

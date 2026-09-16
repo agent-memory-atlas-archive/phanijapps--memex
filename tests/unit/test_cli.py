@@ -120,7 +120,7 @@ def test_export_import_cli(data_dir: Path, capture: dict[str, str], tmp_path: Pa
     assert code == 0
     payload = json.loads(capture["out"])
     assert payload["imported"] == 1
-    assert (other_dir / "wiki/entities/ex.md").exists()
+    assert (other_dir / "docs/entities/ex.md").exists()
 
 
 def test_consolidate_requires_api_key(

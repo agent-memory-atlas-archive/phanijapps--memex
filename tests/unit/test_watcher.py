@@ -19,7 +19,7 @@ def test_detects_external_edit(data_dir: Path) -> None:
     watcher = IndexWatcher(memex.wiki_store.wiki_dir, memex.index_manager, memex.wiki_store)
     assert watcher.check() == []
 
-    page = data_dir / "wiki/entities/watched.md"
+    page = data_dir / "docs/entities/watched.md"
     os.utime(page, None)
     assert watcher.check() == ["watched"]
 
@@ -37,7 +37,7 @@ def test_reindexes_real_content_changes(data_dir: Path) -> None:
         link_mgr=memex.link_manager,
     )
 
-    page = data_dir / "wiki/entities/watched.md"
+    page = data_dir / "docs/entities/watched.md"
     page.write_text(page.read_text().replace("original", "hand-edited"), encoding="utf-8")
     os.utime(page, None)
 
@@ -55,7 +55,7 @@ def test_touched_but_unchanged_skipped(data_dir: Path) -> None:
     memex.write(WriteInput(type="entity", title="Stable", body="same"))
     watcher = IndexWatcher(memex.wiki_store.wiki_dir, memex.index_manager, memex.wiki_store)
 
-    page = data_dir / "wiki/entities/stable.md"
+    page = data_dir / "docs/entities/stable.md"
     os.utime(page, (946684800, 946684800))  # old mtime, same content
 
     assert watcher.check() == ["stable"]
@@ -70,7 +70,7 @@ def test_deleted_page_removed_from_index(data_dir: Path) -> None:
     memex.write(WriteInput(type="entity", title="Doomed", body="bye"))
     watcher = IndexWatcher(memex.wiki_store.wiki_dir, memex.index_manager, memex.wiki_store)
 
-    (data_dir / "wiki/entities/doomed.md").unlink()
+    (data_dir / "docs/entities/doomed.md").unlink()
     watcher.reindex_changed()
 
     assert memex.index_manager.get("doomed") is None

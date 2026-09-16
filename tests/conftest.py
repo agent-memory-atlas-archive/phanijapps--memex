@@ -25,13 +25,14 @@ def capture(monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
 
 
 @pytest.fixture(autouse=True)
-def _isolated_memex_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Every test starts with a clean memex environment.
+def _isolated_memex_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every test starts with a clean, hermetic memex environment.
 
-    Developer shells frequently carry MEMEX_* exports from manual runs;
-    without this, config tests silently read the developer's real
-    ~/.memex instead of isolated fixtures.
+    Developer shells carry MEMEX_* exports and a real ~/.memex may exist
+    (harness adapters capture sessions into it). Redirect HOME so the
+    default data dir resolves inside tmp_path, never the developer home.
     """
+    monkeypatch.setenv("HOME", str(tmp_path))
     for var in (
         "MEMEX_DATA_DIR",
         "MEMEX_API_KEY",

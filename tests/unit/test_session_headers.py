@@ -131,7 +131,7 @@ class TestTranscriptWriter:
         )
         lines = (data_dir / f"transcripts/{report.session_id}.jsonl").read_text().splitlines()
         assert json.loads(lines[0])["meta"]["token_usage"]["input_tokens"] == 90000
-        episodes = list((data_dir / "wiki/episodes").glob("*.md"))
+        episodes = list((data_dir / "docs/episodes").glob("*.md"))
         assert len(episodes) == 1  # idempotent, no duplicate episode
 
 

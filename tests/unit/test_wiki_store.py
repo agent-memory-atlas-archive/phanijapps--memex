@@ -24,7 +24,7 @@ class TestWriteRead:
         stored = store.write(make_node(id=""))
         assert stored.slug == "ruff-linter"
         assert stored.id
-        assert stored.file_path == str(data_dir / "wiki/entities/ruff-linter.md")
+        assert stored.file_path == str(data_dir / "docs/entities/ruff-linter.md")
         assert stored.content_hash == hash_body(stored.body)
 
     def test_update_preserves_stored_fields(self, data_dir: Path) -> None:
@@ -42,7 +42,7 @@ class TestWriteRead:
 
     def test_malformed_page_raises(self, data_dir: Path) -> None:
         store = WikiStore(data_dir)
-        bad = data_dir / "wiki/entities/broken.md"
+        bad = data_dir / "docs/entities/broken.md"
         bad.parent.mkdir(parents=True, exist_ok=True)
         bad.write_text("not front matter at all\n", encoding="utf-8")
         with pytest.raises(WikiStoreError):
@@ -65,7 +65,7 @@ class TestDeleteMove:
         store.write(make_node())
         node = store.move("ruff-linter", "preference")
         assert node.file_path is not None
-        assert node.file_path.endswith("wiki/preferences/ruff-linter.md")
+        assert node.file_path.endswith("docs/preferences/ruff-linter.md")
         assert store.read("ruff-linter") is not None
 
 
@@ -104,7 +104,7 @@ class TestListScan:
     def test_scan_all_collects_errors(self, data_dir: Path) -> None:
         store = WikiStore(data_dir)
         store.write(make_node())
-        bad = data_dir / "wiki/entities/broken.md"
+        bad = data_dir / "docs/entities/broken.md"
         bad.write_text("garbage\n", encoding="utf-8")
         errors: list[str] = []
         nodes = store.scan_all(errors)
@@ -114,13 +114,13 @@ class TestListScan:
     def test_atomic_write_leaves_no_temp_files(self, data_dir: Path) -> None:
         store = WikiStore(data_dir)
         store.write(make_node())
-        leftovers = list((data_dir / "wiki/entities").glob("*.tmp"))
+        leftovers = list((data_dir / "docs/entities").glob("*.tmp"))
         assert leftovers == []
 
 
 class TestFrontMatterValidation:
     def write_raw(self, data_dir: Path, text: str) -> None:
-        target = data_dir / "wiki/entities/raw.md"
+        target = data_dir / "docs/entities/raw.md"
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(text, encoding="utf-8")
 

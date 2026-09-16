@@ -32,6 +32,7 @@ from memex.infrastructure.harness_installer import (
 from memex.infrastructure.harness_transcripts import (
     HARNESSES,
     parse_transcript,
+    read_transcript_turns,
     suggest_session_id,
 )
 from memex.infrastructure.workspace_context import session_query
@@ -279,6 +280,37 @@ def _pick_harness() -> str | None:
     return None
 
 
+def _merge_turns(old: list[TurnStreamEntry], new: list[TurnStreamEntry]) -> list[TurnStreamEntry]:
+    """Compaction-safe capture merge for repeated checkpoints.
+
+    Normal growth: the new parse extends the old one, so it wins. After
+    a compaction boundary (or a fresh rollout for a resumed session) the
+    new parse may be shorter or diverge: keep earlier turns and append
+    only unseen later ones. Turn numbers are re-assigned sequentially.
+    """
+    if len(new) >= len(old) and new[: len(old)] == old:
+        return new
+
+    def key(turn: TurnStreamEntry) -> tuple[str, str, str]:
+        return (turn.role, turn.content, turn.result or "")
+
+    seen = {key(turn) for turn in old}
+    merged = list(old) + [turn for turn in new if key(turn) not in seen]
+    return [
+        TurnStreamEntry(
+            role=turn.role,
+            content=turn.content,
+            turn=number,
+            ts=turn.ts,
+            tool_name=turn.tool_name,
+            result=turn.result,
+            query=turn.query,
+            token_usage=turn.token_usage,
+        )
+        for number, turn in enumerate(merged, start=1)
+    ]
+
+
 def _transcript_path_from_stdin() -> Path | None:
     """Extract a session file path from a hook JSON payload on stdin."""
     if sys.stdin is None or sys.stdin.isatty():
@@ -345,6 +377,9 @@ def _hook_transcript(args: argparse.Namespace) -> int:
 
     memex = _make_memex(args)
     try:
+        existing_path = memex.data_dir / "transcripts" / f"{session_id}.jsonl"
+        if existing_path.exists():
+            turns = _merge_turns(read_transcript_turns(existing_path), turns)
         report = memex.ingest_transcript(
             IngestTranscriptInput(session_id=session_id, turns=turns, header=parsed.header),
             overwrite=not args.no_overwrite,

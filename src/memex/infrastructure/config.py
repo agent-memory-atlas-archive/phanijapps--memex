@@ -129,8 +129,13 @@ class MemexConfig:
         return self.data_dir / "mem.db"
 
     @property
+    def docs_dir(self) -> Path:
+        return self.data_dir / "docs"
+
+    @property
     def wiki_dir(self) -> Path:
-        return self.data_dir / "wiki"
+        """Legacy alias; pages live under docs/ since 0.2."""
+        return self.docs_dir
 
     @property
     def transcripts_dir(self) -> Path:

@@ -124,3 +124,16 @@ rule, and the OpenAI SDK is the single LLM client.
   (re-emitted `session_meta`) refresh cwd/git and set `resumed`, and
   model changes collect into ordered `models`/`reasoning_efforts` lists.
   Readers skip headers; turn-only transcripts stay readable.
+
+- **Codex capture hardening + docs layout (0.2.0).** The notify wrapper
+  handles agent-turn-complete, PostCompact, and SessionEnd (fast
+  detached handoff — Codex's 1-3s teardown bound), addresses sessions
+  by the payload's session_id/transcript_path instead of the newest
+  rollout, logs diagnostics (event, session, category; never content),
+  and stays nonblocking. The parser captures tool calls/outputs
+  (function/custom/web/tool-search, paired by call_id), agent_message
+  entries, and skips compacted replacement history. Repeated captures
+  merge idempotently, preserving pre-compaction turns. Storage moved
+  from ~/.memex/wiki/ to ~/.memex/docs/ (pure memory layer, not a
+  wiki): existing installs migrate in place on first open, old backups
+  with wiki/ remain restorable.

@@ -15,7 +15,7 @@ type: "Spec"
 title: "Memex — Filesystem Wiki Memory Harness"
 description: >-
   Filesystem-based agent memory harness where the wiki IS the filesystem.
-  Wiki pages are real Markdown files under ~/.memex/wiki/, human-readable,
+  Wiki pages are real Markdown files under ~/.memex/docs/, human-readable,
   git-able, and editable by hand. SQLite (mem.db) is a rebuildable secondary
   index providing BM25 full-text retrieval and freshness tracking only.
   Transcript hooks store raw conversation logs and link them to episode nodes
@@ -62,7 +62,7 @@ transcript_support: true
 
 **Memex** is a filesystem-based, node-driven, LLM-as-wiki agent memory harness.
 The fundamental design principle is: **the wiki is the filesystem**. Every memory
-node is a real Markdown file under `~/.memex/wiki/`. The files are human-readable,
+node is a real Markdown file under `~/.memex/docs/`. The files are human-readable,
 git-able, and editable by hand with any text editor. There is no SQLite node store,
 no BLOB column, and no binary format.
 
@@ -89,7 +89,7 @@ provenance for every stored fact.
 ### 2.1 In scope
 
 - Single-user, single-machine, local-first persistence.
-- Wiki pages as filesystem Markdown files (`~/.memex/wiki/*.md`).
+- Wiki pages as filesystem Markdown files (`~/.memex/docs/*.md`).
 - SQLite as a rebuildable secondary index with FTS5 BM25 retrieval.
 - Node types: **entity**, **preference**, **procedure**, **summary**, **episode**.
 - Four operations: `write`, `recall`, `consolidate`, `forget`.
@@ -156,7 +156,7 @@ flowchart TB
     mcp["<b>MCP Server</b><br>optional stdio<br>exposes memex operations<br>as MCP tools"]
 
     subgraph dir ["~/.memex/"]
-        subgraph wiki ["wiki/ — Markdown .md files (front matter + body)"]
+        subgraph wiki ["docs/ — Markdown .md files (front matter + body)"]
             went["entities/"]
             wprefs["preferences/"]
             wprocs["procedures/"]
@@ -234,7 +234,7 @@ flowchart TB
 flowchart TB
     subgraph machine ["User's Machine — Linux / macOS / Windows (Python 3.12+)"]
         subgraph dir ["~/.memex/"]
-            subgraph wiki ["wiki/ — Markdown pages (PRIMARY STORE)"]
+            subgraph wiki ["docs/ — Markdown pages (PRIMARY STORE)"]
                 wep["episodes/"]
                 went["entities/"]
                 wpref["preferences/"]
@@ -487,7 +487,7 @@ Every wiki `.md` file has YAML front matter followed by Markdown body text.
 The filesystem path determines the node type:
 
 ```
-~/.memex/wiki/{type}/{slug}.md
+~/.memex/docs/{type}/{slug}.md
 ```
 
 Where `type` ∈ {entities, preferences, procedures, summaries, episodes}
@@ -975,7 +975,7 @@ class TranscriptHook:
    Write metadata to `~/.memex/transcripts/{session_id}.meta.json`.
 
 2. **Episode node creation:** Create a new `WikiNode(type="episode", session_id=session_id)`
-   in `~/.memex/wiki/episodes/{session_id}.md` with `transcript_ref: "transcripts/{session_id}.jsonl"`
+   in `~/.memex/docs/episodes/{session_id}.md` with `transcript_ref: "transcripts/{session_id}.jsonl"`
    in front matter. The episode body is a one-paragraph summary of the session.
 
 3. **Transcript file format:** One JSON object per line (`jsonl`). Turn `content`
@@ -1151,7 +1151,7 @@ class BackupRestore:
 **Backup contents:**
 ```
 memex-backup-{timestamp}/
-├── wiki/                  # All wiki .md files, preserving directory structure
+├── docs/                  # All wiki .md files, preserving directory structure
 ├── transcripts/           # All .jsonl + .meta.json files
 ├── mem.db                 # (optional) the SQLite index
 └── manifest.json          # { version, backed_up_at, memex_version, file_counts }
@@ -1234,7 +1234,7 @@ def write(
 `slug`, `file_path`, and auto-computed fields (`content_hash`, parsed `links`).
 
 **Side effects:**
-1. Writes `~/.memex/wiki/{type}/{slug}.md` with YAML front matter + Markdown body.
+1. Writes `~/.memex/docs/{type}/{slug}.md` with YAML front matter + Markdown body.
 2. Calls `IndexManager.update_record(node)`.
 3. Calls `LinkManager.sync_links(slug, body)` to update cross-reference table.
 4. Appends to `logs/memex.log`.
@@ -1348,7 +1348,7 @@ ForgetResult = {
 ```
 
 **Side effects:**
-- `hard`: Deletes `~/.memex/wiki/{type}/{slug}.md` from filesystem; removes from `wiki_index`; removes from `wiki_links`.
+- `hard`: Deletes `~/.memex/docs/{type}/{slug}.md` from filesystem; removes from `wiki_index`; removes from `wiki_links`.
 - `soft`: Sets `valid_to` in front matter; updates `updated` timestamp; upserts index.
 - `decay`: Sets `expires_at` in front matter; updates `updated` timestamp; upserts index.
 
@@ -1374,7 +1374,7 @@ def ingest_transcript(
 **Side effects:**
 1. Writes `~/.memex/transcripts/{session_id}.jsonl`.
 2. Writes `~/.memex/transcripts/{session_id}.meta.json`.
-3. Creates `~/.memex/wiki/episodes/{session_id}.md` (episode node) with `transcript_ref` in front matter.
+3. Creates `~/.memex/docs/episodes/{session_id}.md` (episode node) with `transcript_ref` in front matter.
 4. Updates `wiki_index` with the new episode record.
 5. Optionally runs `NodeExtractor.extract(turns)` to auto-extract facts/preferences (if configured).
 6. Appends to `logs/memex.log`.
@@ -1412,7 +1412,7 @@ RebuildIndexReport = {
 ```
 
 **Side effects:**
-- Reads all `.md` files under `~/.memex/wiki/`.
+- Reads all `.md` files under `~/.memex/docs/`.
 - Truncates and rebuilds `wiki_index`, `wiki_fts`, `wiki_links` tables.
 - Updates `index_meta` with new `last_index_rebuild` timestamp.
 - Appends to `logs/memex.log`.
@@ -1613,7 +1613,7 @@ back from any wiki page.
 │   ├── 2026-09-15-sess-abc123.jsonl    # Raw conversation turns
 │   ├── 2026-09-15-sess-abc123.meta.json # Session metadata
 │   └── 2026-09-15-sess-def456.jsonl
-└── wiki/
+└── docs/
     └── episodes/
         └── 2026-09-15-sess-abc123.md    # Episode node with transcript_ref
 ```
@@ -1624,7 +1624,7 @@ When a transcript is ingested:
 
 1. The raw turns are written to `transcripts/{session_id}.jsonl`.
 2. Metadata is written to `transcripts/{session_id}.meta.json`.
-3. An episode node is created at `wiki/episodes/{session_id}.md`.
+3. An episode node is created at `docs/episodes/{session_id}.md`.
 4. The episode node's front matter contains `transcript_ref: "transcripts/{session_id}.jsonl"`.
 
 This creates a bidirectional link:

@@ -1,6 +1,6 @@
 """Filesystem CRUD for wiki Markdown pages (spec §7 Utility 1).
 
-Pages live at ``wiki/{type_dir}/{slug}.md`` with strict front matter.
+Pages live at ``docs/{type_dir}/{slug}.md`` with strict front matter.
 Reads are side-effect free; access counting lives in the index layer.
 """
 
@@ -68,9 +68,16 @@ StrList = list[str]
 class WikiStore:
     """CRUD over the wiki directory tree. The filesystem is the truth."""
 
+    LEGACY_DIR = "wiki"  # pre-0.2 layout; migrated in place, never deleted
+    PAGES_DIR = "docs"
+
     def __init__(self, data_dir: Path, *, slug_algo: str = "kebab") -> None:
         self.data_dir = data_dir
-        self.wiki_dir = data_dir / "wiki"
+        legacy = data_dir / self.LEGACY_DIR
+        docs = data_dir / self.PAGES_DIR
+        if legacy.is_dir() and not docs.exists():
+            legacy.rename(docs)  # one-time migration to the docs layout
+        self.wiki_dir = docs
         self.slug_algo = slug_algo
         for type_dir in TYPE_DIRS.values():
             (self.wiki_dir / type_dir).mkdir(parents=True, exist_ok=True)

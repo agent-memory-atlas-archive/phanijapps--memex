@@ -251,6 +251,12 @@ def _parse_iso_epoch(ts: str) -> float | None:
 def parse_codex_rollout(path: Path) -> ParsedTranscript:
     """Parse a Codex rollout JSONL into header + turns (tolerant).
 
+    Tool traffic becomes tool turns: function_call / custom_tool_call
+    entries carry the invocation (query), and their paired outputs
+    (matched by call_id) carry the result. agent_message entries are
+    assistant text. compacted entries are skipped: rollouts are
+    append-only, so the real pre-compaction turns are already in the
+    file and the conversation continues after the compact marker.
     Header extraction (real rollout shapes):
     - session_meta: session id, cwd, git (branch/commit/repo), provider,
       cli version, start timestamp. Resumed sessions re-emit session_meta;
@@ -272,6 +278,7 @@ def parse_codex_rollout(path: Path) -> ParsedTranscript:
     last_agent_index: int | None = None
     models: list[str] = []
     efforts: list[str] = []
+    pending_calls: dict[str, str] = {}
 
     for entry in _read_jsonl(path):
         ts = normalize_ts(entry.get("timestamp"))
@@ -309,10 +316,14 @@ def parse_codex_rollout(path: Path) -> ParsedTranscript:
             if turn_usage is not None and last_agent_index is not None:
                 turns[last_agent_index]["token_usage"] = turn_usage
             continue
+        if entry_type == "compacted":
+            continue  # append-only file already holds the real earlier turns
         if entry_type != "response_item" or payload is None:
             continue
 
-        if payload.get("type") == "message":
+        kind = payload.get("type")
+
+        if kind == "message":
             role = payload.get("role")
             content = payload.get("content")
             texts: list[str] = []
@@ -333,6 +344,47 @@ def parse_codex_rollout(path: Path) -> ParsedTranscript:
             elif role in ("assistant", "agent"):
                 turns.append({"role": "agent", "content": text, "ts": ts})
                 last_agent_index = len(turns) - 1
+        elif kind == "agent_message":
+            text = str(payload.get("content") or payload.get("text") or "")
+            if text.strip():
+                turns.append({"role": "agent", "content": text, "ts": ts})
+                last_agent_index = len(turns) - 1
+        elif kind in ("function_call", "custom_tool_call", "web_search_call", "tool_search_call"):
+            name = str(payload.get("name") or payload.get("action") or kind)
+            invocation: str | None = None
+            for key in ("arguments", "input", "query"):
+                value = payload.get(key)
+                if isinstance(value, str):
+                    invocation = value
+                    break
+            call_id = payload.get("call_id")
+            if isinstance(call_id, str):
+                pending_calls[call_id] = name
+            turns.append(
+                {
+                    "role": "tool",
+                    "content": name,
+                    "tool_name": name,
+                    "query": invocation if isinstance(invocation, str) else None,
+                    "ts": ts,
+                }
+            )
+        elif kind in ("function_call_output", "custom_tool_call_output", "tool_search_output"):
+            call_id = payload.get("call_id")
+            output = payload.get("output")
+            result = output if isinstance(output, str) else json.dumps(output, default=str)
+            out_name: str | None = (
+                pending_calls.get(str(call_id)) if isinstance(call_id, str) else None
+            )
+            turns.append(
+                {
+                    "role": "tool",
+                    "content": out_name or "tool_output",
+                    "tool_name": out_name,
+                    "result": result,
+                    "ts": ts,
+                }
+            )
 
     if first_meta is not None:
         source = latest_meta if latest_meta is not None else first_meta

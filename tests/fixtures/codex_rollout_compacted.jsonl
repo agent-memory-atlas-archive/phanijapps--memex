@@ -1,0 +1,15 @@
+{"timestamp":"2026-09-15T10:00:00.000Z","type":"session_meta","payload":{"session_id":"sess-comp","timestamp":"2026-09-15T10:00:00.000Z","cwd":"/w","cli_version":"0.154.0","model_provider":"openai","git":{"branch":"b","commit_hash":"c"}}}
+{"timestamp":"2026-09-15T10:00:01.000Z","type":"turn_context","payload":{"turn_id":"t1","model":"gpt-5","collaboration_mode":{"settings":{"reasoning_effort":"low"}}}}
+{"timestamp":"2026-09-15T10:00:02.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"first user turn"}]}}
+{"timestamp":"2026-09-15T10:00:03.000Z","type":"response_item","payload":{"type":"function_call","name":"shell","arguments":"{\"command\":\"ls\"}","call_id":"c1"}}
+{"timestamp":"2026-09-15T10:00:04.000Z","type":"response_item","payload":{"type":"function_call_output","call_id":"c1","output":"file_a file_b"}}
+{"timestamp":"2026-09-15T10:00:05.000Z","type":"response_item","payload":{"type":"agent_message","content":"agent inline message"}}
+{"timestamp":"2026-09-15T10:00:06.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"assistant before compaction"}]}}
+{"timestamp":"2026-09-15T10:00:07.000Z","type":"token_usage_record","payload":{"turn_id":"t1","turn_token_usage":{"input_tokens":10,"total_tokens":11},"thread_token_usage":{"input_tokens":10,"total_tokens":11}}}
+{"timestamp":"2026-09-15T10:00:08.000Z","type":"compacted","payload":{"message":"","replacement_history":[{"type":"message","role":"user","content":[{"type":"input_text","text":"summary replacement"}]}]}}
+{"timestamp":"2026-09-15T10:00:09.000Z","type":"turn_context","payload":{"turn_id":"t2","model":"gpt-5","collaboration_mode":{"settings":{"reasoning_effort":"low"}}}}
+{"timestamp":"2026-09-15T10:00:10.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"post-compaction user"}]}}
+{"timestamp":"2026-09-15T10:00:11.000Z","type":"response_item","payload":{"type":"custom_tool_call","name":"apply_patch","input":"patch body","call_id":"c2"}}
+{"timestamp":"2026-09-15T10:00:12.000Z","type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"c2","output":"{\"output\":\"done\"}"}}
+{"timestamp":"2026-09-15T10:00:13.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"assistant after compaction"}]}}
+{"timestamp":"2026-09-15T10:00:14.000Z","type":"token_usage_record","payload":{"turn_id":"t2","turn_token_usage":{"input_tokens":20,"total_tokens":22},"thread_token_usage":{"input_tokens":30,"total_tokens":33}}}

@@ -18,8 +18,8 @@ from memex.domain.errors import BackupError
 from memex.domain.models import BackupReport, RestoreReport, utc_now_iso
 
 ARCHIVE_VERSION = "1.0"
-_ALLOWED_PREFIXES = ("wiki/", "transcripts/")
-_ALLOWED_NAMES = ("wiki", "transcripts", "mem.db", "manifest.json")
+_ALLOWED_PREFIXES = ("docs/", "wiki/", "transcripts/")  # wiki/: pre-0.2 archives
+_ALLOWED_NAMES = ("docs", "wiki", "transcripts", "mem.db", "manifest.json")
 
 
 class BackupRestore:
@@ -29,16 +29,21 @@ class BackupRestore:
         self.data_dir = data_dir
         self.db_path = db_path
 
+    def _pages_dir(self) -> Path:
+        """docs/ layout, falling back to a not-yet-migrated wiki/ dir."""
+        docs = self.data_dir / "docs"
+        return docs if docs.is_dir() else self.data_dir / "wiki"
+
     def backup(self, output_path: Path, *, include_mem_db: bool = True) -> BackupReport:
         started = time.perf_counter()
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        wiki_count = self._count_files(self.data_dir / "wiki", "*.md")
+        wiki_count = self._count_files(self._pages_dir(), "*.md")
         transcript_count = self._count_files(self.data_dir / "transcripts", "*")
         db_count = 1 if (include_mem_db and self.db_path.exists()) else 0
 
         try:
             with tarfile.open(output_path, "w:gz") as archive:
-                for name in ("wiki", "transcripts"):
+                for name in (self._pages_dir().name, "transcripts"):
                     directory = self.data_dir / name
                     if directory.is_dir():
                         archive.add(directory, arcname=name)
@@ -116,14 +121,15 @@ class BackupRestore:
                     shutil.move(str(sidecar), str(backup_dir / sidecar.name))
                 warnings.append(f"previous data moved to {backup_dir}")
 
-            for name in ("wiki", "transcripts"):
+            for name in ("docs", "wiki", "transcripts"):
                 source = staging / name
                 if source.is_dir():
                     shutil.copytree(source, self.data_dir / name, dirs_exist_ok=True)
+            # Old archives carry wiki/; WikiStore migrates it on next open.
             if (staging / "mem.db").exists():
                 shutil.copy2(staging / "mem.db", self.db_path)
 
-            wiki_count = self._count_files(self.data_dir / "wiki", "*.md")
+            wiki_count = self._count_files(self.data_dir / "docs", "*.md")
             transcript_count = self._count_files(self.data_dir / "transcripts", "*")
 
         if backup_dir is None:
