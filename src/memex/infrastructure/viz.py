@@ -19,6 +19,7 @@ from urllib.parse import parse_qs, urlparse
 
 from memex.application.memory import Memex
 from memex.domain.models import WikiNode
+from memex.infrastructure.markdown import render_markdown
 
 DEFAULT_PORT = 7171
 
@@ -153,6 +154,38 @@ tr:last-child td { border-bottom:none; }
 .grid-line { stroke:var(--border); stroke-width:.5; opacity:.3; }
 .axis-label { fill:var(--text-dim); font-size:10px; font-family:var(--mono); }
 
+/* ---- Slide-out detail panel ---- */
+.panel-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.5);
+  opacity:0; pointer-events:none; transition:opacity .25s; z-index:98; }
+.panel-backdrop.open { opacity:1; pointer-events:auto; }
+.panel { position:fixed; top:0; right:0; bottom:0; width:min(640px,90vw);
+  background:var(--surface); border-left:1px solid var(--border);
+  transform:translateX(100%); transition:transform .25s ease-out;
+  z-index:99; display:flex; flex-direction:column; }
+.panel.open { transform:translateX(0); }
+.panel-header { display:flex; align-items:center; justify-content:space-between;
+  padding:.8rem 1rem; border-bottom:1px solid var(--border); flex-shrink:0; }
+.panel-header h2 { font-size:.95rem; font-weight:600; }
+.panel-close { background:none; border:none; color:var(--text-muted);
+  font-size:1.3rem; cursor:pointer; padding:.2rem .4rem; line-height:1; }
+.panel-close:hover { color:var(--text); }
+.panel-body { flex:1; overflow-y:auto; padding:1rem; }
+.panel-body h1, .panel-body h2, .panel-body h3 { margin-top:1.2rem; margin-bottom:.4rem; }
+.panel-body h1 { font-size:1.2rem; } .panel-body h2 { font-size:1.05rem; }
+.panel-body h3 { font-size:.95rem; }
+.panel-body p { margin-bottom:.6rem; font-size:.88rem; line-height:1.55; }
+.panel-body pre { background:var(--bg); border:1px solid(var(--border));
+  border-radius:var(--radius); padding:.7rem; margin:.5rem 0; overflow-x:auto; }
+.panel-body code { font-family:var(--mono); font-size:.8rem; }
+.panel-body pre code { display:block; }
+.panel-body ul, .panel-body ol { padding-left:1.3rem; margin:.4rem 0; }
+.panel-body li { font-size:.88rem; margin-bottom:.2rem; }
+.panel-body blockquote { border-left:3px solid(var(--border));
+  padding:.4rem .8rem; margin:.5rem 0; color:var(--text-muted); }
+.panel-body hr { border:none; border-top:1px solid(var(--border)); margin:.8rem 0; }
+.wikilink { color:var(--accent); background:rgba(88,166,255,.08);
+  padding:0 3px; border-radius:3px; font-family:var(--mono); font-size:.82em; }
+
 /* ---- Empty/error states ---- */
 .empty { padding:1.5rem; text-align:center; color:var(--text-muted);
          background:var(--surface); border:1px dashed var(--border);
@@ -166,7 +199,7 @@ tr:last-child td { border-bottom:none; }
 .subtle { font-size:.72rem; color:var(--text-dim); }
 """
 
-_PAGE = """<!DOCTYPE html>
+_PAGE_SHELL = """<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -179,7 +212,7 @@ _PAGE = """<!DOCTYPE html>
 <div class="shell">
 <header>
 <h1>memex</h1>
-<span class="datapath">{data_dir}</span>
+<span class="datapath">@@DATA_DIR@@</span>
 </header>
 <nav>
   <a href="/view/overview" hx-get="/overview" hx-target="#main" hx-push-url="true">Overview</a>
@@ -187,8 +220,27 @@ _PAGE = """<!DOCTYPE html>
   <a href="/view/sessions" hx-get="/sessions" hx-target="#main" hx-push-url="true">Sessions</a>
   <a href="/view/tokens" hx-get="/tokens" hx-target="#main" hx-push-url="true">Tokens</a>
 </nav>
-<main id="main" hx-get="/overview" hx-trigger="load">{initial}</main>
+<main id="main" hx-get="/overview" hx-trigger="load"></main>
 </div>
+<div class="panel-backdrop" id="panel-backdrop" onclick="closePanel()"></div>
+<aside class="panel" id="panel">
+  <div class="panel-header">
+    <h2 id="panel-title"></h2>
+    <button class="panel-close" onclick="closePanel()">&times;</button>
+  </div>
+  <div class="panel-body" id="panel-body"></div>
+</aside>
+<script>
+function closePanel(){document.getElementById('panel').classList.remove('open');
+document.getElementById('panel-backdrop').classList.remove('open');}
+document.addEventListener('htmx:afterSwap',function(e){
+if(e.detail.target.id==='panel-body'){
+var h=e.detail.target.querySelector('h1,h2,h3');
+document.getElementById('panel-title').textContent=h?h.textContent:'Detail';
+document.getElementById('panel').classList.add('open');
+document.getElementById('panel-backdrop').classList.add('open');}});
+document.addEventListener('keydown',function(e){if(e.key==='Escape')closePanel();});
+</script>
 </body>
 </html>"""
 
@@ -245,7 +297,9 @@ class VizHandler(BaseHTTPRequestHandler):
         elif route == "/style.css":
             self._text(_CSS, "text/css")
         elif route == "/":
-            self._text(_PAGE.format(data_dir=_esc(self._m().data_dir), initial=""), "text/html")
+            self._text(
+                _PAGE_SHELL.replace("@@DATA_DIR@@", _esc(str(self._m().data_dir))), "text/html"
+            )
         elif route == "/overview":
             self._text(self._frag_overview(), "text/html")
         elif route == "/pages":
@@ -257,6 +311,9 @@ class VizHandler(BaseHTTPRequestHandler):
             self._text(self._frag_sessions(), "text/html")
         elif route == "/tokens":
             self._text(self._frag_tokens(), "text/html")
+        elif route.startswith("/page/"):
+            slug = route.removeprefix("/page/")
+            self._text(self._frag_page_detail(slug), "text/html")
         elif route == "/health":
             self._text(self._frag_health(), "text/html")
         else:
@@ -413,6 +470,41 @@ class VizHandler(BaseHTTPRequestHandler):
             "<table><thead><tr><th>Session</th><th>Turns</th><th>Started</th><th>Episode</th></tr></thead>"
             + "".join(rows)
             + "</table>"
+        )
+
+    def _frag_page_detail(self, slug: str) -> str:
+        """Rendered Markdown view of a single memory page."""
+        node = self._m().wiki_store.read(slug)
+        if node is None:
+            return '<div class="empty">Page not found</div>'
+
+        rendered = render_markdown(node.body)
+        badge = _type_badge(node.type, node.status)
+
+        # Provenance
+        provenance = ""
+        if node.transcript_ref:
+            provenance = (
+                f'<div class="section">Provenance</div>'
+                f'<p class="subtle"><code>{_esc(node.transcript_ref)}</code></p>'
+            )
+
+        # Meta line
+        meta_parts = [_esc(node.type), f"importance {_esc(node.importance)}"]
+        if node.tags:
+            meta_parts.append(" ".join(f"#{_esc(t)}" for t in node.tags))
+        if node.updated:
+            meta_parts.append(f"updated {_esc(str(node.updated)[:10])}")
+        if node.source:
+            meta_parts.append(f"source {_esc(node.source)}")
+        if node.harness:
+            meta_parts.append(f"harness {_esc(node.harness)}")
+
+        return (
+            f'<div style="display:flex;gap:.5rem;align-items:center;margin-bottom:.5rem">{badge}'
+            f'<span class="subtle">{" · ".join(meta_parts)}</span></div>'
+            f"{rendered}"
+            f"{provenance}"
         )
 
     def _frag_tokens(self) -> str:
