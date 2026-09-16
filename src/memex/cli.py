@@ -549,6 +549,8 @@ def _run(args: argparse.Namespace) -> int:
             )
             _emit(report)
             return 0 if report.ok else 1
+        elif args.command == "status":
+            _emit(memex.status())
         elif args.command == "info":
             _emit(_info(memex))
         elif args.command == "watch":
