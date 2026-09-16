@@ -186,6 +186,25 @@ tr:last-child td { border-bottom:none; }
 .wikilink { color:var(--accent); background:rgba(88,166,255,.08);
   padding:0 3px; border-radius:3px; font-family:var(--mono); font-size:.82em; }
 
+/* ---- Session transcript viewer ---- */
+.turn { margin-bottom:.8rem; padding:.6rem .8rem; border-radius:var(--radius);
+        border-left:3px solid transparent; background:var(--bg); }
+.turn.user { border-left-color:var(--accent); }
+.turn.agent { border-left-color:var(--ok); }
+.turn.tool { border-left-color:var(--text-dim); }
+.turn .role { font-size:.68rem; font-weight:600; text-transform:uppercase;
+              letter-spacing:.05em; margin-bottom:.3rem; display:flex; align-items:center; gap:.4rem; }
+.turn.user .role { color:var(--accent); }
+.turn.agent .role { color:var(--ok); }
+.turn.tool .role { color:var(--text-muted); }
+.turn .content { font-size:.82rem; line-height:1.5; color:var(--text); white-space:pre-wrap; word-break:break-word; }
+.turn .tool-result { font-size:.78rem; color:var(--text-muted); background:var(--surface);
+                     border:1px solid(var(--border)); border-radius:4px; padding:.4rem .6rem; margin-top:.3rem;
+                     font-family:var(--mono); max-height:6em; overflow-y:auto; }
+.turn .timestamp { font-size:.68rem; color:var(--text-dim); font-family:var(--mono); }
+.tool-name { background:rgba(139,148,158,.15); padding:0 4px; border-radius:3px;
+             font-family:var(--mono); font-size:.72rem; }
+
 /* ---- Empty/error states ---- */
 .empty { padding:1.5rem; text-align:center; color:var(--text-muted);
          background:var(--surface); border:1px dashed var(--border);
@@ -311,6 +330,9 @@ class VizHandler(BaseHTTPRequestHandler):
             self._text(self._frag_sessions(), "text/html")
         elif route == "/tokens":
             self._text(self._frag_tokens(), "text/html")
+        elif route.startswith("/session/"):
+            session_id = route.removeprefix("/session/")
+            self._text(self._frag_session_detail(session_id), "text/html")
         elif route.startswith("/page/"):
             slug = route.removeprefix("/page/")
             self._text(self._frag_page_detail(slug), "text/html")
@@ -479,6 +501,86 @@ class VizHandler(BaseHTTPRequestHandler):
             + "".join(rows)
             + "</table>"
         )
+
+    def _frag_session_detail(self, session_id: str) -> str:
+        """Chronological transcript viewer: user/agent messages + tool calls."""
+        jsonl_path = self._m().transcript_hook.get_transcript_path(session_id)
+        if not jsonl_path.exists():
+            return f'<div class="empty">Session not found: {_esc(session_id)}</div>'
+
+        turns = []
+        try:
+            for line in jsonl_path.read_text(encoding="utf-8", errors="replace").splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(entry, dict) and "role" in entry:
+                    turns.append(entry)
+        except OSError:
+            return f'<div class="empty">Cannot read transcript for {_esc(session_id)}</div>'
+
+        if not turns:
+            return '<div class="empty">Transcript is empty</div>'
+
+        html_parts = []
+        for turn in turns:
+            role = str(turn.get("role", ""))
+            content = str(turn.get("content", ""))
+            ts = str(turn.get("ts", "")) or ""
+            tool_name = turn.get("tool_name")
+            result = turn.get("result")
+            query = turn.get("query")
+
+            if role == "user":
+                html_parts.append(
+                    '<div class="turn user"><div class="role">User'
+                    + (f' <span class="timestamp">{_esc(ts)}</span>' if ts else "")
+                    + "</div>"
+                    + f'<div class="content">{_esc(content)}</div></div>'
+                )
+            elif role == "agent":
+                body_html = render_markdown(content) if content else ""
+                html_parts.append(
+                    '<div class="turn agent"><div class="role">Agent'
+                    + (f' <span class="timestamp">{_esc(ts)}</span>' if ts else "")
+                    + "</div>"
+                    + f'<div class="content">{body_html}</div></div>'
+                )
+            elif role == "tool":
+                parts = [
+                    '<div class="turn tool"><div class="role">Tool'
+                    + (f' <span class="tool-name">{_esc(tool_name)}</span>' if tool_name else "")
+                    + (f' <span class="timestamp">{_esc(ts)}</span>' if ts else "")
+                    + "</div>"
+                ]
+                if query:
+                    parts.append(
+                        f'<div class="content"><code>{_esc(str(query)[:500])}</code></div>'
+                    )
+                if result:
+                    parts.append(f'<div class="tool-result">{_esc(str(result)[:2000])}</div>')
+                parts.append("</div>")
+                html_parts.append("".join(parts))
+
+        meta_path = jsonl_path.with_suffix(".meta.json")
+        meta_line = ""
+        if meta_path.exists():
+            try:
+                meta = json.loads(meta_path.read_text(encoding="utf-8"))
+                meta_line = (
+                    f'<span class="subtle">'
+                    f"{_esc(meta.get('turn_count', '?'))} turns · "
+                    f"started {_esc(str(meta.get('started_at', '?'))[:16])} · "
+                    f"harness {_esc(meta.get('harness', '?'))}" + "</span>"
+                )
+            except (OSError, json.JSONDecodeError):
+                pass
+
+        return f'<div style="margin-bottom:.6rem">{meta_line}</div>' + "".join(html_parts)
 
     def _frag_page_detail(self, slug: str) -> str:
         """Rendered Markdown view of a single memory page."""
