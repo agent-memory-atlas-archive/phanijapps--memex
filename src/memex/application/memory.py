@@ -135,6 +135,8 @@ class Memex:
         time_range: tuple[str, str] | None = None,
         tags: list[str] | None = None,
         include_expired: bool = False,
+        include_inactive: bool = False,
+        max_tokens: int | None = None,
     ) -> RecallResult:
         """BM25 search over the index; each hit records access statistics.
 
@@ -171,7 +173,12 @@ class Memex:
             time_range=time_range,
             tags=tags,
             include_expired=include_expired,
+            include_inactive=include_inactive,
         )
+        if max_tokens is not None:
+            from memex.application.context_injection import pack_to_budget
+
+            result.hits = pack_to_budget(result.hits, max_tokens)
         self.logger.info(
             "operation=recall hits=%d total_indexed=%d", len(result.hits), result.total_indexed
         )

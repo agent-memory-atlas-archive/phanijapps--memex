@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from memex import Memex
-from memex.domain.models import WriteInput
+from memex.domain.models import WikiNode, WriteInput
 from memex.infrastructure.config import MemexConfig as Config
 from memex.infrastructure.index_manager import SCHEMA_VERSION, IndexManager
 from memex.infrastructure.run_log import append_run, read_runs, zero_yield_streak
@@ -66,7 +66,7 @@ class TestFrontMatterRoundTrip:
         memex.close()
 
 
-def _node():
+def _node() -> WikiNode:
     from memex.domain.models import WikiNode
 
     return WikiNode(type="entity", title="Plain", body="b", id="p1")

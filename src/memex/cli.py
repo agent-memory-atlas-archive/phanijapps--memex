@@ -66,6 +66,7 @@ def _build_parser() -> argparse.ArgumentParser:
     recall.add_argument("--type", default=None)
     recall.add_argument("--tag", action="append", default=None)
     recall.add_argument("--include-expired", action="store_true")
+    recall.add_argument("--include-inactive", action="store_true")
 
     consolidate = sub.add_parser("consolidate", help=summary("memex_consolidate"))
     consolidate.add_argument("--mode", choices=["full", "dry-run"], default="full")
@@ -499,6 +500,7 @@ def _run(args: argparse.Namespace) -> int:
                     node_type=args.type,
                     tags=args.tag,
                     include_expired=args.include_expired,
+                    include_inactive=args.include_inactive,
                 )
             )
         elif args.command == "consolidate":

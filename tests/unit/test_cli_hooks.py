@@ -26,7 +26,8 @@ def test_session_start_emits_context_block(seeded: Path, capture: dict[str, str]
     code = cli.main(["--data-dir", str(seeded), "hook", "session-start", "--query", "linting"])
     assert code == 0
     out = capture["out"]
-    assert out.startswith("=== memex MEMORY ===")
+    assert out.startswith("[memex] Memories below are yours")
+    assert "=== memex MEMORY ===" in out
     assert "Prefer ruff" in out
     assert out.rstrip().endswith("=== END memex MEMORY ===")
 
