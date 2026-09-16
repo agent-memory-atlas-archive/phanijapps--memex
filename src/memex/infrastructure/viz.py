@@ -319,6 +319,8 @@ class VizHandler(BaseHTTPRequestHandler):
 <div id="search-results"></div>
 <div class="section">Recent memories</div>
 {memories}
+<div class="section">Token consumption</div>
+{token_chart}
 """
 
     def _frag_health(self) -> str:
