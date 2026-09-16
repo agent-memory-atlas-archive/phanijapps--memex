@@ -686,7 +686,7 @@ class VizHandler(BaseHTTPRequestHandler):
 
         # Bars
         bars = []
-        for i, (label, tokens, started) in enumerate(data):
+        for i, (label, tokens, _started) in enumerate(data):
             x = margin["left"] + i * (bar_w + bar_gap)
             h = (tokens / max_tokens) * plot_h
             y = margin["top"] + plot_h - h
@@ -725,10 +725,7 @@ class VizHandler(BaseHTTPRequestHandler):
 
         # X-axis labels (show ~5-8 labels max)
         x_labels = []
-        if n <= 8:
-            step = 1
-        else:
-            step = max(n // 6, 1)
+        step = 1 if n <= 8 else max(n // 6, 1)
         for i in range(0, n, step):
             x = margin["left"] + i * (bar_w + bar_gap) + bar_w // 2
             label = data[i][0]
