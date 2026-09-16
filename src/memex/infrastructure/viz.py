@@ -489,12 +489,17 @@ class VizHandler(BaseHTTPRequestHandler):
         sessions = sorted(sessions, key=lambda s: s.started_at or "", reverse=True)[:20]
         rows = []
         for s in sessions:
-            sid = _esc(str(s.session_id)[:18])
+            sid_full = str(s.session_id)
+            sid = _esc(sid_full[:18])
             turns = _esc(s.turn_count)
             started = _esc(str(s.started_at or "?")[:16])
             ep = _esc(str(s.episode_slug or "—")[:24] if s.episode_slug else "—")
+            link = (
+                f'<a href="/session/{sid_full}" '
+                f'hx-get="/session/{sid_full}" hx-target="#panel-body" hx-swap="innerHTML">{sid}</a>'
+            )
             rows.append(
-                f'<tr><td>{sid}</td><td>{turns}</td><td class="muted">{started}</td><td class="muted">{ep}</td></tr>'
+                f'<tr><td>{link}</td><td>{turns}</td><td class="muted">{started}</td><td class="muted">{ep}</td></tr>'
             )
         return (
             "<table><thead><tr><th>Session</th><th>Turns</th><th>Started</th><th>Episode</th></tr></thead>"
