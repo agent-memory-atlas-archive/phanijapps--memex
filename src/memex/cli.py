@@ -75,7 +75,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     forget = sub.add_parser("forget", help=summary("memex_forget"))
     forget.add_argument("slug")
-    forget.add_argument("--mode", choices=["hard", "soft", "decay"], default="hard")
+    forget.add_argument("--mode", choices=["hard", "soft", "decay", "archive"], default="hard")
     forget.add_argument("--valid-to", default=None)
 
     ingest = sub.add_parser("ingest-transcript", help=summary("memex_ingest_transcript"))
@@ -98,6 +98,15 @@ def _build_parser() -> argparse.ArgumentParser:
 
     import_cmd = sub.add_parser("import", help=summary("memex_import"))
     import_cmd.add_argument("--input", type=Path, required=True)
+
+    approve_cmd = sub.add_parser("approve", help="Approve a pending page (flip status to active)")
+    approve_cmd.add_argument("slug")
+
+    merge_cmd = sub.add_parser(
+        "merge", help="Merge source page into target; source becomes superseded"
+    )
+    merge_cmd.add_argument("target")
+    merge_cmd.add_argument("source")
 
     sub.add_parser("info", help="Show data directory and index statistics")
 

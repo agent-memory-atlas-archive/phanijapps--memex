@@ -101,6 +101,7 @@ class WikiConsolidator:
         self._links = link_mgr
         self._llm = llm_client
         self._config = config
+        self._approval = config.governance.approval
 
     def consolidate(self, input: ConsolidateInput) -> ConsolidationReport:
         episodes = self._select_episodes(input)
@@ -195,6 +196,9 @@ class WikiConsolidator:
             tags=candidate.tags,
             importance=candidate.importance,
             links=candidate.links,
+            status="pending" if self._approval == "manual" else "active",
+            source="consolidation",
+            harness=self._config.llm.provider,
         )
         updating = bool(node.slug) and self._store.exists(node.slug)
         stored = self._store.write(node)

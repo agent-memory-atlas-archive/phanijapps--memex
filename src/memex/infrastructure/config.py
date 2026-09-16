@@ -66,6 +66,14 @@ class ConsolidationConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class GovernanceConfig:
+    """Approval policy: auto (default) or manual (consolidation output lands
+    status:pending, invisible to recall until approved)."""
+
+    approval: str = "auto"
+
+
+@dataclass(frozen=True, slots=True)
 class BM25Config:
     # k1/b are parsed for forward compatibility; SQLite FTS5 bm25() uses
     # compile-time defaults and cannot be tuned from SQL.
@@ -107,6 +115,7 @@ class MemexConfig:
     data_dir: Path = Path.home() / ".memex"
     llm: LLMConfig = LLMConfig()
     consolidation: ConsolidationConfig = ConsolidationConfig()
+    governance: GovernanceConfig = GovernanceConfig()
     bm25: BM25Config = BM25Config()
     recency_decay: RecencyDecayConfig = RecencyDecayConfig()
     index: IndexConfig = IndexConfig()
@@ -198,6 +207,7 @@ class ConfigLoader:
             data_dir=resolved,
             llm=llm,
             consolidation=self._consolidation(raw),
+            governance=self._governance(raw),
             bm25=BM25Config(
                 k1=float(_or(_get(_table(raw, "bm25"), "k1", float, "bm25"), 1.5)),
                 b=float(_or(_get(_table(raw, "bm25"), "b", float, "bm25"), 0.75)),
@@ -261,6 +271,13 @@ class ConfigLoader:
             timeout=int(_or(_get(table, "timeout", int, "llm"), 60)),
             max_tokens=int(_or(_get(table, "max_tokens", int, "llm"), 4096)),
         )
+
+    def _governance(self, raw: dict[str, object]) -> GovernanceConfig:
+        table = _table(raw, "governance")
+        approval = str(_or(_get(table, "approval", str, "governance"), "auto"))
+        if approval not in ("auto", "manual"):
+            raise ConfigError(f"governance.approval must be auto|manual, got {approval!r}")
+        return GovernanceConfig(approval=approval)
 
     def _consolidation(self, raw: dict[str, object]) -> ConsolidationConfig:
         table = _table(raw, "consolidation")

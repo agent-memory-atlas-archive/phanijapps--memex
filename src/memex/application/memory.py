@@ -103,6 +103,7 @@ class Memex:
                 fails field validation.
             WikiStoreError: The wiki directory is not writable.
         """
+        self._guard_reserved(input)
         if len(input.body) > self.config.wiki.max_body_chars:
             raise ValueError(
                 f"body exceeds wiki.max_body_chars ({self.config.wiki.max_body_chars})"
@@ -259,12 +260,18 @@ class Memex:
             FileNotFoundError: No page exists for ``slug``.
             ValueError: ``mode`` is invalid.
         """
-        if mode not in FORGET_MODES:
+        if mode not in (*FORGET_MODES, "archive"):
             raise ValueError(f"mode must be one of {FORGET_MODES}, got {mode!r}")
         node = self.wiki_store.read(slug)
         if node is None:
             raise FileNotFoundError(f"no wiki page for slug: {slug!r}")
 
+        if mode == "archive":
+            node.status = "archived"
+            stored = self.wiki_store.write(node)
+            self.index_manager.update_record(stored)
+            self.logger.info("operation=forget mode=archive slug=%s", slug)
+            return ForgetResult(slug=slug, forgotten=True, mode=mode, file_path=stored.file_path)
         if mode == "hard":
             self.wiki_store.delete(slug)
             self.index_manager.remove_record(slug)
@@ -400,6 +407,59 @@ class Memex:
         report.index_rebuilt = True
         self.logger.info("operation=restore warnings=%d", len(report.warnings))
         return report
+
+    @staticmethod
+    def _guard_reserved(input: object) -> None:
+        """User-supplied source/harness/confidence is a forgery attempt."""
+        reserved = {
+            key: value
+            for key, value in (
+                ("source", getattr(input, "source", None)),
+                ("harness", getattr(input, "harness", None)),
+                ("confidence", getattr(input, "confidence", None)),
+            )
+            if value is not None
+        }
+        if reserved:
+            raise ValueError(
+                "source/harness/confidence are reserved namespaces set by "
+                f"capture and consolidation, not user input: {sorted(reserved)}"
+            )
+
+    def approve(self, slug: str) -> dict[str, object]:
+        """Flip a pending page to active and re-index it."""
+        node = self.wiki_store.read(slug)
+        if node is None:
+            raise FileNotFoundError(f"no wiki page for slug: {slug!r}")
+        if node.status != "pending":
+            raise ValueError(f"page {slug!r} is {node.status!r}, not pending")
+        node.status = "active"
+        stored = self.wiki_store.write(node)
+        self.index_manager.update_record(stored)
+        self.logger.info("operation=approve slug=%s", slug)
+        return {"slug": slug, "status": "active"}
+
+    def merge(self, target: str, source: str) -> dict[str, object]:
+        """Append source's body into target; source becomes superseded."""
+        target_node = self.wiki_store.read(target)
+        if target_node is None:
+            raise FileNotFoundError(f"no wiki page for slug: {target!r}")
+        source_node = self.wiki_store.read(source)
+        if source_node is None:
+            raise FileNotFoundError(f"no wiki page for slug: {source!r}")
+        target_node.body = (
+            target_node.body.rstrip() + f"\n\n## Merged from [[{source}]]\n\n{source_node.body}"
+        )
+        target_node = self.wiki_store.write(target_node)
+        self.index_manager.update_record(target_node)
+        self.link_manager.sync_node(target_node)
+
+        source_node.status = "superseded"
+        source_node.links = sorted({*source_node.links, target})
+        source_node = self.wiki_store.write(source_node)
+        self.index_manager.update_record(source_node)
+        self.logger.info("operation=merge target=%s source=%s", target, source)
+        return {"target": target, "source": source, "source_status": "superseded"}
 
     def get_provenance(self, slug: str) -> ProvenanceReport | None:
         return self.transcript_hook.get_provenance(slug)
