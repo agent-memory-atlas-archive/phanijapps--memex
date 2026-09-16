@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+import pytest
+
 from memex import Memex
 from memex.infrastructure.config import ConfigLoader, MemexConfig
 
@@ -15,7 +17,7 @@ def _repo_with_config_files(tmp_path: Path) -> Path:
     return repo
 
 
-def test_repo_config_never_loaded(tmp_path: Path, monkeypatch) -> None:
+def test_repo_config_never_loaded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 
     repo = _repo_with_config_files(tmp_path)
     monkeypatch.chdir(repo)
@@ -25,7 +27,7 @@ def test_repo_config_never_loaded(tmp_path: Path, monkeypatch) -> None:
     assert config.llm.model != "smuggled"
 
 
-def test_home_scope_only(tmp_path: Path, monkeypatch) -> None:
+def test_home_scope_only(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("MEMEX_DATA_DIR", str(tmp_path / "memex-home"))
     m = Memex(MemexConfig(data_dir=tmp_path / "memex-home"))
     assert m.data_dir == tmp_path / "memex-home"
