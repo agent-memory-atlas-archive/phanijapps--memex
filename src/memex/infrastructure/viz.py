@@ -398,13 +398,13 @@ class VizHandler(BaseHTTPRequestHandler):
         )
 
     def _card(self, node: WikiNode) -> str:
-        body_raw = _strip_enriched(str(getattr(node, "body", ""))
+        body_raw = _strip_enriched(str(getattr(node, "body", "")))
         badge = _type_badge(getattr(node, "type", ""), getattr(node, "status", "active"))
         slug = getattr(node, "slug", "")
         title_html = (
             f'<a href="/page/{slug}" hx-get="/page/{slug}" '
             f'hx-target="#panel-body" hx-swap="innerHTML">'
-            f'{_esc(getattr(node, "title", ""))}</a>'
+            f"{_esc(getattr(node, 'title', ''))}</a>"
             if slug
             else _esc(getattr(node, "title", ""))
         )
