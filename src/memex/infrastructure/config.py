@@ -88,6 +88,8 @@ class IndexConfig:
 
 @dataclass(frozen=True, slots=True)
 class WikiConfig:
+    """Page-store settings; TOML section [pages] (legacy [wiki] accepted)."""
+
     default_importance: float = 0.5
     max_body_chars: int = 50000
     slug_algo: str = "kebab"
@@ -162,6 +164,14 @@ def _or[T](value: T | None, default: T) -> T:
     return default if value is None else value
 
 
+def _pages_table(raw: dict[str, object]) -> dict[str, object]:
+    """[pages] section, falling back to the pre-0.2 [wiki] name."""
+    pages = raw.get("pages")
+    if isinstance(pages, dict):
+        return pages
+    return _table(raw, "wiki")
+
+
 class ConfigLoader:
     """Loads memex.toml, applies env overrides, and validates the result."""
 
@@ -214,12 +224,12 @@ class ConfigLoader:
             ),
             wiki=WikiConfig(
                 default_importance=float(
-                    _or(_get(_table(raw, "wiki"), "default_importance", float, "wiki"), 0.5)
+                    _or(_get(_pages_table(raw), "default_importance", float, "pages"), 0.5)
                 ),
                 max_body_chars=int(
-                    _or(_get(_table(raw, "wiki"), "max_body_chars", int, "wiki"), 50000)
+                    _or(_get(_pages_table(raw), "max_body_chars", int, "pages"), 50000)
                 ),
-                slug_algo=str(_or(_get(_table(raw, "wiki"), "slug_algo", str, "wiki"), "kebab")),
+                slug_algo=str(_or(_get(_pages_table(raw), "slug_algo", str, "pages"), "kebab")),
             ),
             logging=self._logging(raw, resolved),
         )

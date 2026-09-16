@@ -102,3 +102,14 @@ class TestLLMConfig:
         assert LLMConfig(provider="ollama").base_url.endswith(":11434/v1")
         assert LLMConfig(provider="lmstudio").base_url.endswith(":1234/v1")
         assert LLMConfig(provider="openai", api_base="http://x/v1").base_url == "http://x/v1"
+
+
+def test_pages_section_with_wiki_alias(tmp_path: Path) -> None:
+    config_path = tmp_path / "memex.toml"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text("[pages]\ndefault_importance = 0.9\n", encoding="utf-8")
+    assert ConfigLoader().load(config_path).wiki.default_importance == 0.9
+
+    legacy = tmp_path / "legacy.toml"
+    legacy.write_text("[wiki]\ndefault_importance = 0.7\n", encoding="utf-8")
+    assert ConfigLoader().load(legacy).wiki.default_importance == 0.7

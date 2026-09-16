@@ -4,9 +4,9 @@
 
 A durable, local-first memory layer for AI coding agents.
 
-The wiki **is** the filesystem: every memory is a human-readable Markdown
+The memory store **is** the filesystem: every memory is a human-readable Markdown
 page under `~/.memex/docs/`, git-able and editable by hand. SQLite FTS5 is
-a disposable BM25 index — delete it and it rebuilds from the wiki. No
+a disposable BM25 index — delete it and it rebuilds from the pages. No
 server, no cloud, no embeddings.
 
 ```bash

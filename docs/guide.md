@@ -14,7 +14,7 @@ Everything you need to run memex for yourself, your agent, or your team.
 
 ## Concepts
 
-**The wiki is the filesystem.** Every memory is a Markdown page under
+**The memory store is the filesystem.** Every memory is a Markdown page under
 `~/.memex/docs/`, with YAML front matter and a Markdown body. Pages are
 human-readable, git-able, and editable by hand in any editor. If you edit a
 page externally, `memex rebuild-index` (or `memex watch`) picks it up.
@@ -43,16 +43,16 @@ page externally, `memex rebuild-index` (or `memex watch`) picks it up.
 | `summary` | Synthesized overviews | "Tooling decisions, Sept 2026" |
 | `episode` | One captured session | "Session sess-abc123" |
 
-**Links.** Reference other pages in any body with `[[slug]]` wiki-links
+**Links.** Reference other pages in any body with `[[slug]]` links
 (`[[Ruff Linter]]` normalizes to `[[ruff-linter]]`). Links are indexed both
 directions — backlinks answer "what mentions this?".
 
-**The index is disposable.** `mem.db` mirrors the wiki for fast BM25 search
+**The index is disposable.** `mem.db` mirrors the pages for fast BM25 search
 and freshness tracking. It is never the source of truth:
 
 ```bash
 rm ~/.memex/mem.db
-memex rebuild-index        # fully rebuilt from the wiki files
+memex rebuild-index        # fully rebuilt from the memory files
 ```
 
 **Temporal validity.** Every node optionally carries `expires_at`,
@@ -62,11 +62,12 @@ recall by default (`--include-expired` / `include_expired=True` opts back in).
 ## Getting started
 
 ```bash
-# install (from this repository); --force replaces an existing installation.
-# Add --no-cache when the version number has not changed since your last
-# install -- uv caches built wheels by version and would otherwise
-# reinstall the old code.
-uv tool install . --force --no-cache
+# install from source (run inside a clone of this repository)
+git clone https://github.com/phanijapps/memex.git
+cd memex
+uv tool install . --force
+# Rebuilding after source edits at the SAME version? Add --no-cache:
+# uv caches built wheels by version and would otherwise reinstall old code.
 
 # store your first memory
 memex write --type preference --title "Deploy on Fridays" \
@@ -82,7 +83,7 @@ cat ~/.memex/docs/preferences/deploy-on-fridays.md
 Version-control your memory if you like:
 
 ```bash
-cd ~/.memex/wiki && git init && git add -A && git commit -m "memory: initial"
+cd ~/.memex/docs && git init && git add -A && git commit -m "memory: initial"
 ```
 
 ## Operations
@@ -147,7 +148,7 @@ with any OpenAI-compatible endpoint — OpenAI, Ollama, LM Studio, OpenRouter
 ### Maintenance
 
 ```bash
-memex rebuild-index --force    # full re-index from the wiki files
+memex rebuild-index --force    # full re-index from the memory files
 memex watch                    # poll for hand-edited pages and re-index
 memex info                     # counts, index state, last rebuild
 ```
@@ -286,7 +287,7 @@ memex verify                                # health only
 memex verify --since 2026-09-15T00:00:00Z --require-recall --require-write
 ```
 
-Always checked: every wiki page parses; the index matches content hashes;
+Always checked: every page parses; the index matches content hashes;
 every link resolves. With `--since`, memex additionally reports recall
 activity (access telemetry) and write activity (updated timestamps) since
 the cutoff; `--require-*` turns missing evidence into exit code 1. The
@@ -296,7 +297,7 @@ memex-verify.yml`).
 ## Data portability
 
 ```bash
-memex backup --output memex-backup.tar.gz   # wiki + transcripts + mem.db snapshot
+memex backup --output memex-backup.tar.gz   # pages + transcripts + mem.db snapshot
 memex verify memex-backup.tar.gz 2>/dev/null || true   # (verification is built into restore)
 memex restore --input memex-backup.tar.gz   # validates members, moves old data aside, rebuilds index
 memex export --output nodes.json            # JSON node document
@@ -341,7 +342,7 @@ half_life_days = 30        # importance halves per N idle days (explicit apply o
 watch_poll_interval = 60   # 0 disables
 auto_rebuild_on_startup = false
 
-[wiki]
+[pages]
 default_importance = 0.5
 max_body_chars = 50000
 slug_algo = "kebab"        # kebab | sha1

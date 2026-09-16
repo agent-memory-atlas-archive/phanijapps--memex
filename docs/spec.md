@@ -58,6 +58,16 @@ transcript_support: true
 
 ---
 
+> **Terminology note (post-build, v0.2+).** This specification was
+> authored against the original "wiki" naming. The shipped product
+> renamed the storage concepts: pages live under `~/.memex/docs/` (not
+> `wiki/`), the config section is `[pages]` (legacy `[wiki]` still
+> accepted), and transcripts carry identity only with token accounting
+> in the `.meta.json` sidecar. Where this document says "wiki", read the
+> filesystem memory store. See the [user guide](guide.md) for current
+> behavior and [implementation notes](implementation-notes.md) for every
+> deviation.
+
 ## 1. Objective
 
 **Memex** is a filesystem-based, node-driven, LLM-as-wiki agent memory harness.

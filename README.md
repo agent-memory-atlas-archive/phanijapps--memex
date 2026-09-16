@@ -4,7 +4,7 @@
 
 **A durable, local-first memory layer for AI coding agents.**
 
-The wiki is the filesystem · the index is disposable · every session is provable.
+The filesystem is the memory · the index is disposable · every session is provable.
 
 [![CI](https://github.com/phanijapps/memex/actions/workflows/ci.yml/badge.svg)](https://github.com/phanijapps/memex/actions/workflows/ci.yml)
 [![Docs](https://github.com/phanijapps/memex/actions/workflows/docs.yml/badge.svg)](https://github.com/phanijapps/memex/actions/workflows/docs.yml)
@@ -24,12 +24,12 @@ Agents that matter forget things that matter: your stack, your rules, your
 decisions from last Tuesday. Vector databases and cloud memory services
 solve this with infrastructure. Memex solves it with a **filesystem**:
 
-- **The wiki is the filesystem.** Every memory is a Markdown page under
+- **The filesystem is the memory.** Every memory is a Markdown page under
   `~/.memex/docs/` — human-readable, git-able, editable by hand, portable
   forever. No blobs, no lock-in, no server.
 - **The index is disposable.** SQLite FTS5 provides fast BM25 search, and it
   is never the source of truth: delete `mem.db`, run `memex rebuild-index`,
-  everything comes back from the wiki.
+  everything comes back from the pages.
 - **Every session is provable.** Captured transcripts link to episode nodes,
   so any memory traces back to the conversation that produced it.
 
@@ -121,7 +121,7 @@ Exit 1 fails the build. Ready-made workflow: [marketplace/copilot/memex-verify.y
 | `verify` | Deterministic health + activity gate for CI |
 | `install` | Seamless harness setup: adapters, MCP wiring, `[consolidation]` provisioning, or custom init |
 | `serve-mcp` | stdio MCP server (official SDK) |
-| `rebuild-index` / `watch` | Rebuild `mem.db` from the wiki; poll for hand edits |
+| `rebuild-index` / `watch` | Rebuild `mem.db` from the pages; poll for hand edits |
 | `backup` / `restore` / `export` / `import` | Hardened tar.gz archives; JSON node portability |
 
 ## Documentation
