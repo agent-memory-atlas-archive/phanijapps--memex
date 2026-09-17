@@ -584,6 +584,9 @@ def _run(args: argparse.Namespace) -> int:
     if args.command in ("harness", "install"):
         return _run_install(args)
 
+    if args.command == "eval":
+        return _run_eval(args)
+
     memex = _make_memex(args)
     try:
         if args.command == "write":
