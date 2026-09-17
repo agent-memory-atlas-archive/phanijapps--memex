@@ -127,6 +127,7 @@ class CorpusResult:
     memories_written: int
     queries: list[QuerySpec] = field(default_factory=list)
     elapsed_ms: float = 0.0
+    domain_counts: dict[str, int] = field(default_factory=dict)
 
 
 class CorpusGenerator:

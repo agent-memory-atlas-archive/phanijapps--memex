@@ -40,11 +40,31 @@ def viz_server(tmp_path_factory: pytest.TempPathFactory) -> Iterator[tuple[int, 
     meta = {
         "session_id": "sess-viz",
         "started_at": "2026-09-16T10:00:00Z",
-        "turn_count": 2,
+        "turn_count": 3,
         "token_usage": {"total_tokens": 1234},
+        "harness": "codex",
     }
     (data_dir / "transcripts").mkdir(parents=True, exist_ok=True)
     (data_dir / "transcripts/sess-viz.meta.json").write_text(json.dumps(meta))
+    turns = [
+        {"role": "user", "content": "fix the login bug", "ts": "2026-09-16T10:00:01Z"},
+        {
+            "role": "agent",
+            "content": "Reading the auth module first.",
+            "ts": "2026-09-16T10:00:02Z",
+        },
+        {
+            "role": "tool",
+            "tool_name": "read",
+            "query": "src/auth.py",
+            "result": "def login(): ...",
+            "ts": "2026-09-16T10:00:03Z",
+        },
+        {"role": "user", "content": "looks good", "ts": "2026-09-16T10:01:00Z"},
+    ]
+    (data_dir / "transcripts/sess-viz.jsonl").write_text(
+        "\n".join(json.dumps(t) for t in turns), encoding="utf-8"
+    )
     # Seed an episode page for the sessions list
     ep = WikiNode(
         type="episode",
@@ -158,3 +178,67 @@ class TestTokens:  # AC-0006
         assert "<svg" in body
         assert "<rect" in body
         assert "1,234" in body
+
+
+class TestSessionDetail:
+    def test_session_detail_renders_turns(self, viz_server: tuple[int, Path]) -> None:
+        port, _ = viz_server
+        code, body = _get(port, "/session/sess-viz")
+        assert code == 200
+        assert "fix the login bug" in body
+        assert "Reading the auth module" in body
+        assert "def login(): ..." in body
+
+    def test_session_detail_shows_meta(self, viz_server: tuple[int, Path]) -> None:
+        port, _ = viz_server
+        code, body = _get(port, "/session/sess-viz")
+        assert code == 200
+        assert "3 turns" in body
+        assert "codex" in body
+
+    def test_session_detail_missing(self, viz_server: tuple[int, Path]) -> None:
+        port, _ = viz_server
+        code, body = _get(port, "/session/no-such-session")
+        assert code == 200
+        assert "not found" in body.lower()
+
+
+class TestPageDetail:
+    def test_page_detail_renders_markdown(self, viz_server: tuple[int, Path]) -> None:
+        port, _ = viz_server
+        code, body = _get(port, "/page/alpha-entity")
+        assert code == 200
+        assert "alpha search content" in body
+
+    def test_page_detail_pending_badge(self, viz_server: tuple[int, Path]) -> None:
+        port, _ = viz_server
+        code, body = _get(port, "/page/gamma-pending")
+        assert code == 200
+        assert "pending" in body
+        assert "codex" in body
+
+    def test_page_detail_missing(self, viz_server: tuple[int, Path]) -> None:
+        port, _ = viz_server
+        code, body = _get(port, "/page/no-such-page")
+        assert code == 200
+        assert "not found" in body.lower()
+
+
+class TestShellAndFallback:
+    def test_root_shell(self, viz_server: tuple[int, Path]) -> None:
+        port, _ = viz_server
+        code, body = _get(port, "/")
+        assert code == 200
+        assert "memex" in body.lower()
+
+    def test_style_css(self, viz_server: tuple[int, Path]) -> None:
+        port, _ = viz_server
+        code, body = _get(port, "/style.css")
+        assert code == 200
+        assert "body" in body
+
+    def test_unknown_route_fallback(self, viz_server: tuple[int, Path]) -> None:
+        port, _ = viz_server
+        code, body = _get(port, "/definitely-not-a-route")
+        assert code == 200
+        assert "Not found" in body

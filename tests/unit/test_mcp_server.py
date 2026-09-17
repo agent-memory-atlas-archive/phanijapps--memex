@@ -1,3 +1,4 @@
+import json
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -163,3 +164,27 @@ def test_export_import_tools() -> None:
 
     result = memex_import(exported["nodes"])
     assert result["imported"] == 1
+
+
+def test_tool_exception_fallbacks_are_sanitized(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Internal failures surface as sanitized errors, never raw traces."""
+    import memex.mcp_server as srv
+
+    class _Boom:
+        def __getattr__(self, name: str) -> object:
+            raise RuntimeError("secret path /root/x in store")
+
+    monkeypatch.setattr(srv, "_get_memex", lambda: _Boom())
+
+    assert "error" in memex_recall("anything")
+    assert "error" in memex_export()
+    assert "error" in memex_import([])
+    assert "error" in srv.memex_consolidate(mode="full")
+    assert "error" in srv.memex_ingest_transcript(
+        session_id="s", turns=[{"role": "user", "content": "hi", "turn": 1}]
+    )
+    assert "error" in srv.memex_provenance("ghost")
+    # The sanitized error must not leak the internal exception message
+    assert "secret path" not in json.dumps(srv.memex_export())
