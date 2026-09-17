@@ -137,6 +137,7 @@ class CorpusGenerator:
         self._rng = random.Random(seed)  # noqa: S311 - deterministic, not crypto
         self._queries: list[QuerySpec] = []
         self._slugs: list[str] = []
+        self._used_slugs: set[str] = set()
 
     def generate(
         self,
