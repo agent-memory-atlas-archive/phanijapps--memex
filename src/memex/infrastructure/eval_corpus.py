@@ -300,7 +300,6 @@ class CorpusGenerator:
             tags=tags,
         )
         stored = self._memex.wiki_store.write(node)
-        self._memex.index_manager.update_record(stored)
         self._slugs.append(stored.slug)
         return stored
 
