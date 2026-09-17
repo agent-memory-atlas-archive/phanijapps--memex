@@ -5,8 +5,8 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 
+from eval.corpus import CorpusResult
 from memex.application.memory import Memex
-from memex.infrastructure.eval_corpus import CorpusResult
 
 
 @dataclass(slots=True)

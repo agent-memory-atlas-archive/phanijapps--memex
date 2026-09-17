@@ -2,9 +2,9 @@
 
 from pathlib import Path
 
+from eval.realistic import RealisticCorpusGenerator
 from memex.application.memory import Memex
 from memex.infrastructure.config import MemexConfig
-from memex.infrastructure.eval_realistic import RealisticCorpusGenerator
 
 
 def _make_gen(tmp_path: Path, seed: int = 42) -> RealisticCorpusGenerator:

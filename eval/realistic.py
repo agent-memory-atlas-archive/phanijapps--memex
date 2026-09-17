@@ -10,10 +10,10 @@ import random
 import uuid
 from pathlib import Path
 
+from eval.corpus import CorpusResult, QuerySpec
 from memex.domain.frontmatter import serialize_front_matter
 from memex.domain.models import WikiNode, utc_now_iso
 from memex.domain.slugs import slugify, unique_slug
-from memex.infrastructure.eval_corpus import CorpusResult, QuerySpec
 from memex.infrastructure.wiki_store import TYPE_DIRS, hash_body
 
 # ---------------------------------------------------------------------------

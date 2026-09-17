@@ -75,6 +75,7 @@ no_implicit_reexport = true
 addopts = ["--strict-markers", "--strict-config", "--cov=memex", "--cov-report=term-missing:skip-covered"]
 markers = ["ollama: opt-in integration tests against a local ollama server"]
 testpaths = ["tests"]
+pythonpath = ["."]
 
 [tool.coverage.run]
 branch = true

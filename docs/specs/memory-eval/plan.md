@@ -171,8 +171,8 @@ tests/eval/
 CLI surface:
 
 ```bash
-memex eval corpus --size 10K --seed 42       # build synthetic store
-memex eval retrieval --corpus medium         # run query set, report metrics
+uv run python -m eval.run corpus --size 10000 --seed 42   # build synthetic store
+uv run python -m eval.run retrieval --realistic --size 10000 # run query set, report metrics
 memex eval scale --corpus large              # benchmark at scale
 memex eval consolidation --transcripts tests/eval/corpus/transcripts/
 memex eval e2e --scenarios tests/eval/e2e-scenarios.yaml

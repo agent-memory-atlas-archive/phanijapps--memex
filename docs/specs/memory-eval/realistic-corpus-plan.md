@@ -312,3 +312,15 @@ Expected slugs expand to *all pages of the same topic* (e.g., every
 `stream-processor-rate-limiting-design*` copy). Exact-slug matching was
 unfair to any ranker when a topic has near-duplicate pages: any duplicate
 is an equally correct answer.
+
+### Location note
+
+The eval tooling lives outside the shipped package, in the repo-root
+`eval/` directory (`eval/corpus.py`, `eval/realistic.py`, `eval/runner.py`,
+`eval/run.py`). It is developer benchmarking, not product surface:
+
+    uv run python -m eval.run corpus --realistic --size 10000 --seed 42
+    uv run python -m eval.run retrieval --realistic --size 10000
+
+The `memex` CLI no longer exposes an `eval` subcommand; `src/memex/`
+contains only product code.
