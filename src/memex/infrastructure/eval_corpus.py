@@ -307,7 +307,7 @@ class CorpusGenerator:
 
         now = utc_now_iso()
         fm = {
-            "id": "",
+            "id": str(__import__("uuid").uuid4()),
             "type": node_type,
             "title": title,
             "tags": tags,
