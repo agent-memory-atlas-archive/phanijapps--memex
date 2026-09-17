@@ -339,6 +339,9 @@ class CorpusGenerator:
             updated=now,
         )
 
+    def _add_query(self, query: str, expected: list[str], difficulty: str) -> None:
+        self._queries.append(QuerySpec(query=query, expected_slugs=expected, difficulty=difficulty))
+
 
 def _slugify(text: str) -> str:
     import re as _re
@@ -346,6 +349,3 @@ def _slugify(text: str) -> str:
     slug = text.lower().replace(" ", "-")
     slug = _re.sub(r"[^a-z0-9-]", "", slug)[:64]
     return slug or "node"
-
-    def _add_query(self, query: str, expected: list[str], difficulty: str) -> None:
-        self._queries.append(QuerySpec(query=query, expected_slugs=expected, difficulty=difficulty))
