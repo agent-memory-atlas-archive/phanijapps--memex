@@ -274,6 +274,10 @@ class RealisticCorpusGenerator:
         self._slugs: list[str] = []
         self._used_slugs: set[str] = set()
         self._domain_counts: dict[str, int] = {}
+        # topic key -> all slugs sharing that topic; ground truth expects
+        # any same-topic page since duplicates are equally relevant
+        self._topic_slugs: dict[str, list[str]] = {}
+        self._pending: list[tuple[str, str, str]] = []
 
         for type_dir in TYPE_DIRS.values():
             (self._data_dir / "docs" / type_dir).mkdir(parents=True, exist_ok=True)
@@ -284,9 +288,11 @@ class RealisticCorpusGenerator:
 
         started = time.perf_counter()
         self._queries.clear()
+        self._pending.clear()
         self._slugs.clear()
         self._used_slugs.clear()
         self._domain_counts.clear()
+        self._topic_slugs.clear()
 
         n_arch = int(size * 0.25)
         n_debug = int(size * 0.20)
@@ -317,7 +323,7 @@ class RealisticCorpusGenerator:
         elapsed = (time.perf_counter() - started) * 1000
         return CorpusResult(
             memories_written=len(self._slugs),
-            queries=list(self._queries),
+            queries=self._resolve_queries(),
             elapsed_ms=round(elapsed, 1),
             domain_counts=dict(self._domain_counts),
         )
@@ -335,6 +341,7 @@ class RealisticCorpusGenerator:
         infra = rng.choice(["kubernetes", "docker", "serverless", "vm-cluster"])
         failure_mode = rng.choice(["circuit breaker", "bulkhead", "retry with backoff"])
         quarter = rng.randint(1, 4)
+        topic = f"arch:{service}:{concern}"
         year = rng.choice([2023, 2024, 2025])
 
         body = (
@@ -351,10 +358,10 @@ class RealisticCorpusGenerator:
         )
         title = f"{service} {concern} design"
         tags = ["architecture", service.split("-")[0], concern.split()[0]]
-        node = self._write("entity", title, body, tags)
-        self._add_query(f"how does {service} handle {concern}", [node.slug], "medium")
-        self._add_query(f"{service} architecture", [node.slug], "easy")
-        self._add_query(f"why {pattern} instead of {alternative}", [node.slug], "hard")
+        self._write("entity", title, body, tags, topic=topic)
+        self._add_query(f"how does {service} handle {concern}", topic, "medium")
+        self._add_query(f"{service} architecture", topic, "easy")
+        self._add_query(f"why {pattern} instead of {alternative}", topic, "hard")
 
     def _gen_debugging(self) -> None:
         rng = self._rng
@@ -375,6 +382,7 @@ class RealisticCorpusGenerator:
         )
         trigger = rng.choice(["deploying", "under load", "after failover", "during scale-up"])
         adjective = rng.choice(["failing", "slow", "erroring"])
+        topic = f"debug:{symptom}:{system}"
 
         body = (
             f"When {trigger}, {system} exhibits {symptom}.\n\n"
@@ -387,9 +395,9 @@ class RealisticCorpusGenerator:
         )
         title = f"{symptom} in {system}"
         tags = ["debugging", system.split()[-1] if " " in system else system]
-        node = self._write("entity", title, body, tags)
-        self._add_query(symptom, [node.slug], "medium")
-        self._add_query(f"why is {system} {adjective}", [node.slug], "hard")
+        self._write("entity", title, body, tags, topic=topic)
+        self._add_query(symptom, topic, "medium")
+        self._add_query(f"why is {system} {adjective}", topic, "hard")
 
     def _gen_api_contract(self) -> None:
         rng = self._rng
@@ -402,6 +410,7 @@ class RealisticCorpusGenerator:
         weeks = rng.randint(2, 4)
         err1 = rng.choice(["400", "401", "403", "404"])
         err2 = rng.choice(["409", "422", "429", "500", "503"])
+        topic = f"api:{method}:{path}"
 
         body = (
             f"The `{method} {path}` endpoint {purpose}.\n\n"
@@ -417,13 +426,14 @@ class RealisticCorpusGenerator:
         )
         title = f"{method} {path} contract"
         tags = ["api", path.split("/")[1] if "/" in path else "api"]
-        node = self._write("entity", title, body, tags)
-        self._add_query(f"{method} {path}", [node.slug], "easy")
-        self._add_query(f"rate limit {path}", [node.slug], "medium")
+        self._write("entity", title, body, tags, topic=topic)
+        self._add_query(f"{method} {path}", topic, "easy")
+        self._add_query(f"rate limit {path}", topic, "medium")
 
     def _gen_convention(self) -> None:
         rng = self._rng
         convention, anti = rng.choice(CONVENTIONS)
+        topic = f"conv:{convention}"
         example = rng.choice(CODE_EXAMPLES)
         reason = rng.choice(REASONS)
         origin = rng.choice(
@@ -459,8 +469,8 @@ class RealisticCorpusGenerator:
         )
         title = f"Convention: {convention[:50]}"
         tags = ["convention", "coding-standards"]
-        node = self._write("procedure", title, body, tags)
-        self._add_query(f"why {convention.split()[0]}", [node.slug], "medium")
+        self._write("procedure", title, body, tags, topic=topic)
+        self._add_query(f"why {convention.split()[0]}", topic, "medium")
 
     def _gen_infrastructure(self) -> None:
         rng = self._rng
@@ -488,6 +498,7 @@ class RealisticCorpusGenerator:
         )
         max_deploys = rng.randint(2, 5)
         last_change = rng.choice(["2024-Q1", "2024-Q3", "2025-Q1", "2025-Q2"])
+        topic = f"infra:{env}:{resource}"
 
         body = (
             f"The {env} {resource} configuration:\n\n"
@@ -502,15 +513,16 @@ class RealisticCorpusGenerator:
         )
         title = f"{env} {resource}"
         tags = ["infrastructure", env]
-        node = self._write("entity", title, body, tags)
-        self._add_query(f"{env} {resource}", [node.slug], "easy")
-        self._add_query(f"how many nodes in {env}", [node.slug], "medium")
+        self._write("entity", title, body, tags, topic=topic)
+        self._add_query(f"{env} {resource}", topic, "easy")
+        self._add_query(f"how many nodes in {env}", topic, "medium")
 
     def _gen_domain_knowledge(self) -> None:
         rng = self._rng
         concept = rng.choice(CONCEPTS).strip()
         misconception, correction = rng.choice(MISCONCEPTIONS)
         concept2 = rng.choice([c for c in CONCEPTS if c.strip() != concept]).strip()
+        topic = f"concept:{concept}"
 
         body = (
             f"{concept.title()} is a fundamental concept in distributed systems.\n\n"
@@ -525,9 +537,9 @@ class RealisticCorpusGenerator:
         )
         title = f"{concept.title()} explained"
         tags = ["concept", "distributed-systems"]
-        node = self._write("summary", title, body, tags)
-        self._add_query(f"what is {concept}", [node.slug], "easy")
-        self._add_query(f"{concept} misconception", [node.slug], "hard")
+        self._write("summary", title, body, tags, topic=topic)
+        self._add_query(f"what is {concept}", topic, "easy")
+        self._add_query(f"{concept} misconception", topic, "hard")
 
     def _gen_temporal(self) -> None:
         rng = self._rng
@@ -536,6 +548,7 @@ class RealisticCorpusGenerator:
         quarter = rng.choice(["Q1", "Q2", "Q3", "Q4"])
         year = rng.choice([2023, 2024, 2025])
         weeks = rng.randint(2, 6)
+        topic = f"temporal:{project}:{from_tech}"
 
         body = (
             f"As of {quarter} {year}, the {project} project has migrated "
@@ -551,9 +564,9 @@ class RealisticCorpusGenerator:
         )
         title = f"{project}: migrated from {from_tech} to {to_tech}"
         tags = ["migration", project]
-        node = self._write("summary", title, body, tags)
-        self._add_query(f"why did we switch from {from_tech}", [node.slug], "medium")
-        self._add_query(f"{project} {to_tech}", [node.slug], "easy")
+        self._write("summary", title, body, tags, topic=topic)
+        self._add_query(f"why did we switch from {from_tech}", topic, "medium")
+        self._add_query(f"{project} {to_tech}", topic, "easy")
 
     def _gen_session(self) -> None:
         rng = self._rng
@@ -561,6 +574,7 @@ class RealisticCorpusGenerator:
         month = rng.randint(1, 12)
         day = rng.randint(1, 28)
         date = f"2024-{month:02d}-{day:02d}"
+        topic = f"session:{date}"
         pattern = rng.choice(PATTERNS)
         service = rng.choice(SERVICES)
         topics = rng.choice(
@@ -582,8 +596,15 @@ class RealisticCorpusGenerator:
         )
         title = f"Session {date}: {task[:40]}"
         tags = ["session", "episodic"]
-        node = self._write("episode", title, body, tags, session_id=f"sess-{uuid.uuid4().hex[:8]}")
-        self._add_query(task.split()[0], [node.slug], "hard")
+        self._write(
+            "episode",
+            title,
+            body,
+            tags,
+            session_id=f"sess-{uuid.uuid4().hex[:8]}",
+            topic=topic,
+        )
+        self._add_query(task.split()[0], topic, "hard")
 
     # ------------------------------------------------------------- helpers
 
@@ -594,10 +615,13 @@ class RealisticCorpusGenerator:
         body: str,
         tags: list[str],
         session_id: str | None = None,
+        topic: str | None = None,
     ) -> WikiNode:
         base = slugify(title)[:64] or "node"
         slug = unique_slug(base, self._used_slugs)
         self._used_slugs.add(slug)
+        if topic is not None:
+            self._topic_slugs.setdefault(topic, []).append(slug)
 
         now = utc_now_iso()
         node_id = str(uuid.uuid4())
@@ -637,5 +661,15 @@ class RealisticCorpusGenerator:
             session_id=session_id,
         )
 
-    def _add_query(self, query: str, expected: list[str], difficulty: str) -> None:
-        self._queries.append(QuerySpec(query=query, expected_slugs=expected, difficulty=difficulty))
+    def _add_query(self, query: str, topic: str, difficulty: str) -> None:
+        """Defer resolution: expected slugs = every page of that topic."""
+        self._pending.append((query, topic, difficulty))
+
+    def _resolve_queries(self) -> list[QuerySpec]:
+        resolved = []
+        for query, topic, difficulty in self._pending:
+            expected = list(self._topic_slugs.get(topic, []))
+            if not expected:
+                continue
+            resolved.append(QuerySpec(query=query, expected_slugs=expected, difficulty=difficulty))
+        return resolved
