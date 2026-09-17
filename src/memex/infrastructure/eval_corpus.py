@@ -173,6 +173,9 @@ class CorpusGenerator:
         for i in range(n_overlap):
             self._gen_distractor(i)
 
+        # Bulk index: one scan + batch insert (not per-node roundtrips)
+        self._memex.rebuild_index(force=True)
+
         elapsed = (time.perf_counter() - started) * 1000
         return CorpusResult(
             memories_written=len(self._slugs),
