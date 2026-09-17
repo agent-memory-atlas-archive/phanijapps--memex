@@ -7,7 +7,6 @@ the configured ``api_base``. No hand-rolled HTTP.
 
 from __future__ import annotations
 
-import os
 import subprocess
 
 from memex.application.ports import LLMClient, LLMResponse

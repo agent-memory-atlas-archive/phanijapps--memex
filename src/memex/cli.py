@@ -109,6 +109,16 @@ def _build_parser() -> argparse.ArgumentParser:
     merge_cmd.add_argument("source")
 
     sub.add_parser("info", help="Show data directory and index statistics")
+
+    eval_cmd = sub.add_parser("eval", help="Memory layer evaluation")
+    eval_sub = eval_cmd.add_subparsers(dest="eval_command", required=True)
+
+    eval_corpus = eval_sub.add_parser("corpus", help="Generate synthetic test corpus")
+    eval_corpus.add_argument("--size", type=int, default=100)
+    eval_corpus.add_argument("--seed", type=int, default=42)
+
+    eval_retrieval = eval_sub.add_parser("retrieval", help="Run retrieval quality evaluation")
+    eval_retrieval.add_argument("--top-k", type=int, default=10)
     sub.add_parser("status", help="Memory health: freshness, captures, pending, zero-yield")
 
     watch = sub.add_parser("watch", help="Poll for external wiki edits and re-index")
@@ -391,6 +401,49 @@ def _transcript_path_from_stdin() -> Path | None:
         if isinstance(value, str) and value:
             return Path(value)
     return None
+
+
+def _run_eval(args: argparse.Namespace) -> int:
+    if args.eval_command == "corpus":
+        from memex.infrastructure.config import MemexConfig as MC
+        from memex.infrastructure.eval_corpus import CorpusGenerator
+
+        eval_dir = Path(args.data_dir or "~/.memex-eval").expanduser()
+        config = MC(data_dir=eval_dir)
+        memex = _make_memex_from_config(config)
+        gen = CorpusGenerator(memex, seed=args.seed)
+        result = gen.generate(args.size)
+        memex.close()
+        _emit(
+            {
+                "memories_written": result.memories_written,
+                "queries_generated": len(result.queries),
+                "elapsed_ms": result.elapsed_ms,
+                "data_dir": str(eval_dir),
+            }
+        )
+        return 0
+
+    if args.eval_command == "retrieval":
+        from memex.infrastructure.config import MemexConfig as MC
+        from memex.infrastructure.eval_corpus import CorpusGenerator
+        from memex.infrastructure.eval_runner import format_report, run_retrieval_eval
+
+        eval_dir = Path(args.data_dir or "~/.memex-eval").expanduser()
+        config = MC(data_dir=eval_dir)
+        memex = _make_memex_from_config(config)
+        # Re-generate corpus to get ground truth (idempotent: same seed = same corpus)
+        gen = CorpusGenerator(memex, seed=42)
+        corpus = gen.generate(100)  # re-gen to build query list
+        report = run_retrieval_eval(memex, corpus, top_k=args.top_k)
+        memex.close()
+        print(format_report(report))
+        return 0
+    return 1
+
+
+def _make_memex_from_config(config: object) -> Memex:
+    return Memex(config)
 
 
 def _run_hook(args: argparse.Namespace) -> int:
