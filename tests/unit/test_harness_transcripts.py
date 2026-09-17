@@ -90,3 +90,105 @@ def test_parse_transcript_dispatch_and_unknown_harness(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="unknown harness"):
         parse_transcript("vscode", tmp_path / "x.jsonl")
+
+
+def test_claude_header_extracts_identity_models_and_usage() -> None:
+    parsed = parse_claude_transcript(FIXTURES / "claude_transcript.jsonl")
+    header = parsed.header
+    assert header is not None
+    assert header.harness == "claude"
+    assert header.session_id == "26fda21a-20c4-49f2-8da2-3663d878c009"
+    assert header.started_at == "2026-09-15T10:00:00Z"
+    assert header.ended_at == "2026-09-15T10:00:02Z"
+    assert header.duration_s == 2.0
+    assert header.meta["cli_version"] == "2.1.233"
+    assert header.meta["cwd"] == "/home/user/proj"
+    assert header.meta["git_branch"] == "main"
+    assert header.meta["entrypoint"] == "cli"
+    assert header.meta["models"] == ["claude-sonnet-4-5"]
+    assert header.meta["reasoning_efforts"] == ["high"]
+
+
+def test_claude_session_usage_sums_per_call_usage() -> None:
+    """Claude usage is per-API-call; the session total is the sum."""
+    parsed = parse_claude_transcript(FIXTURES / "claude_transcript.jsonl")
+    assert parsed.session_usage == {
+        "input_tokens": 100,
+        "cache_creation_input_tokens": 5,
+        "cache_read_input_tokens": 900,
+        "output_tokens": 50,
+    }
+
+
+def test_claude_agent_turns_carry_per_call_usage() -> None:
+    parsed = parse_claude_transcript(FIXTURES / "claude_transcript.jsonl")
+    agent_turns = [t for t in parsed.turns if t.role == "agent"]
+    assert len(agent_turns) == 1
+    assert agent_turns[0].token_usage == {
+        "input_tokens": 100,
+        "cache_creation_input_tokens": 5,
+        "cache_read_input_tokens": 900,
+        "output_tokens": 50,
+    }
+
+
+def test_claude_sidechain_excluded_from_turns_and_usage() -> None:
+    import json
+    import tempfile
+
+    lines = [
+        {
+            "type": "assistant",
+            "sessionId": "s1",
+            "timestamp": "2026-09-15T10:00:00Z",
+            "isSidechain": True,
+            "message": {
+                "role": "assistant",
+                "model": "sidechain-model",
+                "content": [{"type": "text", "text": "sidechain reply"}],
+                "usage": {"input_tokens": 1, "output_tokens": 1},
+            },
+        },
+        {
+            "type": "assistant",
+            "sessionId": "s1",
+            "timestamp": "2026-09-15T10:00:01Z",
+            "message": {
+                "role": "assistant",
+                "model": "main-model",
+                "content": [{"type": "text", "text": "main reply"}],
+                "usage": {"input_tokens": 10, "output_tokens": 10},
+            },
+        },
+    ]
+    with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False) as fh:
+        fh.write("\n".join(json.dumps(entry) for entry in lines))
+        path = Path(fh.name)
+    parsed = parse_claude_transcript(path)
+    texts = [t.content for t in parsed.turns if t.role == "agent"]
+    assert texts == ["main reply"]
+    assert parsed.session_usage == {"input_tokens": 10, "output_tokens": 10}
+    assert parsed.header is not None
+    assert parsed.header.meta["models"] == ["main-model"]
+
+
+def test_claude_no_usage_still_yields_header() -> None:
+    import json
+    import tempfile
+
+    with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False) as fh:
+        fh.write(
+            json.dumps(
+                {
+                    "type": "user",
+                    "sessionId": "s2",
+                    "timestamp": "2026-09-15T10:00:00Z",
+                    "message": {"role": "user", "content": "hi"},
+                }
+            )
+        )
+        path = Path(fh.name)
+    parsed = parse_claude_transcript(path)
+    assert parsed.header is not None
+    assert parsed.session_usage is None
+    assert parsed.header.session_id == "s2"

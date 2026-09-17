@@ -182,26 +182,74 @@ def parse_pi_session(path: Path) -> ParsedTranscript:
 
 
 def parse_claude_transcript(path: Path) -> ParsedTranscript:
-    """Parse a Claude Code transcript JSONL into turns.
+    """Parse a Claude Code transcript JSONL into header + turns.
 
     Assistant tool_use blocks become tool turns; user tool_result blocks
-    become tool results. Non-conversational lines are skipped.
+    become tool results. Non-conversational lines (mode, attachments,
+    file snapshots) are skipped. Sidechain entries are excluded from
+    turns and usage — they bill to their parent session context.
+
+    Header extraction (real transcript shapes):
+    - identity: sessionId / cwd / gitBranch / version appear on every
+      line; identity comes from the first, freshness from the latest.
+    - model + effort: message.model and the top-level effort field on
+      assistant lines; ordered unique sets capture mid-session changes.
+    - usage: message.usage is per-API-call (not cumulative like Codex
+      thread usage), so the session total is the sum across assistant
+      messages. Each call's usage is attached to the agent turn it
+      billed, same contract as Codex turn_token_usage.
     """
     turns: list[dict[str, object]] = []
+    started = ""
+    ended = ""
+    session_id = ""
+    latest: dict[str, Any] | None = None
+    models: list[str] = []
+    efforts: list[str] = []
+    totals: dict[str, int] = {}
+    last_agent_index: int | None = None
+
     for entry in _read_jsonl(path):
+        ts = normalize_ts(entry.get("timestamp"))
+        if ts:
+            ended = ts
+            if not started:
+                started = ts
+        if isinstance(entry.get("sessionId"), str) and not session_id:
+            session_id = entry["sessionId"]
+        if any(k in entry for k in ("version", "cwd", "gitBranch")):
+            latest = entry
         entry_type = entry.get("type")
+        if entry.get("isSidechain"):
+            continue
         if entry_type not in ("user", "assistant"):
             continue
         message = entry.get("message")
         if not isinstance(message, dict):
             continue
-        ts = normalize_ts(entry.get("timestamp") or message.get("timestamp"))
+        ts = ts or normalize_ts(message.get("timestamp"))
         content = message.get("content")
         if entry_type == "assistant":
+            model = message.get("model")
+            if isinstance(model, str) and model and model not in models:
+                models.append(model)
+            effort = entry.get("effort")
+            if isinstance(effort, str) and effort and effort not in efforts:
+                efforts.append(effort)
+            usage = _usage_dict(message.get("usage"))
+            if usage is not None:
+                for key, value in usage.items():
+                    totals[key] = totals.get(key, 0) + value
             blocks = content if isinstance(content, list) else []
             text = _blocks_text(blocks)
             if text.strip():
                 turns.append({"role": "agent", "content": text, "ts": ts})
+                last_agent_index = len(turns) - 1
+                if usage is not None:
+                    turns[last_agent_index]["token_usage"] = usage
+            elif usage is not None and last_agent_index is not None:
+                # tool-only response: bill usage to the previous agent turn
+                turns[last_agent_index]["token_usage"] = usage
             for block in blocks:
                 if not isinstance(block, dict) or block.get("type") != "tool_use":
                     continue
@@ -230,7 +278,35 @@ def parse_claude_transcript(path: Path) -> ParsedTranscript:
                         "ts": ts,
                     }
                 )
-    return ParsedTranscript(header=None, turns=_finalize(turns))
+    header_meta: dict[str, object] = {}
+    if latest is not None:
+        header_meta = {
+            "cli_version": latest.get("version"),
+            "cwd": latest.get("cwd"),
+            "git_branch": latest.get("gitBranch"),
+            "entrypoint": latest.get("entrypoint"),
+        }
+    if models:
+        header_meta["models"] = models
+    if efforts:
+        header_meta["reasoning_efforts"] = efforts
+    header_meta = {k: v for k, v in header_meta.items() if v is not None}
+
+    duration_s: float | None = None
+    start_epoch = _parse_iso_epoch(started)
+    end_epoch = _parse_iso_epoch(ended)
+    if start_epoch is not None and end_epoch is not None and end_epoch >= start_epoch:
+        duration_s = round(end_epoch - start_epoch, 3)
+
+    header = SessionHeader(
+        harness="claude",
+        session_id=session_id or suggest_session_id("claude", path),
+        started_at=started or None,
+        ended_at=ended or None,
+        duration_s=duration_s,
+        meta=header_meta,
+    )
+    return ParsedTranscript(header=header, turns=_finalize(turns), session_usage=totals or None)
 
 
 # ---------------------------------------------------------------- codex

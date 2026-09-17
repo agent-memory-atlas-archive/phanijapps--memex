@@ -1,5 +1,5 @@
-{"type":"user","uuid":"u1","timestamp":"2026-09-15T10:00:00.123Z","message":{"role":"user","content":"Remember the deploy uses blue-green"}}
-{"type":"assistant","uuid":"u2","timestamp":"2026-09-15T10:00:01.456Z","message":{"role":"assistant","content":[{"type":"text","text":"Noted."},{"type":"tool_use","name":"Bash","input":{"command":"kubectl get pods"}}]}}
-{"type":"user","uuid":"u3","timestamp":"2026-09-15T10:00:02.789Z","message":{"role":"user","content":[{"type":"tool_result","content":"NAME READY\npod/a 1/1"}]}}
-{"type":"summary","uuid":"u4","summary":"older context"}
+{"type": "user", "uuid": "u1", "timestamp": "2026-09-15T10:00:00.123Z", "message": {"role": "user", "content": "Remember the deploy uses blue-green"}, "sessionId": "26fda21a-20c4-49f2-8da2-3663d878c009", "cwd": "/home/user/proj", "gitBranch": "main", "version": "2.1.233", "entrypoint": "cli"}
+{"type": "assistant", "uuid": "u2", "timestamp": "2026-09-15T10:00:01.456Z", "message": {"role": "assistant", "content": [{"type": "text", "text": "Noted."}, {"type": "tool_use", "name": "Bash", "input": {"command": "kubectl get pods"}}], "model": "claude-sonnet-4-5", "usage": {"input_tokens": 100, "cache_creation_input_tokens": 5, "cache_read_input_tokens": 900, "output_tokens": 50}}, "sessionId": "26fda21a-20c4-49f2-8da2-3663d878c009", "cwd": "/home/user/proj", "gitBranch": "main", "version": "2.1.233", "entrypoint": "cli", "effort": "high"}
+{"type": "user", "uuid": "u3", "timestamp": "2026-09-15T10:00:02.789Z", "message": {"role": "user", "content": [{"type": "tool_result", "content": "NAME READY\npod/a 1/1"}]}, "sessionId": "26fda21a-20c4-49f2-8da2-3663d878c009", "cwd": "/home/user/proj", "gitBranch": "main", "version": "2.1.233", "entrypoint": "cli"}
+{"type": "summary", "uuid": "u4", "summary": "older context", "sessionId": "26fda21a-20c4-49f2-8da2-3663d878c009", "cwd": "/home/user/proj", "gitBranch": "main", "version": "2.1.233", "entrypoint": "cli"}
 not json at all
