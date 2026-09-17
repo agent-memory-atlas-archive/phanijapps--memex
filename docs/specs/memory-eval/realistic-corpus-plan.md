@@ -281,3 +281,34 @@ The templates should draw from real project documentation patterns:
 | Real GitHub issues | Bug reports, debugging narratives, resolution patterns |
 
 These are canonical references whose structure (not content) informs the synthetic templates. The templates should feel like they were written by an agent who was actually debugging, deploying, and reviewing code.
+
+---
+
+## Results (v0.2.5, seed 42, BM25-only)
+
+| Corpus | Recall@1 | Recall@5 | Recall@10 | MRR | Avg Latency |
+|---|---|---|---|---|---|
+| 1,000 realistic | 53.0% | 78.4% | 88.6% | 0.632 | 6.1ms |
+| 10,000 realistic | 49.5% | 61.5% | 68.9% | 0.546 | 20.8ms |
+
+### By difficulty (10K)
+
+| Difficulty | n | R@5 | R@10 | MRR |
+|---|---|---|---|---|
+| easy (title-match) | 6,300 | 76.7% | 84.7% | 0.687 |
+| medium (attribute) | 8,700 | 75.3% | 82.0% | 0.672 |
+| hard (reasoning) | 5,800 | 24.2% | 32.0% | 0.205 |
+
+### Findings
+
+1. **BM25 handles title-match and attribute queries well** (82–85% R@10 even at 10K with ~17 near-duplicates per topic).
+2. **Hard queries expose the semantic gap**: "why event sourcing instead of direct synchronous calls" requires matching the page that *reasons about* that trade-off — the pattern/alternative words appear once in the body while competing pages match on title. R@10 collapses to 32%. This is the strongest evidence yet for A1 (RRF fusion: body BM25 + title BM25) and A2 (importance/recency boosts).
+3. **Ranking, not finding, is the bottleneck**: R@10 88.6% vs R@1 53.0% at 1K — the right page is in the top 10 but pure lexical scoring leaves it mid-list.
+4. **Scale cost is linear**: 6.1ms → 20.8ms avg for 10× corpus; p99 stays under 50ms.
+
+### Ground-truth design note
+
+Expected slugs expand to *all pages of the same topic* (e.g., every
+`stream-processor-rate-limiting-design*` copy). Exact-slug matching was
+unfair to any ranker when a topic has near-duplicate pages: any duplicate
+is an equally correct answer.
