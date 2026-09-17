@@ -292,17 +292,60 @@ class CorpusGenerator:
     # ------------------------------------------------------------- helpers
 
     def _write(self, node_type: str, title: str, body: str, tags: list[str]) -> WikiNode:
+        """Direct file write — bypasses WikiStore to avoid O(n²) slug scanning."""
+        from memex.domain.frontmatter import serialize_front_matter
+        from memex.domain.models import utc_now_iso
+        from memex.infrastructure.wiki_store import TYPE_DIRS, hash_body
 
-        node = WikiNode(
+        slug = _slugify(title)
+        base = slug
+        suffix = 1
+        while slug in self._used_slugs:
+            suffix += 1
+            slug = f"{base}-{suffix}"
+        self._used_slugs.add(slug)
+
+        now = utc_now_iso()
+        fm = {
+            "id": "",
+            "type": node_type,
+            "title": title,
+            "tags": tags,
+            "importance": 0.5,
+            "created": now,
+            "updated": now,
+            "access_count": 0,
+            "last_access": None,
+            "expires_at": None,
+            "valid_from": None,
+            "valid_to": None,
+            "transcript_ref": None,
+            "session_id": None,
+            "links": [],
+            "content_hash": hash_body(body),
+        }
+        path = self._memex.data_dir / "docs" / TYPE_DIRS[node_type] / f"{slug}.md"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(serialize_front_matter(fm, body), encoding="utf-8")
+        self._slugs.append(slug)
+        return WikiNode(
             type=node_type,
             title=title,
             body=body,
             id="",
+            slug=slug,
             tags=tags,
+            created=now,
+            updated=now,
         )
-        stored = self._memex.wiki_store.write(node)
-        self._slugs.append(stored.slug)
-        return stored
+
+
+def _slugify(text: str) -> str:
+    import re as _re
+
+    slug = text.lower().replace(" ", "-")
+    slug = _re.sub(r"[^a-z0-9-]", "", slug)[:64]
+    return slug or "node"
 
     def _add_query(self, query: str, expected: list[str], difficulty: str) -> None:
         self._queries.append(QuerySpec(query=query, expected_slugs=expected, difficulty=difficulty))
