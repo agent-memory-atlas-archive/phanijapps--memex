@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from dataclasses import replace
 from pathlib import Path
 
 from memex.application.decay import RecencyDecay
@@ -17,6 +18,7 @@ from memex.domain.models import (
     IngestTranscriptInput,
     ProvenanceReport,
     RebuildIndexReport,
+    RecallHit,
     RecallResult,
     RestoreReport,
     SessionSummary,
@@ -184,7 +186,7 @@ class Memex:
                 include_expired=include_expired,
                 include_inactive=include_inactive,
             )
-            result.hits = pack_to_budget(result.hits, max_tokens)
+            result.hits = _renumber_hits(pack_to_budget(result.hits, max_tokens))
             self.retriever.record_access(result.hits)
         else:
             result = self.retriever.retrieve(
@@ -534,6 +536,10 @@ class Memex:
                 raise LLMError("llm.api_key is required (set MEMEX_API_KEY or [llm].api_key)")
             self._llm = client_from_config(llm)
         return self._llm
+
+
+def _renumber_hits(hits: list[RecallHit]) -> list[RecallHit]:
+    return [replace(hit, rank=rank) for rank, hit in enumerate(hits, start=1)]
 
 
 __all__ = ["Memex"]

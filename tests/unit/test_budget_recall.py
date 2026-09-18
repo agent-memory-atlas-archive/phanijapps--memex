@@ -141,6 +141,7 @@ class TestBudgetPacker:  # AC-0001
         result = memex.recall("findme", max_tokens=4)
 
         assert [hit.slug for hit in result.hits] == ["returned-first", "returned-third"]
+        assert [hit.rank for hit in result.hits] == [1, 2]
         assert _access_count(memex, "returned-first") == 1
         assert _access_count(memex, "skipped-second") == 0
         assert _access_count(memex, "returned-third") == 1

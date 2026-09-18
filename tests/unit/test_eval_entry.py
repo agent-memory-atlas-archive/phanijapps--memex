@@ -73,11 +73,15 @@ def test_eval_retrieval_writes_reproducible_json(tmp_path: Path) -> None:
         == 0
     )
 
-    payload = json.loads(report_path.read_text(encoding="utf-8"))
+    retained = report_path.read_text(encoding="utf-8")
+    payload = json.loads(retained)
     assert payload["schema_version"] == 1
     assert payload["run"]["seed"] == 7
     assert payload["run"]["git_commit"]
     assert isinstance(payload["run"]["git_dirty"], bool)
+    assert "data_dir" not in payload["run"]
+    assert str(data_dir) not in retained
+    assert str(tmp_path) not in retained
     assert payload["run"]["ranker"] == json.loads(json.dumps(production_ranker_metadata()))
     assert payload["run"]["ranker"]["name"] == "semantic-and-fallback-fts5"
     assert payload["run"]["ranker"]["query_strategy"] == "strict-and-weighted-fts5"
@@ -93,9 +97,12 @@ def test_eval_retrieval_uses_fresh_temporary_store_by_default(tmp_path: Path) ->
 
     assert eval_main(["retrieval", "--size", "20", "--json-output", str(report_path)]) == 0
 
-    run = json.loads(report_path.read_text(encoding="utf-8"))["run"]
+    retained = report_path.read_text(encoding="utf-8")
+    run = json.loads(retained)["run"]
     assert run["ephemeral_data_dir"] is True
-    assert not Path(run["data_dir"]).exists()
+    assert "data_dir" not in run
+    assert str(tmp_path) not in retained
+    assert str(Path.home()) not in retained
 
 
 def test_eval_retrieval_rejects_nonempty_store(tmp_path: Path) -> None:

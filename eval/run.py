@@ -185,7 +185,6 @@ def _run_retrieval(args: argparse.Namespace, eval_dir: Path, *, ephemeral: bool)
                 "requested_corpus_size": args.size,
                 "top_k": args.top_k,
                 "realistic": args.realistic,
-                "data_dir": str(eval_dir),
                 "ephemeral_data_dir": ephemeral,
                 "ranker": production_ranker_metadata(),
             },
