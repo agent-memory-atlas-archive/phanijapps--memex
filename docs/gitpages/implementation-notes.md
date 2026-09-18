@@ -160,12 +160,16 @@ rule, and the OpenAI SDK is the single LLM client.
   when strict matching returns zero rows. Snippets are capped at 12 tokens;
   filters apply before limiting; returned slugs are unique; links and access
   rows are batched once after ranking; ascending slug is the final tie-break.
-  Clean promotion evidence at commit `7af1bb1` selected the ranker
-  with overall Recall@10 `0.9819588`, MRR `0.9819588`, nDCG@10 `0.9323851`,
-  hard Recall/MRR `0.9809524`, hard tokens per correct result `935.18` versus
-  the `1220.51` threshold, 10K p99 `12.35 ms` versus baseline `42.64 ms`, and
-  100K p99 `73.02 ms` versus baseline `363.36 ms`. All repaired realistic,
-  Gutenberg, and Salesforce workload gates passed in the promotion report.
+  Final post-review clean promotion evidence at commit `0c87262c` selected the
+  ranker with overall Recall@10/MRR `0.9819588`, nDCG@10 `0.9323851`, hard
+  Recall@10 `0.9809524`, and hard MRR `0.9809524` versus the `0.9738095`
+  truthful legacy baseline. Hard tokens per correct result were `989.96`
+  versus the `1275.32` threshold and `1594.16` baseline, a `37.90%` reduction.
+  10K p99 improved from `46.44 ms` to `14.75 ms`, and 100K p99 improved from
+  `400.72 ms` to `77.83 ms`. All repaired realistic, Gutenberg, and Salesforce
+  workload gates passed in the promotion report, which recorded no failures and
+  has SHA-256
+  `374a1fcaf865f98cd5b6ef298e7779857621fb4876bd23e11d33d0e1b63d157f`.
 
 - **Retrieval dependency disposition.** `rgapi==0.1.22` remains an optional
   evaluation candidate only. It is not imported by `src/memex`, is not required

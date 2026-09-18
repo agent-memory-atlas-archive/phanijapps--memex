@@ -65,7 +65,7 @@ Verification on that committed tree:
 - Pytest: 494 passed, 1 skipped in 141.14 seconds; coverage 90.17%.
 - MkDocs strict build: pass in 0.54 seconds.
 
-## 2026-09-18 — T6 clean promotion
+## 2026-09-18 — T6 earlier clean promotion
 
 Command:
 
@@ -87,6 +87,10 @@ and 388 sampled queries. The retained PR-only report was
 The selected winner was `semantic-and-fallback-fts5`. It passed promotion,
 was promotion-eligible, and recorded no failures.
 
+This entry is historical earlier clean evidence. It was superseded as the
+current promotion evidence by the final post-review clean-promotion report
+below, after review hardening and final rerun on source revision `0c87262c`.
+
 - Overall Recall@10/MRR/nDCG@10: `0.9819587629`, `0.9819587629`,
   `0.9323851353`.
 - Hard-query Recall@10/MRR: baseline `0.9809523810` / `0.9738095238`,
@@ -99,6 +103,45 @@ was promotion-eligible, and recorded no failures.
   paired ratio `0.2009454948`.
 - Workload gates: repaired realistic, Gutenberg, and Salesforce each passed
   Recall@10, MRR, nDCG@10, hard Recall@10, hard MRR, and family Recall@10.
+
+## 2026-09-18 — Final post-review clean promotion
+
+Command:
+
+```bash
+uv run python -m eval.run selection --promotion \
+  --candidate semantic-and-fallback-fts5 \
+  --workload realistic \
+  --workload gutenberg \
+  --workload salesforce \
+  --evidence-dir /tmp/memex-final-evidence-0c87262
+```
+
+The definitive retained PR-only report is
+`/tmp/memex-final-evidence-0c87262/selection-promotion.json`, with SHA-256
+`374a1fcaf865f98cd5b6ef298e7779857621fb4876bd23e11d33d0e1b63d157f`.
+The run used source revision `0c87262cf3203d409ee7773cd3cb2669eaa414d7` with
+`git_dirty=false`, seed 42, `top_k=10`, 10,005 generated 10K memories,
+100,005 generated 100K memories, and 388 sampled queries.
+
+The selected winner was `semantic-and-fallback-fts5`. It passed promotion,
+was promotion-eligible, and recorded no failures.
+
+- Overall Recall@10/MRR/nDCG@10: `0.9819587629`, `0.9819587629`,
+  `0.9323851353`.
+- Hard-query Recall@10/MRR: baseline `0.9809523810` / `0.9738095238`,
+  candidate `0.9809523810` / `0.9809523810`.
+- Rendered tokens per correct hard query: baseline `1594.1553398058`,
+  threshold `1275.3242718447`, candidate `989.9611650485`; reduction
+  `37.90%`.
+- 10K p99: baseline `46.4352739509 ms`, candidate `14.7542890045 ms`;
+  reduction `68.23%`.
+- 100K p99: baseline `400.7172280108 ms`, candidate `77.8331119800 ms`;
+  reduction `80.58%`.
+- Workload gates: repaired realistic, Gutenberg, and Salesforce each passed
+  Recall@10, MRR, nDCG@10, hard Recall@10, hard MRR, and family Recall@10.
+- Difficulty metrics were retained in the report for overall and each named
+  workload, without raw query text or user-specific paths.
 
 ## 2026-09-18 — T7 production promotion smoke
 

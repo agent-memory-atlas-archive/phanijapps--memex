@@ -579,8 +579,8 @@
       <div class="grid-4">
         <article class="card"><span class="label">Overall + hard Recall@10</span><span class="number">98.20%</span><p>The selected ranker keeps the right page in the first ten results on both overall and hard-query slices.</p></article>
         <article class="card"><span class="label">Hard MRR</span><span class="number">0.9810</span><p>MRR measures how early the first correct result appears; the winner improves the legacy 0.9738 baseline.</p></article>
-        <article class="card"><span class="label">Context cost</span><span class="number">978</span><p>Rendered tokens per correct hard-query result, down from 1,579 on the truthful legacy baseline.</p></article>
-        <article class="card"><span class="label">100K p99</span><span class="number">78.2<span style="font-size:.45em"> ms</span></span><p>The winner stays under the 100 ms large-store gate while the legacy baseline measured 417.3 ms.</p></article>
+        <article class="card"><span class="label">Context cost</span><span class="number">990</span><p>Rendered tokens per correct hard-query result, down from 1,594 on the truthful legacy baseline.</p></article>
+        <article class="card"><span class="label">100K p99</span><span class="number">77.8<span style="font-size:.45em"> ms</span></span><p>The winner stays under the 100 ms large-store gate while the legacy baseline measured 400.7 ms.</p></article>
       </div>
       <p class="footer-note">Latest clean promotion evidence · truthful legacy baseline · realistic, Gutenberg, and Salesforce workloads · top_k=10.</p>
     </section>
@@ -612,8 +612,8 @@
       <div class="metric-grid">
         <div class="metric"><div><span class="label">Overall + hard Recall@10</span><br><strong>98.20%</strong></div><div class="track"><span class="bar" style="--value: 98%"></span></div><div class="delta">Gate met<br><span class="status pass">Pass</span></div></div>
         <div class="metric"><div><span class="label">Hard MRR</span><br><strong>0.9738 → 0.9810</strong></div><div class="track"><span class="bar" style="--value: 98%"></span></div><div class="delta">+0.0072<br><span class="status pass">Pass</span></div></div>
-        <div class="metric"><div><span class="label">Tokens / correct hard query</span><br><strong>1,579 → 978</strong></div><div class="track"><span class="bar" style="--value: 62%"></span></div><div class="delta">−38.1%<br><span class="status pass">Pass</span></div></div>
-        <div class="metric"><div><span class="label">10K p99 latency</span><br><strong>49.2 → 13.8 ms</strong></div><div class="track"><span class="bar" style="--value: 28%"></span></div><div class="delta">−72.0%<br><span class="status pass">Pass</span></div></div>
+        <div class="metric"><div><span class="label">Tokens / correct hard query</span><br><strong>1,594 → 990</strong></div><div class="track"><span class="bar" style="--value: 62%"></span></div><div class="delta">−37.9%<br><span class="status pass">Pass</span></div></div>
+        <div class="metric"><div><span class="label">10K p99 latency</span><br><strong>46.4 → 14.8 ms</strong></div><div class="track"><span class="bar" style="--value: 32%"></span></div><div class="delta">−68.2%<br><span class="status pass">Pass</span></div></div>
       </div>
       <p class="footer-note">Candidate: semantic-and-fallback-fts5, deterministic lexical ranking, compact snippets, and ascending slug tie-breaks.</p>
     </section>
@@ -626,19 +626,20 @@
       <div class="split">
         <div class="threshold">
           <span class="label">Large-store p99</span>
-          <span class="actual" style="color:var(--lime)">78.2 ms</span>
+          <span class="actual" style="color:var(--lime)">77.8 ms</span>
           <span class="target">Gate: <strong>&lt; 100 ms</strong></span>
         </div>
         <div>
           <div class="callout"><strong>The candidate ships as the production ranker.</strong> It preserves high recall, improves first-correct position, cuts rendered context, and makes 100K retrieval fast enough.</div>
           <ul class="checklist" style="margin-top:1.5rem">
             <li>Realistic, Gutenberg, and Salesforce promotion workloads pass together.</li>
-            <li>10K p99 improves from 49.2 ms to 13.8 ms.</li>
-            <li>100K p99 improves from 417.3 ms to 78.2 ms.</li>
+            <li>Overall nDCG@10 is 0.9324 in the final clean report.</li>
+            <li>10K p99 improves from 46.4 ms to 14.8 ms.</li>
+            <li>100K p99 improves from 400.7 ms to 77.8 ms.</li>
           </ul>
         </div>
       </div>
-      <p class="footer-note">Historical note: an earlier weighted-RRF candidate failed MRR and did not ship. This slide describes the repaired clean promotion evidence.</p>
+      <p class="footer-note">Historical note: an earlier weighted-RRF candidate failed MRR and did not ship. This slide describes the final post-review clean promotion evidence.</p>
     </section>
 
     <section class="slide" data-title="Value now" data-number="07 / 10" aria-hidden="true">
@@ -662,10 +663,10 @@
       </header>
       <div class="roadmap">
         <article class="card"><span class="step">01 · Shipped</span><h3 style="margin-top:.8rem">Evaluation foundation</h3><p>Repeatable selection, lower-risk experiments, and source-clean promotion evidence across three workloads.</p><span class="status pass confidence">High confidence</span></article>
-        <article class="card"><span class="step">02 · Shipped</span><h3 style="margin-top:.8rem">A production ranker</h3><p>Users get 98.20% overall and hard Recall@10, improved hard MRR, 38.1% fewer rendered tokens, and bounded p99.</p><span class="status pass confidence">Gate-backed</span></article>
+        <article class="card"><span class="step">02 · Shipped</span><h3 style="margin-top:.8rem">A production ranker</h3><p>Users get 98.20% overall and hard Recall@10, improved hard MRR, 37.90% fewer rendered tokens, and bounded p99.</p><span class="status pass confidence">Gate-backed</span></article>
         <article class="card"><span class="step">03 · Separate slices</span><h3 style="margin-top:.8rem">Evidence-aware memory</h3><p>Section provenance, temporal supersession, contradiction handling, and identity-aware consolidation remain promising but unimplemented.</p><span class="status fail confidence" style="color:var(--amber);background:rgba(251,191,36,.1)">Not yet measured</span></article>
       </div>
-      <p class="footer-note">The shipped token result is 1,579 → 978 rendered tokens per correct hard-query result on the clean paired evidence.</p>
+      <p class="footer-note">The shipped token result is 1,594 → 990 rendered tokens per correct hard-query result on the final clean paired evidence.</p>
     </section>
 
     <section class="slide" data-title="Next move" data-number="09 / 10" aria-hidden="true">
