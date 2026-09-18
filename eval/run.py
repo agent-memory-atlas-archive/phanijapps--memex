@@ -19,7 +19,7 @@ from pathlib import Path
 
 from eval.corpus import CorpusResult
 from eval.runner import format_report, run_retrieval_eval
-from eval.selection import CANDIDATE_NAMES, EvaluationConfig, run_selection
+from eval.selection import CANDIDATE_NAMES, WORKLOAD_NAMES, EvaluationConfig, run_selection
 from memex import Memex
 from memex.infrastructure.config import MemexConfig
 
@@ -74,6 +74,12 @@ def _build_parser() -> argparse.ArgumentParser:
         action="append",
         choices=CANDIDATE_NAMES,
         help="Candidate to evaluate; repeat for multiple (default: all)",
+    )
+    selection_cmd.add_argument(
+        "--workload",
+        action="append",
+        choices=WORKLOAD_NAMES,
+        help="Workload to evaluate; repeat for multiple (default: realistic)",
     )
     selection_cmd.add_argument(
         "--evidence-dir",
@@ -215,6 +221,7 @@ def main(argv: list[str] | None = None) -> int:
                 seed=args.seed,
                 top_k=args.top_k,
                 candidates=tuple(args.candidate) if args.candidate else CANDIDATE_NAMES,
+                workloads=tuple(args.workload) if args.workload else ("realistic",),
                 evidence_dir=args.evidence_dir.expanduser() if args.evidence_dir else None,
                 data_root=args.data_dir.expanduser() if args.data_dir else None,
                 promotion_mode=args.promotion,

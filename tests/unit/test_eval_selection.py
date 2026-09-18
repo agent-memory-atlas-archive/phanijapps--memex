@@ -16,8 +16,10 @@ from eval.selection import (
     CLOSED_FAILURE_CATEGORIES,
     EvaluationConfig,
     GitState,
+    WorkloadMetrics,
     run_selection,
     stable_selection_payload,
+    validate_workload_metrics,
 )
 from memex.domain.models import RecallHit
 
@@ -29,7 +31,9 @@ def test_selection_refuses_nonempty_output_directory(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="must be empty"):
         run_selection(
-            EvaluationConfig(size=12, evidence_dir=output_dir, candidates=("weighted-lexical-rrf",))
+            EvaluationConfig(
+                size=12, evidence_dir=output_dir, candidates=("field-channel-rrf-k60",)
+            )
         )
 
     assert (output_dir / "keep.txt").read_text(encoding="utf-8") == "leave me alone"
@@ -48,7 +52,7 @@ def test_selection_refuses_nonempty_paired_data_root_without_mutation(tmp_path: 
                 size=12,
                 data_root=data_root,
                 evidence_dir=evidence_dir,
-                candidates=("weighted-lexical-rrf",),
+                candidates=("field-channel-rrf-k60",),
             )
         )
 
@@ -68,7 +72,7 @@ def test_selection_refuses_configured_memex_store_and_descendants(
                 EvaluationConfig(
                     size=12,
                     data_root=requested,
-                    candidates=("weighted-lexical-rrf",),
+                    candidates=("field-channel-rrf-k60",),
                 )
             )
         assert not requested.exists()
@@ -87,7 +91,7 @@ def test_selection_preflight_ignores_unrelated_invalid_live_configuration(
         EvaluationConfig(
             size=12,
             data_root=evaluation_root,
-            candidates=("weighted-lexical-rrf",),
+            candidates=("field-channel-rrf-k60",),
             git_state=GitState(source_revision="abc123", git_dirty=False),
         )
     )
@@ -108,7 +112,7 @@ def test_selection_protects_default_store_when_environment_uses_isolated_store(
                 EvaluationConfig(
                     size=12,
                     data_root=requested,
-                    candidates=("weighted-lexical-rrf",),
+                    candidates=("field-channel-rrf-k60",),
                 )
             )
         assert not requested.exists()
@@ -121,7 +125,7 @@ def test_selection_writes_sanitized_schema_and_blocks_dirty_promotion(tmp_path: 
         EvaluationConfig(
             size=12,
             evidence_dir=output_dir,
-            candidates=("weighted-lexical-rrf",),
+            candidates=("field-channel-rrf-k60",),
             git_state=GitState(source_revision="abc123", git_dirty=True),
         )
     )
@@ -140,7 +144,7 @@ def test_selection_writes_sanitized_schema_and_blocks_dirty_promotion(tmp_path: 
 def test_selection_stable_payload_excludes_volatile_metadata(tmp_path: Path) -> None:
     config = EvaluationConfig(
         size=12,
-        candidates=("weighted-lexical-rrf",),
+        candidates=("field-channel-rrf-k60",),
         git_state=GitState(source_revision="abc123", git_dirty=False),
     )
 
@@ -154,11 +158,11 @@ def test_selection_uses_independent_paired_stores(tmp_path: Path) -> None:
     report = run_selection(
         EvaluationConfig(
             size=12,
-            candidates=("weighted-lexical-rrf",),
+            candidates=("field-channel-rrf-k60",),
             git_state=GitState(source_revision="abc123", git_dirty=False),
         )
     )
-    weighted = report.candidates["weighted-lexical-rrf"]
+    weighted = report.candidates["field-channel-rrf-k60"]
 
     assert weighted.baseline.access_mutations > 0
     assert weighted.candidate.pre_run_access_count == 0
@@ -176,14 +180,14 @@ def test_candidate_run_is_independent_of_baseline_access_state(tmp_path: Path) -
         top_k=10,
     )
     paired = selection._run_candidate_pair(
-        name="weighted-lexical-rrf",
+        name="field-channel-rrf-k60",
         snapshot_dir=snapshot_dir,
         data_dir=tmp_path / "candidate-paired",
         corpus=corpus,
         top_k=10,
     )
     clean = selection._run_candidate_pair(
-        name="weighted-lexical-rrf",
+        name="field-channel-rrf-k60",
         snapshot_dir=snapshot_dir,
         data_dir=tmp_path / "candidate-clean",
         corpus=corpus,
@@ -231,14 +235,14 @@ def test_promotion_uses_one_baseline_per_actual_scale_and_never_duplicates_p99(
     report = run_selection(
         EvaluationConfig(
             promotion_mode=True,
-            candidates=("weighted-lexical-rrf",),
+            candidates=("field-channel-rrf-k60",),
             git_state=GitState(source_revision="abc123", git_dirty=False),
         )
     )
 
     assert setup_sizes == [10_000, 100_000]
     assert candidate_sizes == [10_000, 100_000]
-    comparison = report.candidates["weighted-lexical-rrf"].comparison
+    comparison = report.candidates["field-channel-rrf-k60"].comparison
     baseline = cast(dict[str, selection.JsonValue], comparison["baseline"])
     candidate = cast(dict[str, selection.JsonValue], comparison["candidate"])
     assert baseline["p99_ms"] == {"10000": 1.0, "100000": 10.0}
@@ -246,12 +250,12 @@ def test_promotion_uses_one_baseline_per_actual_scale_and_never_duplicates_p99(
 
 
 def test_diagnostic_run_can_never_select_candidate(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(selection, "_select_candidate", lambda candidates: "weighted-lexical-rrf")
+    monkeypatch.setattr(selection, "_select_candidate", lambda candidates: "field-channel-rrf-k60")
 
     report = run_selection(
         EvaluationConfig(
             size=12,
-            candidates=("weighted-lexical-rrf",),
+            candidates=("field-channel-rrf-k60",),
             git_state=GitState(source_revision="abc123", git_dirty=False),
         )
     )
@@ -280,7 +284,7 @@ def test_promotion_skips_large_scale_when_no_candidate_clears_quality_gate(
     report = run_selection(
         EvaluationConfig(
             promotion_mode=True,
-            candidates=("weighted-lexical-rrf",),
+            candidates=("field-channel-rrf-k60",),
             git_state=GitState(source_revision="abc123", git_dirty=False),
         )
     )
@@ -296,11 +300,11 @@ def test_incomplete_large_scale_retains_closed_failure_and_scale_status() -> Non
     )
 
     result = selection._candidate_selection(
-        name="weighted-lexical-rrf",
+        name="field-channel-rrf-k60",
         baselines={10_000: _fake_measured(1.0), 100_000: _fake_measured(2.0)},
         candidates={10_000: _fake_measured(1.0), 100_000: large_candidate},
         corpora={10_000: _fake_corpus(10_000), 100_000: _fake_corpus(100_000)},
-        config=EvaluationConfig(promotion_mode=True, candidates=("weighted-lexical-rrf",)),
+        config=EvaluationConfig(promotion_mode=True, candidates=("field-channel-rrf-k60",)),
         git_state=GitState(source_revision="abc123", git_dirty=False),
     )
 
@@ -322,7 +326,7 @@ def test_promotion_rejects_noncanonical_seed_or_top_k(seed: int, top_k: int) -> 
                 promotion_mode=True,
                 seed=seed,
                 top_k=top_k,
-                candidates=("weighted-lexical-rrf",),
+                candidates=("field-channel-rrf-k60",),
             )
         )
 
@@ -342,6 +346,84 @@ def test_selection_failure_categories_are_closed_and_bounded(tmp_path: Path) -> 
         assert "\n" not in failure.reason
 
 
+def test_selection_rejects_missing_family_or_failed_workload_floor() -> None:
+    metrics = WorkloadMetrics(
+        recall_at_10=0.89,
+        mrr=0.60,
+        ndcg_at_10=0.80,
+        hard_recall_at_10=0.80,
+        by_family={"alias": 0.90},
+    )
+    assert validate_workload_metrics(metrics).passed is False
+
+
+def test_selection_treats_hard_floor_as_inapplicable_without_hard_queries() -> None:
+    metrics = WorkloadMetrics(
+        recall_at_10=0.90,
+        mrr=0.50,
+        ndcg_at_10=0.75,
+        hard_recall_at_10=0.0,
+        by_family={"book-title": 0.90},
+        hard_query_count=0,
+    )
+
+    verdict = validate_workload_metrics(metrics)
+
+    assert verdict.passed is True
+    assert verdict.gates["hard_recall_at_10"] is True
+
+
+def test_selection_report_includes_workload_manifest_and_ndcg() -> None:
+    measured = _fake_measured(1.0)
+
+    result = selection._candidate_selection(
+        name="field-channel-rrf-k60",
+        baselines={10_000: measured},
+        candidates={10_000: measured},
+        corpora={10_000: _fake_corpus(10_000)},
+        config=EvaluationConfig(
+            promotion_mode=True,
+            candidates=("field-channel-rrf-k60",),
+            workloads=("realistic", "gutenberg", "salesforce"),
+        ),
+        git_state=GitState(source_revision="abc123", git_dirty=False),
+    )
+
+    workload_metrics = cast(dict[str, selection.JsonValue], result.to_dict()["workload_metrics"])
+    overall = cast(dict[str, selection.JsonValue], workload_metrics["overall"])
+    by_workload = cast(dict[str, selection.JsonValue], workload_metrics["by_workload"])
+    realistic = cast(dict[str, selection.JsonValue], by_workload["realistic"])
+    realistic_family = cast(dict[str, selection.JsonValue], realistic["by_family"])
+
+    assert result.to_dict()["workload_manifest"] == [
+        {"name": "realistic", "fixture_version": "generated", "source_manifest": "seed-42"},
+        {
+            "name": "gutenberg",
+            "fixture_version": "eval/data/gutenberg-books.jsonl",
+            "source_manifest": "gutenberg-books.jsonl provenance",
+        },
+        {
+            "name": "salesforce",
+            "fixture_version": "eval/data/salesforce-facts.jsonl",
+            "source_manifest": "salesforce-facts.jsonl citations",
+        },
+    ]
+    assert overall["ndcg_at_10"] == 1.0
+    assert realistic_family["unit"] == 1.0
+
+
+def test_large_selection_manifest_is_bounded_by_family_and_difficulty() -> None:
+    queries = [
+        QuerySpec(f"query {index}", ["target"], "hard", family="unit", corpus="realistic")
+        for index in range(selection.SELECTION_QUERY_BOUND_THRESHOLD + 1)
+    ]
+
+    bounded = selection._bound_query_manifest(queries)
+
+    assert len(bounded) == selection.SELECTION_MAX_QUERIES_PER_GROUP
+    assert bounded[0].query == "query 0"
+
+
 def test_retained_report_excludes_prohibited_content_canaries(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -351,8 +433,14 @@ def test_retained_report_excludes_prohibited_content_canaries(
     stack_canary = 'Traceback (most recent call last): File "/private/secret.py"'
     original_generate = selection._generate_snapshot
 
-    def generate_with_canaries(snapshot_dir: Path, *, size: int, seed: int) -> CorpusResult:
-        corpus = original_generate(snapshot_dir, size=size, seed=seed)
+    def generate_with_canaries(
+        snapshot_dir: Path,
+        *,
+        size: int,
+        seed: int,
+        workloads: tuple[selection.WorkloadName, ...] = ("realistic",),
+    ) -> CorpusResult:
+        corpus = original_generate(snapshot_dir, size=size, seed=seed, workloads=workloads)
         corpus.queries[0].query = f"{query_canary} {credential_canary}"
         page = next((snapshot_dir / "docs").rglob("*.md"))
         page.write_text(
@@ -369,7 +457,7 @@ def test_retained_report_excludes_prohibited_content_canaries(
             size=12,
             evidence_dir=evidence_dir,
             data_root=data_root,
-            candidates=("weighted-lexical-rrf",),
+            candidates=("field-channel-rrf-k60",),
             git_state=GitState(source_revision="abc123", git_dirty=False),
         )
     )
@@ -392,7 +480,7 @@ def test_retained_report_excludes_prohibited_content_canaries(
 def _fake_corpus(size: int) -> CorpusResult:
     return CorpusResult(
         memories_written=size,
-        queries=[QuerySpec("hard query", ["target"], "hard")],
+        queries=[QuerySpec("hard query", ["target"], "hard", family="unit", corpus="realistic")],
     )
 
 

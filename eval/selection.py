@@ -13,6 +13,7 @@ import sys
 import tempfile
 import time
 import tomllib
+import uuid
 from collections.abc import Mapping, Sequence
 from contextlib import nullcontext
 from dataclasses import dataclass, field
@@ -42,13 +43,26 @@ from eval.realistic import RealisticCorpusGenerator
 from eval.rgapi_candidate import rank_rgapi_candidate
 from eval.runner import HitResult
 from eval.weighted_retriever import WeightedLexicalRetriever
+from eval.workloads import (
+    GUTENBERG_FIXTURE,
+    SALESFORCE_FIXTURE,
+    first_hit_rank,
+    load_gutenberg_workload,
+    load_salesforce_workload,
+    ndcg_at_k,
+    validate_queries,
+)
 from memex import __version__ as MEMEX_VERSION
 from memex.application import context_injection
 from memex.application.memory import Memex
+from memex.domain.frontmatter import serialize_front_matter
 from memex.domain.models import RecallHit, utc_now_iso
+from memex.domain.slugs import unique_slug
 from memex.infrastructure.config import MemexConfig
+from memex.infrastructure.wiki_store import TYPE_DIRS, hash_body
 
-type CandidateName = Literal["weighted-lexical-rrf", "rgapi-0.1.22"]
+type CandidateName = Literal["field-channel-rrf-k60", "rgapi-0.1.22"]
+type WorkloadName = Literal["realistic", "gutenberg", "salesforce"]
 type FailureCategory = Literal[
     "dependency_unavailable",
     "invalid_query",
@@ -60,7 +74,8 @@ type FailureCategory = Literal[
 ]
 type JsonValue = str | int | float | bool | list[JsonValue] | dict[str, JsonValue] | None
 
-CANDIDATE_NAMES: tuple[CandidateName, ...] = ("weighted-lexical-rrf", "rgapi-0.1.22")
+CANDIDATE_NAMES: tuple[CandidateName, ...] = ("field-channel-rrf-k60", "rgapi-0.1.22")
+WORKLOAD_NAMES: tuple[WorkloadName, ...] = ("realistic", "gutenberg", "salesforce")
 CLOSED_FAILURE_CATEGORIES: set[FailureCategory] = {
     "dependency_unavailable",
     "invalid_query",
@@ -75,7 +90,14 @@ PROMOTION_SEED = 42
 PROMOTION_TOP_K = 10
 RGAPI_CANDIDATE_BUDGET_SECONDS = 15.0
 SELECTION_SCHEMA_VERSION = 1
+SELECTION_MAX_QUERIES_PER_GROUP = 25
+SELECTION_QUERY_BOUND_THRESHOLD = 2_000
 TOKEN_BUDGET = context_injection.DEFAULT_MAX_TOKENS
+WORKLOAD_RECALL_FLOOR = 0.90
+WORKLOAD_MRR_FLOOR = 0.50
+WORKLOAD_NDCG_FLOOR = 0.75
+WORKLOAD_HARD_RECALL_FLOOR = 0.75
+WORKLOAD_FAMILY_RECALL_FLOOR = 0.70
 _MAX_FAILURE_REASON = 120
 _QUERY_TOKENS = re.compile(r"[a-z0-9]+")
 
@@ -96,6 +118,7 @@ class EvaluationConfig:
     seed: int = PROMOTION_SEED
     top_k: int = PROMOTION_TOP_K
     candidates: Sequence[CandidateName] = CANDIDATE_NAMES
+    workloads: Sequence[WorkloadName] = ("realistic",)
     evidence_dir: Path | None = None
     data_root: Path | None = None
     promotion_mode: bool = False
@@ -109,6 +132,35 @@ class SelectionFailure:
 
     def to_dict(self) -> dict[str, JsonValue]:
         return {"category": self.category, "reason": self.reason}
+
+
+@dataclass(frozen=True, slots=True)
+class WorkloadMetrics:
+    recall_at_10: float
+    mrr: float
+    ndcg_at_10: float
+    hard_recall_at_10: float
+    by_family: Mapping[str, float]
+    hard_query_count: int = 1
+
+    def to_dict(self) -> dict[str, JsonValue]:
+        return {
+            "recall_at_10": self.recall_at_10,
+            "mrr": self.mrr,
+            "ndcg_at_10": self.ndcg_at_10,
+            "hard_recall_at_10": self.hard_recall_at_10,
+            "hard_query_count": self.hard_query_count,
+            "by_family": dict(self.by_family),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class WorkloadVerdict:
+    passed: bool
+    gates: Mapping[str, bool]
+
+    def to_dict(self) -> dict[str, JsonValue]:
+        return {"passed": self.passed, "gates": dict(self.gates)}
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,6 +194,8 @@ class CandidateSelection:
     candidate: RunSummary
     scales: Mapping[int, dict[str, JsonValue]]
     comparison: dict[str, JsonValue]
+    workload_manifest: tuple[dict[str, JsonValue], ...]
+    workload_metrics: dict[str, JsonValue]
     passed: bool
     promotion_eligible: bool
     failures: tuple[SelectionFailure, ...]
@@ -153,6 +207,8 @@ class CandidateSelection:
             "candidate": self.candidate.to_dict(),
             "scales": {str(size): dict(status) for size, status in self.scales.items()},
             "comparison": self.comparison,
+            "workload_manifest": [dict(item) for item in self.workload_manifest],
+            "workload_metrics": self.workload_metrics,
             "passed": self.passed,
             "promotion_eligible": self.promotion_eligible,
             "failures": [failure.to_dict() for failure in self.failures],
@@ -293,6 +349,11 @@ def stable_selection_payload(report: SelectionReport) -> dict[str, JsonValue]:
 def _validate_config(config: EvaluationConfig) -> None:
     if config.size < 1:
         raise ValueError("size must be positive")
+    if not config.workloads:
+        raise ValueError("at least one workload is required")
+    unknown = [name for name in config.workloads if name not in WORKLOAD_NAMES]
+    if unknown:
+        raise ValueError(f"unknown workload: {unknown[0]}")
     if config.promotion_mode and (config.seed, config.top_k) != (PROMOTION_SEED, PROMOTION_TOP_K):
         raise ValueError("promotion mode requires seed=42 and top_k=10")
 
@@ -337,7 +398,9 @@ def _run_scale_setup(
 ) -> tuple[CorpusResult, _MeasuredRun]:
     scale_root = root / str(size)
     snapshot_dir = scale_root / "snapshot"
-    corpus = _generate_snapshot(snapshot_dir, size=size, seed=config.seed)
+    corpus = _generate_snapshot(
+        snapshot_dir, size=size, seed=config.seed, workloads=config.workloads
+    )
     baseline = _run_baseline_pair(
         snapshot_dir=snapshot_dir,
         data_dir=scale_root / "baseline",
@@ -348,9 +411,121 @@ def _run_scale_setup(
     return corpus, baseline
 
 
-def _generate_snapshot(snapshot_dir: Path, *, size: int, seed: int) -> CorpusResult:
+def _generate_snapshot(
+    snapshot_dir: Path,
+    *,
+    size: int,
+    seed: int,
+    workloads: Sequence[WorkloadName] = ("realistic",),
+) -> CorpusResult:
     snapshot_dir.mkdir(parents=True)
-    return RealisticCorpusGenerator(snapshot_dir, seed=seed).generate(size)
+    combined = CorpusResult(memories_written=0, queries=[], domain_counts={})
+    if "realistic" in workloads:
+        realistic = RealisticCorpusGenerator(snapshot_dir, seed=seed).generate(size)
+        combined.memories_written += realistic.memories_written
+        combined.queries.extend(realistic.queries)
+        combined.domain_counts.update(realistic.domain_counts)
+    if "gutenberg" in workloads:
+        gutenberg = load_gutenberg_workload()
+        _append_fixture_workload(snapshot_dir, GUTENBERG_FIXTURE, corpus="gutenberg")
+        _merge_workload(combined, gutenberg, "gutenberg")
+    if "salesforce" in workloads:
+        salesforce = load_salesforce_workload()
+        _append_fixture_workload(snapshot_dir, SALESFORCE_FIXTURE, corpus="salesforce")
+        _merge_workload(combined, salesforce, "salesforce")
+    validate_queries(combined.queries)
+    combined.queries = _bound_query_manifest(combined.queries)
+    return combined
+
+
+def _merge_workload(combined: CorpusResult, workload: CorpusResult, name: str) -> None:
+    combined.memories_written += workload.memories_written
+    combined.queries.extend(workload.queries)
+    combined.domain_counts[name] = workload.memories_written
+
+
+def _bound_query_manifest(queries: Sequence[QuerySpec]) -> list[QuerySpec]:
+    if len(queries) <= SELECTION_QUERY_BOUND_THRESHOLD:
+        return list(queries)
+    retained: list[QuerySpec] = []
+    counts: dict[tuple[str, str, str, bool], int] = {}
+    for query in queries:
+        key = (query.corpus, query.family, query.difficulty, query.negative)
+        count = counts.get(key, 0)
+        if count >= SELECTION_MAX_QUERIES_PER_GROUP:
+            continue
+        counts[key] = count + 1
+        retained.append(query)
+    return retained
+
+
+def _append_fixture_workload(snapshot_dir: Path, fixture: Path, *, corpus: str) -> None:
+    rows = _fixture_rows(fixture)
+    used_slugs = {path.stem for path in (snapshot_dir / "docs").rglob("*.md")}
+    for row in rows:
+        slug = str(row["slug"])
+        if slug in used_slugs:
+            slug = unique_slug(slug, used_slugs)
+        used_slugs.add(slug)
+        body = _fixture_body(row, corpus=corpus)
+        now = utc_now_iso()
+        front_matter = {
+            "id": str(uuid.uuid4()),
+            "type": "entity",
+            "title": str(row["title"] if corpus == "gutenberg" else row["slug"]),
+            "tags": [corpus, "evaluation"],
+            "importance": 0.5,
+            "created": now,
+            "updated": now,
+            "access_count": 0,
+            "last_access": None,
+            "expires_at": None,
+            "valid_from": None,
+            "valid_to": None,
+            "transcript_ref": None,
+            "session_id": None,
+            "links": [],
+            "content_hash": hash_body(body),
+        }
+        path = snapshot_dir / "docs" / TYPE_DIRS["entity"] / f"{slug}.md"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(serialize_front_matter(front_matter, body), encoding="utf-8")
+
+
+def _fixture_rows(fixture: Path) -> list[dict[str, object]]:
+    with fixture.open(encoding="utf-8") as handle:
+        return [json.loads(line) for line in handle]
+
+
+def _fixture_body(row: Mapping[str, object], *, corpus: str) -> str:
+    if corpus == "gutenberg":
+        authors = ", ".join(_object_sequence(row.get("authors")))
+        return "\n".join(
+            [
+                f"Title: {row['title']}",
+                f"Authors: {authors}",
+                f"Subjects: {row.get('subjects', '')}",
+                f"Language: {row.get('language', '')}",
+                f"Project Gutenberg book id: {row.get('book_id', '')}",
+            ]
+        )
+    aliases = ", ".join(_object_sequence(row.get("aliases")))
+    objects = ", ".join(_object_sequence(row.get("api_or_object_names")))
+    return "\n".join(
+        [
+            f"Salesforce fact: {row['fact']}",
+            f"Aliases: {aliases}",
+            f"API or object names: {objects}",
+            f"Product context: {row.get('product_context', '')}",
+            f"Official source URL: {row.get('source_url', '')}",
+        ]
+    )
+
+
+def _object_sequence(value: object) -> list[str]:
+    if isinstance(value, Sequence) and not isinstance(value, str | bytes):
+        return [str(item) for item in value]
+    return []
 
 
 def _run_baseline_pair(
@@ -414,7 +589,7 @@ def _run_candidate_pair(
     metadata: dict[str, JsonValue] = {"name": name}
     candidate_started = time.perf_counter()
     weighted = (
-        WeightedLexicalRetriever(data_dir / "mem.db") if name == "weighted-lexical-rrf" else None
+        WeightedLexicalRetriever(data_dir / "mem.db") if name == "field-channel-rrf-k60" else None
     )
     rgapi_conn = sqlite3.connect(data_dir / "mem.db") if name == "rgapi-0.1.22" else None
     if rgapi_conn is not None:
@@ -737,7 +912,22 @@ def _candidate_selection(
         failures.append(_failure("measurement_failed", "token metric could not be computed"))
         comparison = {"schema_version": COMPARISON_SCHEMA_VERSION, "verdict": {"passed": False}}
     verdict = comparison.get("verdict", {})
-    passed = bool(isinstance(verdict, dict) and verdict.get("passed") is True)
+    workload_manifest = _workload_manifest(config.workloads)
+    workload_metrics = _workload_report(corpora[quality_size].queries, candidate.results)
+    floor_verdict = validate_workload_metrics(_overall_workload_metrics(workload_metrics))
+    if not floor_verdict.passed:
+        failures.append(_failure("measurement_failed", "workload quality floor failed"))
+    for workload_name, metrics_payload in _workload_metric_items(workload_metrics):
+        verdict_payload = metrics_payload.get("verdict")
+        if isinstance(verdict_payload, dict) and verdict_payload.get("passed") is not True:
+            failures.append(
+                _failure("measurement_failed", f"{workload_name} workload quality floor failed")
+            )
+    passed = (
+        bool(isinstance(verdict, dict) and verdict.get("passed") is True)
+        and floor_verdict.passed
+        and not any(failure.category == "measurement_failed" for failure in failures)
+    )
     promotion_eligible = config.promotion_mode and passed and git_state.promotion_eligible
     if config.promotion_mode and passed and not git_state.promotion_eligible:
         failures.append(_failure("source_unreproducible", "source revision is dirty or unknown"))
@@ -747,10 +937,159 @@ def _candidate_selection(
         candidate.summary,
         _scale_statuses(baselines, candidates),
         comparison,
+        workload_manifest,
+        workload_metrics,
         passed,
         promotion_eligible,
         tuple(failures),
     )
+
+
+def validate_workload_metrics(metrics: WorkloadMetrics) -> WorkloadVerdict:
+    gates = {
+        "recall_at_10": metrics.recall_at_10 + FLOAT_TOLERANCE >= WORKLOAD_RECALL_FLOOR,
+        "mrr": metrics.mrr + FLOAT_TOLERANCE >= WORKLOAD_MRR_FLOOR,
+        "ndcg_at_10": metrics.ndcg_at_10 + FLOAT_TOLERANCE >= WORKLOAD_NDCG_FLOOR,
+        "hard_recall_at_10": metrics.hard_query_count == 0
+        or metrics.hard_recall_at_10 + FLOAT_TOLERANCE >= WORKLOAD_HARD_RECALL_FLOOR,
+        "family_recall_at_10": bool(metrics.by_family)
+        and all(
+            value + FLOAT_TOLERANCE >= WORKLOAD_FAMILY_RECALL_FLOOR
+            for value in metrics.by_family.values()
+        ),
+    }
+    return WorkloadVerdict(passed=all(gates.values()), gates=gates)
+
+
+def _workload_report(
+    queries: Sequence[QuerySpec],
+    results: Sequence[HitResult],
+) -> dict[str, JsonValue]:
+    by_workload: dict[str, JsonValue] = {}
+    for name in sorted({query.corpus for query in queries}):
+        metrics = _metrics_for_queries(
+            [query for query in queries if query.corpus == name],
+            [
+                result
+                for query, result in zip(queries, results, strict=False)
+                if query.corpus == name
+            ],
+        )
+        by_workload[name] = {
+            **metrics.to_dict(),
+            "verdict": validate_workload_metrics(metrics).to_dict(),
+        }
+    overall = _metrics_for_queries(queries, results)
+    return {
+        "overall": overall.to_dict(),
+        "overall_verdict": validate_workload_metrics(overall).to_dict(),
+        "by_workload": by_workload,
+    }
+
+
+def _metrics_for_queries(
+    queries: Sequence[QuerySpec],
+    results: Sequence[HitResult],
+) -> WorkloadMetrics:
+    paired = [
+        (query, result)
+        for query, result in zip(queries, results, strict=False)
+        if not query.negative
+    ]
+    if not paired:
+        return WorkloadMetrics(0.0, 0.0, 0.0, 0.0, {})
+    hard = [(query, result) for query, result in paired if query.difficulty == "hard"]
+    by_family = {
+        family: _paired_recall_at_10(
+            [(query, result) for query, result in paired if query.family == family]
+        )
+        for family in sorted({query.family for query, _ in paired if query.family})
+    }
+    return WorkloadMetrics(
+        recall_at_10=_paired_recall_at_10(paired),
+        mrr=sum(_reciprocal_rank(query, result) for query, result in paired) / len(paired),
+        ndcg_at_10=sum(
+            ndcg_at_k(result.actual_slugs, query.expected_slugs, 10) for query, result in paired
+        )
+        / len(paired),
+        hard_recall_at_10=_paired_recall_at_10(hard) if hard else 0.0,
+        by_family=by_family,
+        hard_query_count=len(hard),
+    )
+
+
+def _paired_recall_at_10(paired: Sequence[tuple[QuerySpec, HitResult]]) -> float:
+    if not paired:
+        return 0.0
+    return sum(
+        1
+        for query, result in paired
+        if first_hit_rank(result.actual_slugs, query.expected_slugs) is not None
+    ) / len(paired)
+
+
+def _reciprocal_rank(query: QuerySpec, result: HitResult) -> float:
+    rank = first_hit_rank(result.actual_slugs, query.expected_slugs)
+    return 0.0 if rank is None else 1.0 / rank
+
+
+def _overall_workload_metrics(report: Mapping[str, JsonValue]) -> WorkloadMetrics:
+    raw = report["overall"]
+    if not isinstance(raw, dict):
+        return WorkloadMetrics(0.0, 0.0, 0.0, 0.0, {})
+    by_family = raw.get("by_family")
+    return WorkloadMetrics(
+        recall_at_10=_json_float(raw.get("recall_at_10")),
+        mrr=_json_float(raw.get("mrr")),
+        ndcg_at_10=_json_float(raw.get("ndcg_at_10")),
+        hard_recall_at_10=_json_float(raw.get("hard_recall_at_10")),
+        by_family=_json_float_mapping(by_family),
+        hard_query_count=int(_json_float(raw.get("hard_query_count"))),
+    )
+
+
+def _json_float(value: JsonValue) -> float:
+    return float(value) if isinstance(value, str | int | float | bool) else 0.0
+
+
+def _json_float_mapping(value: JsonValue) -> dict[str, float]:
+    if not isinstance(value, dict):
+        return {}
+    return {key: _json_float(item) for key, item in value.items()}
+
+
+def _workload_metric_items(
+    report: Mapping[str, JsonValue],
+) -> list[tuple[str, dict[str, JsonValue]]]:
+    by_workload = report.get("by_workload")
+    if not isinstance(by_workload, dict):
+        return []
+    return [
+        (name, metrics)
+        for name, metrics in by_workload.items()
+        if isinstance(name, str) and isinstance(metrics, dict)
+    ]
+
+
+def _workload_manifest(workloads: Sequence[WorkloadName]) -> tuple[dict[str, JsonValue], ...]:
+    manifests: dict[WorkloadName, dict[str, JsonValue]] = {
+        "realistic": {
+            "name": "realistic",
+            "fixture_version": "generated",
+            "source_manifest": "seed-42",
+        },
+        "gutenberg": {
+            "name": "gutenberg",
+            "fixture_version": "eval/data/gutenberg-books.jsonl",
+            "source_manifest": "gutenberg-books.jsonl provenance",
+        },
+        "salesforce": {
+            "name": "salesforce",
+            "fixture_version": "eval/data/salesforce-facts.jsonl",
+            "source_manifest": "salesforce-facts.jsonl citations",
+        },
+    }
+    return tuple(manifests[name] for name in workloads)
 
 
 def _scale_statuses(
@@ -891,6 +1230,11 @@ def _metadata(
         "generated_corpus_size": corpora[quality_size].memories_written,
         "generated_corpus_sizes": {str(size): corpora[size].memories_written for size in sizes},
         "query_count": len(corpora[quality_size].queries),
+        "query_sampling": {
+            "strategy": "stable corpus-family-difficulty cap",
+            "max_per_group": SELECTION_MAX_QUERIES_PER_GROUP,
+            "bound_threshold": SELECTION_QUERY_BOUND_THRESHOLD,
+        },
         "top_k": config.top_k,
         "token_budget": TOKEN_BUDGET,
         "renderer_identity": "memex.application.context_injection.format_context_block",
