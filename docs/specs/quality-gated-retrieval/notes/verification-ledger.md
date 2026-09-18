@@ -42,3 +42,19 @@ Repository verification after the bounded-evaluation change:
 - Mypy: pass, 92 source files.
 - Pytest: 487 passed, 1 skipped in 139.64 seconds; coverage 90.17%.
 - MkDocs strict build: pass in 0.53 seconds.
+
+## 2026-09-18 — Post-review hardening
+
+Commit `e0d8706` added protected-store rejection for the default and configured
+Memex roots, a retained-report prohibited-content canary, per-scale incomplete
+status reporting, bound ranker metadata to the executed FTS5 weights, and added
+real weighted-ranking and query-backoff fixtures. Adversarial, quality, and
+security reviewers returned clean verdicts.
+
+Verification on that committed tree:
+
+- Ruff check: pass.
+- Ruff format check: pass, 106 files.
+- Mypy: pass, 92 source files.
+- Pytest: 494 passed, 1 skipped in 141.14 seconds; coverage 90.17%.
+- MkDocs strict build: pass in 0.54 seconds.
