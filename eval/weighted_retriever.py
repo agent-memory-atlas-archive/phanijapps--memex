@@ -48,34 +48,8 @@ _QUERY_STOP_WORDS = frozenset(
         "why",
     }
 )
-_SEMANTIC_SCAFFOLDING_PHRASES = (
-    ("instead", "of"),
-    ("how", "many"),
-    ("switch", "from"),
-)
 _SOURCE_SQL = """
 SELECT w.slug, bm25(wiki_fts) AS score
-FROM wiki_fts
-JOIN wiki_index w ON w.rowid = wiki_fts.rowid
-WHERE wiki_fts MATCH :match
-  AND (w.expires_at IS NULL OR w.expires_at >= :now)
-  AND (w.valid_to IS NULL OR w.valid_to >= :now)
-  AND (w.status IS NULL OR w.status = 'active')
-ORDER BY score, w.slug
-LIMIT :limit
-"""
-
-_SEMANTIC_BODY_WEIGHT = 2.0
-
-_SEMANTIC_FTS5_SQL = """
-SELECT
-    w.slug, w.file_path, w.title, w.node_type, w.importance,
-    w.tags, w.created, w.updated, w.last_access, w.transcript_ref, w.status,
-    bm25(wiki_fts, 1.0, 1.0, :body_weight, 1.0) AS score,
-    snippet(wiki_fts, 2, '<mark>', '</mark>', '...', 12)
-        AS body_snippet,
-    snippet(wiki_fts, 1, '<mark>', '</mark>', '...', 12)
-        AS title_snippet
 FROM wiki_fts
 JOIN wiki_index w ON w.rowid = wiki_fts.rowid
 WHERE wiki_fts MATCH :match
@@ -107,72 +81,6 @@ def _accepted_tokens(query: str) -> list[str]:
     if not tokens:
         raise ValueError("query contains no searchable terms")
     return tokens
-
-
-def _semantic_tokens(query: str) -> list[str]:
-    raw_tokens = _QUERY_TOKENS.findall(query.lower())
-    if not raw_tokens:
-        raise ValueError("query contains no searchable terms")
-    tokens = _drop_semantic_scaffolding(raw_tokens)
-    tokens = [token for token in tokens if token not in _QUERY_STOP_WORDS]
-    tokens = _stable_dedupe(tokens)
-    return tokens or _stable_dedupe(raw_tokens)
-
-
-def _drop_semantic_scaffolding(tokens: list[str]) -> list[str]:
-    rejected = {
-        index
-        for phrase in _SEMANTIC_SCAFFOLDING_PHRASES
-        for index in _phrase_indexes(tokens, phrase)
-    }
-    rejected.update(_how_does_handle_indexes(tokens))
-    rejected.update(_why_is_showing_indexes(tokens))
-    return [token for index, token in enumerate(tokens) if index not in rejected]
-
-
-def _phrase_indexes(tokens: list[str], phrase: tuple[str, ...]) -> set[int]:
-    indexes: set[int] = set()
-    width = len(phrase)
-    for start in range(len(tokens) - width + 1):
-        if tuple(tokens[start : start + width]) == phrase:
-            indexes.update(range(start, start + width))
-    return indexes
-
-
-def _how_does_handle_indexes(tokens: list[str]) -> set[int]:
-    indexes: set[int] = set()
-    for start in range(len(tokens) - 2):
-        if tokens[start : start + 2] != ["how", "does"]:
-            continue
-        try:
-            handle = tokens.index("handle", start + 2)
-        except ValueError:
-            continue
-        indexes.update({start, start + 1, handle})
-    return indexes
-
-
-def _why_is_showing_indexes(tokens: list[str]) -> set[int]:
-    indexes: set[int] = set()
-    for start in range(len(tokens) - 2):
-        if tokens[start : start + 2] != ["why", "is"]:
-            continue
-        try:
-            indexes.add(tokens.index("showing", start + 2))
-        except ValueError:
-            continue
-    return indexes
-
-
-def _stable_dedupe(tokens: list[str]) -> list[str]:
-    deduped: list[str] = []
-    seen: set[str] = set()
-    for token in tokens:
-        if token in seen:
-            continue
-        seen.add(token)
-        deduped.append(token)
-    return deduped
 
 
 class WeightedLexicalRetriever:
@@ -322,85 +230,3 @@ class WeightedLexicalRetriever:
             links=links,
             status=str(row["status"]),
         )
-
-
-class SemanticAndFallbackFts5Retriever(WeightedLexicalRetriever):
-    """Run strict weighted FTS5 with a broad fallback for zero-hit queries."""
-
-    identity = "semantic-and-fallback-fts5"
-
-    def retrieve(self, query: str, *, top_k: int = 10) -> RecallResult:
-        """Return strict semantic hits, broadening only when strict search is empty."""
-        if not 1 <= top_k <= 100:
-            raise ValueError("top_k must be between 1 and 100")
-        tokens = _semantic_tokens(query)
-
-        started = time.perf_counter()
-        now = utc_now_iso()
-        rows = self._search_rows(" AND ".join(tokens), top_k, now)
-        if not rows:
-            rows = self._search_rows(" OR ".join(tokens), top_k, now)
-        hits = self._rows_to_hits(rows)
-        self._record_access(hits)
-        elapsed_ms = (time.perf_counter() - started) * 1000
-        return RecallResult(
-            query=query,
-            hits=hits,
-            total_indexed=self._total_indexed,
-            search_engine=self.identity,
-            search_time_ms=round(elapsed_ms, 3),
-        )
-
-    def metadata(self) -> dict[str, object]:
-        return {
-            "name": self.identity,
-            "query_strategy": "strict-and-weighted-fts5",
-            "zero_hit_fallback": "broad-or-weighted-fts5",
-            "token_strategy": "lowercase-alphanumeric-safe-stable-dedupe",
-            "removed_scaffolding": (
-                "instead of",
-                "how does ... handle",
-                "how many",
-                "why is ... showing",
-                "switch from",
-            ),
-            "column_weights": {
-                "slug": 1.0,
-                "title": 1.0,
-                "body": _SEMANTIC_BODY_WEIGHT,
-                "tags": 1.0,
-            },
-            "snippet_tokens": _CANDIDATE_SNIPPET_TOKENS,
-            "complete": True,
-        }
-
-    def _search_rows(
-        self,
-        match: str,
-        top_k: int,
-        now: str,
-    ) -> list[sqlite3.Row]:
-        return list(
-            self._conn.execute(
-                _SEMANTIC_FTS5_SQL,
-                {
-                    "match": match,
-                    "limit": top_k,
-                    "now": now,
-                    "body_weight": _SEMANTIC_BODY_WEIGHT,
-                },
-            ).fetchall()
-        )
-
-    def _rows_to_hits(self, rows: Sequence[sqlite3.Row]) -> list[RecallHit]:
-        if not rows:
-            return []
-        links = self._links([str(row["slug"]) for row in rows])
-        return [
-            self._to_hit(
-                row,
-                RankedCandidate(str(row["slug"]), rank, float(row["score"])),
-                links.get(str(row["slug"]), []),
-            )
-            for rank, row in enumerate(rows, start=1)
-        ]
