@@ -62,3 +62,41 @@ def test_weighted_candidate_preserves_query_and_top_k_validation(data_dir: Path)
 
     retriever.close()
     index.close()
+
+
+def test_weighted_candidate_prefers_title_match_over_repeated_body_match(
+    data_dir: Path,
+) -> None:
+    index = _build_index(
+        data_dir,
+        [
+            ("Alpha title", "neutral details"),
+            ("Body repetition", "alpha alpha alpha"),
+        ],
+    )
+    retriever = WeightedLexicalRetriever(data_dir / "mem.db")
+
+    result = retriever.retrieve("alpha", top_k=2)
+
+    assert [hit.title for hit in result.hits] == ["Alpha title", "Body repetition"]
+    retriever.close()
+    index.close()
+
+
+def test_weighted_candidate_uses_or_backoff_after_strict_results(data_dir: Path) -> None:
+    index = _build_index(
+        data_dir,
+        [
+            ("Exact", "alpha beta"),
+            ("Alpha only", "alpha"),
+            ("Beta only", "beta"),
+        ],
+    )
+    retriever = WeightedLexicalRetriever(data_dir / "mem.db")
+
+    result = retriever.retrieve("alpha beta", top_k=3)
+
+    assert result.hits[0].title == "Exact"
+    assert {hit.title for hit in result.hits} == {"Exact", "Alpha only", "Beta only"}
+    retriever.close()
+    index.close()

@@ -39,7 +39,9 @@ _QUERY_STOP_WORDS = frozenset(
     }
 )
 _SOURCE_SQL = """
-SELECT w.slug, bm25(wiki_fts, 0.0, 3.0, 1.0, 2.0) AS score
+SELECT w.slug, bm25(
+    wiki_fts, :slug_weight, :title_weight, :body_weight, :tag_weight
+) AS score
 FROM wiki_fts
 JOIN wiki_index w ON w.rowid = wiki_fts.rowid
 WHERE wiki_fts MATCH :match
@@ -123,7 +125,15 @@ class WeightedLexicalRetriever:
     def _search(self, match: str, limit: int, now: str) -> list[RankedCandidate]:
         rows = self._conn.execute(
             _SOURCE_SQL,
-            {"match": match, "limit": limit, "now": now},
+            {
+                "match": match,
+                "limit": limit,
+                "now": now,
+                "slug_weight": 0.0,
+                "title_weight": DEFAULT_LEXICAL_RECIPE.title_weight,
+                "body_weight": DEFAULT_LEXICAL_RECIPE.body_weight,
+                "tag_weight": DEFAULT_LEXICAL_RECIPE.tag_weight,
+            },
         ).fetchall()
         return [
             RankedCandidate(str(row["slug"]), rank, float(row["score"]))

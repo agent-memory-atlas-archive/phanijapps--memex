@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import platform
 import re
 import shutil
@@ -11,6 +12,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import tomllib
 from collections.abc import Mapping, Sequence
 from contextlib import nullcontext
 from dataclasses import dataclass, field
@@ -138,6 +140,7 @@ class CandidateSelection:
     name: CandidateName
     baseline: RunSummary
     candidate: RunSummary
+    scales: Mapping[int, dict[str, JsonValue]]
     comparison: dict[str, JsonValue]
     passed: bool
     promotion_eligible: bool
@@ -148,6 +151,7 @@ class CandidateSelection:
             "name": self.name,
             "baseline": self.baseline.to_dict(),
             "candidate": self.candidate.to_dict(),
+            "scales": {str(size): dict(status) for size, status in self.scales.items()},
             "comparison": self.comparison,
             "passed": self.passed,
             "promotion_eligible": self.promotion_eligible,
@@ -297,8 +301,31 @@ def _preflight_output_dirs(config: EvaluationConfig) -> None:
     paths = [path for path in (config.evidence_dir, config.data_root) if path is not None]
     if len(paths) == 2 and paths[0].resolve() == paths[1].resolve():
         raise ValueError("evidence and paired data directories must differ")
+    if config.data_root is not None:
+        requested_root = config.data_root.expanduser().resolve()
+        for protected_root in _protected_memex_roots():
+            if requested_root == protected_root or requested_root.is_relative_to(protected_root):
+                raise ValueError("selection data directory must be outside protected Memex stores")
     for path in paths:
         _assert_fresh_dir(path, "selection output directory")
+
+
+def _protected_memex_roots() -> set[Path]:
+    default_root = Path.home() / ".memex"
+    base = Path(os.environ.get("MEMEX_DATA_DIR", str(default_root))).expanduser()
+    roots = {default_root.resolve(), base.resolve()}
+    config_path = base / "memex.toml"
+    try:
+        with config_path.open("rb") as handle:
+            raw = tomllib.load(handle)
+    except (FileNotFoundError, OSError, tomllib.TOMLDecodeError):
+        return roots
+    data_dir = raw.get("data_dir")
+    if isinstance(data_dir, dict):
+        override = data_dir.get("path")
+        if isinstance(override, str) and override:
+            roots.add(Path(override).expanduser().resolve())
+    return roots
 
 
 def _run_scale_setup(
@@ -675,10 +702,14 @@ def _candidate_selection(
     baseline = baselines[quality_size]
     candidate = candidates[quality_size]
     failures: list[SelectionFailure] = []
-    if candidate.summary.stop_reason is not None:
-        failures.append(
-            _failure(candidate.summary.stop_reason, "candidate search did not complete")
-        )
+    for size, run in candidates.items():
+        if run.summary.stop_reason is not None:
+            failures.append(
+                _failure(
+                    run.summary.stop_reason,
+                    f"candidate search did not complete at {size} memories",
+                )
+            )
     try:
         comparison_report = build_comparison_report(
             baseline=_quality_metrics(
@@ -714,11 +745,35 @@ def _candidate_selection(
         name,
         baseline.summary,
         candidate.summary,
+        _scale_statuses(baselines, candidates),
         comparison,
         passed,
         promotion_eligible,
         tuple(failures),
     )
+
+
+def _scale_statuses(
+    baselines: Mapping[int, _MeasuredRun], candidates: Mapping[int, _MeasuredRun]
+) -> dict[int, dict[str, JsonValue]]:
+    statuses: dict[int, dict[str, JsonValue]] = {}
+    for size in sorted(set(baselines) | set(candidates)):
+        statuses[size] = {
+            "baseline": _run_status(baselines.get(size)),
+            "candidate": _run_status(candidates.get(size)),
+        }
+    return statuses
+
+
+def _run_status(run: _MeasuredRun | None) -> JsonValue:
+    if run is None:
+        return None
+    return {
+        "query_count": run.summary.query_count,
+        "p99_ms": run.summary.p99_ms,
+        "complete": run.summary.complete,
+        "stop_reason": run.summary.stop_reason,
+    }
 
 
 def _quality_metrics(
@@ -968,6 +1023,15 @@ def _drop_timing(candidate: dict[str, JsonValue]) -> None:
         summary = candidate.get(side)
         if isinstance(summary, dict):
             summary.pop("p99_ms", None)
+    scales = candidate.get("scales")
+    if isinstance(scales, dict):
+        for status in scales.values():
+            if not isinstance(status, dict):
+                continue
+            for side in ("baseline", "candidate"):
+                run = status.get(side)
+                if isinstance(run, dict):
+                    run.pop("p99_ms", None)
     comparison = candidate.get("comparison")
     if not isinstance(comparison, dict):
         return

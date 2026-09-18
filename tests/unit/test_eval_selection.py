@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import getpass
 import json
+import platform
 from pathlib import Path
 from typing import cast
 
@@ -52,6 +54,64 @@ def test_selection_refuses_nonempty_paired_data_root_without_mutation(tmp_path: 
 
     assert marker.read_text(encoding="utf-8") == "leave me alone"
     assert not evidence_dir.exists()
+
+
+def test_selection_refuses_configured_memex_store_and_descendants(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    live_store = tmp_path / "live-memex"
+    monkeypatch.setenv("MEMEX_DATA_DIR", str(live_store))
+
+    for requested in (live_store, live_store / "evaluation"):
+        with pytest.raises(ValueError, match="outside protected Memex stores"):
+            run_selection(
+                EvaluationConfig(
+                    size=12,
+                    data_root=requested,
+                    candidates=("weighted-lexical-rrf",),
+                )
+            )
+        assert not requested.exists()
+
+
+def test_selection_preflight_ignores_unrelated_invalid_live_configuration(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    live_store = tmp_path / "live-memex"
+    live_store.mkdir()
+    (live_store / "memex.toml").write_text('[llm]\nprovider = "not-a-provider"\n', encoding="utf-8")
+    monkeypatch.setenv("MEMEX_DATA_DIR", str(live_store))
+    evaluation_root = tmp_path / "isolated-evaluation"
+
+    report = run_selection(
+        EvaluationConfig(
+            size=12,
+            data_root=evaluation_root,
+            candidates=("weighted-lexical-rrf",),
+            git_state=GitState(source_revision="abc123", git_dirty=False),
+        )
+    )
+
+    assert report.metadata["requested_corpus_size"] == 12
+    assert evaluation_root.exists()
+
+
+def test_selection_protects_default_store_when_environment_uses_isolated_store(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("MEMEX_DATA_DIR", str(tmp_path / "isolated-live-store"))
+    default_store = Path.home() / ".memex"
+
+    for requested in (default_store, default_store / "evaluation"):
+        with pytest.raises(ValueError, match="outside protected Memex stores"):
+            run_selection(
+                EvaluationConfig(
+                    size=12,
+                    data_root=requested,
+                    candidates=("weighted-lexical-rrf",),
+                )
+            )
+        assert not requested.exists()
 
 
 def test_selection_writes_sanitized_schema_and_blocks_dirty_promotion(tmp_path: Path) -> None:
@@ -230,6 +290,30 @@ def test_promotion_skips_large_scale_when_no_candidate_clears_quality_gate(
     assert report.metadata["requested_corpus_sizes"] == [10_000]
 
 
+def test_incomplete_large_scale_retains_closed_failure_and_scale_status() -> None:
+    large_candidate = selection._replace_completion(
+        _fake_measured(2.0), complete=False, stop_reason="incomplete_search"
+    )
+
+    result = selection._candidate_selection(
+        name="weighted-lexical-rrf",
+        baselines={10_000: _fake_measured(1.0), 100_000: _fake_measured(2.0)},
+        candidates={10_000: _fake_measured(1.0), 100_000: large_candidate},
+        corpora={10_000: _fake_corpus(10_000), 100_000: _fake_corpus(100_000)},
+        config=EvaluationConfig(promotion_mode=True, candidates=("weighted-lexical-rrf",)),
+        git_state=GitState(source_revision="abc123", git_dirty=False),
+    )
+
+    assert result.passed is False
+    assert result.failures[0].category == "incomplete_search"
+    assert result.scales[100_000]["candidate"] == {
+        "query_count": 1,
+        "p99_ms": 2.0,
+        "complete": False,
+        "stop_reason": "incomplete_search",
+    }
+
+
 @pytest.mark.parametrize(("seed", "top_k"), [(7, 10), (42, 5)])
 def test_promotion_rejects_noncanonical_seed_or_top_k(seed: int, top_k: int) -> None:
     with pytest.raises(ValueError, match="requires seed=42 and top_k=10"):
@@ -256,6 +340,53 @@ def test_selection_failure_categories_are_closed_and_bounded(tmp_path: Path) -> 
     for failure in report.failures:
         assert len(failure.reason) <= 120
         assert "\n" not in failure.reason
+
+
+def test_retained_report_excludes_prohibited_content_canaries(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    memory_canary = "PRIVATE-MEMORY-CONTENT-7f91"
+    credential_canary = "sk-live-CREDENTIAL-7f91"
+    query_canary = "raw private query 7f91"
+    stack_canary = 'Traceback (most recent call last): File "/private/secret.py"'
+    original_generate = selection._generate_snapshot
+
+    def generate_with_canaries(snapshot_dir: Path, *, size: int, seed: int) -> CorpusResult:
+        corpus = original_generate(snapshot_dir, size=size, seed=seed)
+        corpus.queries[0].query = f"{query_canary} {credential_canary}"
+        page = next((snapshot_dir / "docs").rglob("*.md"))
+        page.write_text(
+            page.read_text(encoding="utf-8") + f"\n{memory_canary}\n{stack_canary}\n",
+            encoding="utf-8",
+        )
+        return corpus
+
+    monkeypatch.setattr(selection, "_generate_snapshot", generate_with_canaries)
+    evidence_dir = tmp_path / "profile-alice-secret" / "evidence"
+    data_root = tmp_path / "profile-alice-secret" / "paired"
+    report = run_selection(
+        EvaluationConfig(
+            size=12,
+            evidence_dir=evidence_dir,
+            data_root=data_root,
+            candidates=("weighted-lexical-rrf",),
+            git_state=GitState(source_revision="abc123", git_dirty=False),
+        )
+    )
+
+    retained = (evidence_dir / "selection-12.json").read_text(encoding="utf-8")
+    prohibited = (
+        memory_canary,
+        credential_canary,
+        query_canary,
+        stack_canary,
+        str(tmp_path),
+        str(Path.home()),
+        getpass.getuser(),
+        platform.node(),
+    )
+    assert report.report_path is not None
+    assert all(value not in retained for value in prohibited if value)
 
 
 def _fake_corpus(size: int) -> CorpusResult:
