@@ -1,6 +1,6 @@
 # Spec: Quality-gated retrieval
 
-- **Status:** Implementing
+- **Status:** Shipped
 - **Owner:** Memex maintainers
 - **Plan:** [`plan.md`](plan.md)
 - **Constrained by:** [`ADR-0001`](../../adr/0001-use-markdown-pages-as-memory-source-of-truth.md), [`ADR-0002`](../../adr/0002-use-layered-package-and-shared-adapter-contracts.md)
@@ -154,20 +154,20 @@ The sibling plan owns exact stubs and command lines.
 
 ## Acceptance Criteria
 
-- [ ] **AC-0001.** On the 10,000-memory seed-42 realistic corpus, when baseline
+- [x] **AC-0001.** On the 10,000-memory seed-42 realistic corpus, when baseline
       hard-query Recall@10 is below 0.90, the selected candidate improves it by
       at least 0.05. When baseline is already at least 0.90, the selected
       candidate has hard-query Recall@10 at least 0.90 and regresses by no more
       than 0.005. The gate tests both branches at their exact boundaries.
-- [ ] **AC-0002.** On that same paired run, when baseline hard-query MRR is
+- [x] **AC-0002.** On that same paired run, when baseline hard-query MRR is
       below 0.80, the selected candidate improves it by at least 0.05. When
       baseline is already at least 0.80, the selected candidate has hard-query
       MRR at least 0.80 and regresses by no more than 0.005. The gate tests both
       branches at their exact boundaries.
-- [ ] **AC-0003.** On that same paired run, the candidate's Recall@10 regression
+- [x] **AC-0003.** On that same paired run, the candidate's Recall@10 regression
       from baseline is no greater than 0.005 for every member of the closed set
       `{overall, easy, medium}`; a 0.005 regression passes and 0.0051 fails.
-- [ ] **AC-0004.** On that same paired run, the candidate's rendered-context
+- [x] **AC-0004.** On that same paired run, the candidate's rendered-context
       token cost per correct hard query is at most 80% of baseline. The metric
       packs each query's ordered `top_k=10` hits with
       `context_injection.pack_to_budget(..., max_tokens=4096)`, renders the
@@ -176,23 +176,23 @@ The sibling plan owns exact stubs and command lines.
       divides by the count of hard queries whose expected page remains in the
       packed context. The gate rejects a run with zero correct hard queries
       before division.
-- [ ] **AC-0005.** Candidate recall p99 is below 50 ms at 10,000 memories and
+- [x] **AC-0005.** Candidate recall p99 is below 50 ms at 10,000 memories and
       below 100 ms at 100,000 memories, measured from immediately before the
       shared recall service call to immediately after its result returns,
       excluding corpus generation and index construction. The sample is every
       query in the generated manifest; p99 is the nearest-rank value
       `sorted(raw_latency_ms)[ceil(0.99 * n) - 1]`, computed before display
       rounding. The latency gate rejects equality with either bound.
-- [ ] **AC-0006.** At each measured corpus size in `{10_000, 100_000}`, the
+- [x] **AC-0006.** At each measured corpus size in `{10_000, 100_000}`, the
       candidate p99 is no more than 110% of its paired baseline p99. The paired
       latency gate rejects the first size whose ratio exceeds 1.10.
-- [ ] **AC-0007.** One candidate passes AC-0001 through AC-0006 in a single
+- [x] **AC-0007.** One candidate passes AC-0001 through AC-0006 in a single
       paired evaluation before it is selected; the report names that candidate
       and emits a failing overall verdict when any constituent gate fails.
-- [ ] **AC-0008.** Repeating a seed-42 quality run with identical inputs emits
+- [x] **AC-0008.** Repeating a seed-42 quality run with identical inputs emits
       identical ordered slugs and quality/token metrics after volatile timing
       and run metadata are excluded.
-- [ ] **AC-0009.** Every paired report records the source revision and dirty
+- [x] **AC-0009.** Every paired report records the source revision and dirty
       flag, Python and Memex versions, operating-system family and CPU
       architecture,
       corpus generator and seed, requested and generated corpus sizes, query
@@ -201,51 +201,51 @@ The sibling plan owns exact stubs and command lines.
       the overall verdict. Environment metadata is limited to operating-system
       family and CPU architecture; the report excludes hostnames, device names,
       usernames, profile paths, and user-specific filesystem paths.
-- [ ] **AC-0010.** The evaluator refuses a non-empty caller-supplied data
+- [x] **AC-0010.** The evaluator refuses a non-empty caller-supplied data
       directory without deleting or changing any entry, while an empty
       directory and the evaluator-created temporary directory both complete.
-- [ ] **AC-0011.** For identical indexed pages and recall arguments, the shipped
+- [x] **AC-0011.** For identical indexed pages and recall arguments, the shipped
       candidate makes the same per-page eligible/ineligible decision as the
       baseline for every member of `{node_type, time_range, all-tags matching,
       include_expired, include_inactive}`. Ranked membership and order may
       differ after this eligibility step.
-- [ ] **AC-0012.** Every returned hit has a unique slug after multiple candidate
+- [x] **AC-0012.** Every returned hit has a unique slug after multiple candidate
       sources contribute the same page.
-- [ ] **AC-0013.** One explicit recall increments `access_count` exactly once
+- [x] **AC-0013.** One explicit recall increments `access_count` exactly once
       for every returned page and never for an unreturned page, including when
       multiple candidate sources contribute the same page.
-- [ ] **AC-0014.** A base installation with no `rgapi` module imports Memex and
+- [x] **AC-0014.** A base installation with no `rgapi` module imports Memex and
       completes write, rebuild, and recall through SQLite FTS5 without an
       `rg` executable on `PATH`.
-- [ ] **AC-0015.** The optional `rgapi==0.1.22` experiment completes its search
+- [x] **AC-0015.** The optional `rgapi==0.1.22` experiment completes its search
       integration fixture while a child-process sentinel records zero process
       spawn attempts.
-- [ ] **AC-0016.** A timeout, `max_results` stop, or other incomplete `rgapi`
+- [x] **AC-0016.** A timeout, `max_results` stop, or other incomplete `rgapi`
       result is marked incomplete in the evaluation report and receives a
       failing promotion verdict even when its observed quality and latency
       values otherwise pass.
-- [ ] **AC-0017.** With an isolated store containing one relevant and one
+- [x] **AC-0017.** With an isolated store containing one relevant and one
       irrelevant page, `memex recall <query>` returns the relevant page first
       through the shipped CLI.
-- [ ] **AC-0018.** The shipped `memex recall --help` and recall output expose no
+- [x] **AC-0018.** The shipped `memex recall --help` and recall output expose no
       experimental-backend selector or diagnostic.
-- [ ] **AC-0019.** A successful isolated `memex recall <query>` invocation exits
+- [x] **AC-0019.** A successful isolated `memex recall <query>` invocation exits
       zero.
-- [ ] **AC-0020.** Every returned result uses consecutive one-based ranks after
+- [x] **AC-0020.** Every returned result uses consecutive one-based ranks after
       candidate fusion, deduplication, and `top_k` limiting.
-- [ ] **AC-0021.** One hundred repeated production-path calls over a tie fixture
+- [x] **AC-0021.** One hundred repeated production-path calls over a tie fixture
       produce one identical slug order whose final tie-break is ascending slug.
-- [ ] **AC-0022.** A committed winner-discriminating fixture for which the
+- [x] **AC-0022.** A committed winner-discriminating fixture for which the
       paired report's selected candidate and baseline produce different first
       slugs returns the selected candidate's first slug through both
       `Memex.recall` and `memex recall`.
-- [ ] **AC-0023.** The shipped candidate preserves the existing `top_k`
+- [x] **AC-0023.** The shipped candidate preserves the existing `top_k`
       validation bounds: 1 and 100 are accepted, while 0 and 101 raise the
       existing `ValueError`.
-- [ ] **AC-0024.** The production ranker identity observed by the
+- [x] **AC-0024.** The production ranker identity observed by the
       winner-discriminating integration test equals the selected candidate
       identity in the paired promotion report.
-- [ ] **AC-0025.** Before opening or scanning page content, the optional
+- [x] **AC-0025.** Before opening or scanning page content, the optional
       file-search candidate roots traversal at the resolved
       `MEMEX_DATA_DIR/docs` directory, disables following symlinks and
       junctions, and admits only regular `.md` entries whose resolved path
@@ -255,37 +255,37 @@ The sibling plan owns exact stubs and command lines.
       promotion verdict fail without exposing the rejected path. A monitored
       outside-root content canary reachable only through a symlink or junction
       records zero content-open attempts and cannot appear in search results.
-- [ ] **AC-0026.** The optional candidate derives its pattern only from the
+- [x] **AC-0026.** The optional candidate derives its pattern only from the
       same lower-case `[a-z0-9]+` tokens accepted by the FTS5 path and
       literal-escapes every token before regex compilation. Compilation is
       refused before search when the joined UTF-8 pattern first exceeds 1,024
       bytes; search uses `timeout_ms=100` and `max_results=10_000`, and either
       limit marks the result incomplete under AC-0016.
-- [ ] **AC-0027.** Before the optional dependency lands, its admission record
+- [x] **AC-0027.** Before the optional dependency lands, its admission record
       contains the intended PyPI identity, exact version and lockfile integrity,
       publisher provenance, maintenance evidence, direct and transitive
       licenses, and Python and embedded-Rust vulnerability-scan results. A
       missing scanner or uninspectable dependency tree blocks admission unless
       the owner explicitly approves the degraded coverage under `Ask first`.
-- [ ] **AC-0028.** Every retained evaluator failure uses one category from
+- [x] **AC-0028.** Every retained evaluator failure uses one category from
       `{dependency_unavailable, invalid_query, path_rejected,
       incomplete_search, measurement_failed, report_invalid,
       source_unreproducible}` and a bounded non-identifying stop reason. A
       canary fixture proves the report contains no memory content, credentials,
       raw non-generated query, absolute or user-specific path, hostname, device
       name, username, profile path, or stack trace.
-- [ ] **AC-0029.** A paired evaluation copies one immutable generated Markdown
+- [x] **AC-0029.** A paired evaluation copies one immutable generated Markdown
       corpus snapshot into two fresh data directories and rebuilds a separate
       SQLite database in each before query execution. An integration fixture
       proves that running the baseline first changes only its access rows: the
       candidate store retains its pre-run access state and produces the same
       ordered slugs and quality metrics as a clean candidate-only control.
-- [ ] **AC-0030.** A diagnostic evaluation may run from a dirty worktree, but
+- [x] **AC-0030.** A diagnostic evaluation may run from a dirty worktree, but
       the overall promotion verdict is false whenever `git_dirty` is true or
       the source revision is unknown, and its retained failure category is
       `source_unreproducible`. Selected promotion evidence records a known
       commit and `git_dirty=false`.
-- [ ] **AC-0031.** The committed Project Gutenberg workload is generated from
+- [x] **AC-0031.** The committed Project Gutenberg workload is generated from
       a maintainer-supplied local copy of the official `pg_catalog.csv.gz`
       catalog, contains metadata only, and records the canonical source URL,
       retrieval date, upstream `Last-Modified` value when supplied, input byte
@@ -298,12 +298,12 @@ The sibling plan owns exact stubs and command lines.
       replacement and emit only a bounded sanitized category. Tests and
       ordinary evaluation use the committed deterministic fixture with a
       network sentinel proving zero socket or HTTP calls.
-- [ ] **AC-0032.** The Salesforce Financial Services workload contains only
+- [x] **AC-0032.** The Salesforce Financial Services workload contains only
       concise, independently authored factual cards with official source URL,
       access date, product/release context, aliases, and relevant API or object
       names. It performs no network request, automated scraping, or storage of
       Salesforce page bodies at build, test, or evaluation time.
-- [ ] **AC-0033.** Every positive query declares a non-empty set of all relevant
+- [x] **AC-0033.** Every positive query declares a non-empty set of all relevant
       slugs supported by its visible terms and a non-empty query-family label;
       a missing or empty family invalidates the corpus before scoring.
       Evaluation computes first-hit Recall and reciprocal rank plus nDCG@10
@@ -312,32 +312,32 @@ The sibling plan owns exact stubs and command lines.
       titles, and product aliases are either disambiguated in the query or
       multi-labeled. Explicit negative queries are reported separately and do
       not inflate positive-query recall.
-- [ ] **AC-0034.** A candidate is eligible for production only when each of the
+- [x] **AC-0034.** A candidate is eligible for production only when each of the
       repaired realistic, Gutenberg, and Salesforce workloads has Recall@10 at
       least 0.90, MRR at least 0.50, and nDCG@10 at least 0.75, with hard-query
       Recall@10 at least 0.90, hard-query MRR at least 0.80, and no declared
       query family below 0.70. These absolute quality floors are conjunctive
       with AC-0001 through AC-0006.
-- [ ] **AC-0035.** The field-fusion candidate runs independent title, body,
+- [x] **AC-0035.** The field-fusion candidate runs independent title, body,
       tags/metadata, and stable-identifier ranked searches, each overfetching
       before fusion, and combines their rank positions with reciprocal-rank
       fusion using `k=60`. Eligibility filters run before every source limit;
       duplicate slugs collapse; the final order uses ascending slug as its
       stable tie-break.
-- [ ] **AC-0036.** A cross-scope canary proves that an ineligible page cannot
+- [x] **AC-0036.** A cross-scope canary proves that an ineligible page cannot
       consume a source's top-k slot or displace an eligible hit. Every paired
       side uses an isolated database built from the identical immutable corpus
       snapshot, and corpus identity is included in the report.
-- [ ] **AC-0037.** The repaired realistic generator never keys an expected page
+- [x] **AC-0037.** The repaired realistic generator never keys an expected page
       on a symptom, date, or other discriminator absent from the query. Its
       historical seed-42 scores are marked non-comparable after this label and
       query repair and cannot be cited as evidence for the amended gate.
-- [ ] **AC-0038.** A retained re-evaluation report identifies the corpus
+- [x] **AC-0038.** A retained re-evaluation report identifies the corpus
       fixture/version and source manifest for every workload, reports metrics
       overall and by workload, difficulty, and query family, and names a winner
       only if the same candidate passes every applicable accuracy, token, speed,
       completeness, reproducibility, and source-integrity gate.
-- [ ] **AC-0039.** Before closeout, `docs/architecture/overview.md` has a
+- [x] **AC-0039.** Before closeout, `docs/architecture/overview.md` has a
       content-pinned retrieval-evaluation security-controls section covering
       offline Salesforce facts, maintainer-supplied local Gutenberg import,
       fixture-output confinement, compressed and expanded parsing limits,

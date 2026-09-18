@@ -1,7 +1,7 @@
 # Plan: Quality-gated retrieval
 
 - **Spec:** [`spec.md`](spec.md)
-- **Status:** Executing
+- **Status:** Done
 - **Repository anchors:** `docs/architecture/overview.md` (facade, retrieval,
   and offline-eval ownership); `src/memex/application/memory.py` (shared recall
   service and composition root); `src/memex/infrastructure/bm25_retriever.py`
