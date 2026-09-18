@@ -21,3 +21,27 @@
 [backlog]
 open = []
 closed = []
+
+["ini-001"]
+name      = "Memory retrieval and evidence quality"
+status    = "active"
+milestone = "Evidence-aware retrieval"
+
+["ini-001".work]
+queue   = []
+active  = []
+shipped = []
+
+["ini-001".shaping_queue]
+active  = []
+backlog = []
+
+["ini-001".brief_queue]
+draft = [
+  { path = "docs/product/briefs/memory-retrieval-and-evidence.md", kind = "brief", source = { mode = "repo-origin" }, summary = "Improve retrieval ranking, context efficiency, temporal evidence, and consolidation safety", needs = [] },
+]
+ready     = []
+executing = []
+shipped   = []
+withdrawn = []
+cancelled = []
