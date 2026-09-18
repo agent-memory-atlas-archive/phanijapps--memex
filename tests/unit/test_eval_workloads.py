@@ -192,6 +192,48 @@ def test_gutenberg_import_rejects_schema_and_output_escape(tmp_path: Path) -> No
         )
 
 
+def test_gutenberg_import_rejects_tilde_catalog_symlink(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    catalog, provenance = _write_valid_gutenberg_inputs(tmp_path)
+    home = tmp_path / "home"
+    home.mkdir()
+    catalog_link = home / "pg_catalog.csv.gz"
+    catalog_link.symlink_to(catalog)
+    monkeypatch.setenv("HOME", str(home))
+
+    with pytest.raises(GutenbergImportError, match="path_rejected"):
+        import_gutenberg_catalog(
+            catalog=Path("~/pg_catalog.csv.gz"),
+            provenance=provenance,
+            output=tmp_path / "fixtures" / "books.jsonl",
+            fixture_root=tmp_path / "fixtures",
+            book_ids=("1342",),
+        )
+
+
+def test_gutenberg_import_rejects_tilde_provenance_symlink(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    catalog, provenance = _write_valid_gutenberg_inputs(tmp_path)
+    home = tmp_path / "home"
+    home.mkdir()
+    provenance_link = home / "pg_catalog.provenance.json"
+    provenance_link.symlink_to(provenance)
+    monkeypatch.setenv("HOME", str(home))
+
+    with pytest.raises(GutenbergImportError, match="path_rejected"):
+        import_gutenberg_catalog(
+            catalog=catalog,
+            provenance=Path("~/pg_catalog.provenance.json"),
+            output=tmp_path / "fixtures" / "books.jsonl",
+            fixture_root=tmp_path / "fixtures",
+            book_ids=("1342",),
+        )
+
+
 def test_gutenberg_import_requires_exact_provenance_and_selected_ids(tmp_path: Path) -> None:
     catalog = tmp_path / "pg_catalog.csv.gz"
     with gzip.open(catalog, "wt", encoding="utf-8", newline="") as handle:
@@ -281,6 +323,28 @@ def test_multi_label_metrics_ignore_negative_queries() -> None:
 def _fail_network(*args: object, **kwargs: object) -> None:
     del args, kwargs
     raise AssertionError("network access is forbidden")
+
+
+def _write_valid_gutenberg_inputs(tmp_path: Path) -> tuple[Path, Path]:
+    catalog = tmp_path / "pg_catalog.csv.gz"
+    with gzip.open(catalog, "wt", encoding="utf-8", newline="") as handle:
+        handle.write(
+            "Text#,Type,Issued,Title,Language,Authors,Subjects,LoCC,Bookshelves\n"
+            '1342,Text,1998-06-01,Pride and Prejudice,en,"Austen, Jane",Fiction,PR,\n'
+        )
+    digest = hashlib.sha256(catalog.read_bytes()).hexdigest()
+    provenance = tmp_path / "pg_catalog.provenance.json"
+    provenance.write_text(
+        json.dumps(
+            {
+                "canonical_source_url": GUTENBERG_SOURCE_URL,
+                "retrieved_at": "2026-09-18",
+                "sha256": digest,
+            }
+        ),
+        encoding="utf-8",
+    )
+    return catalog, provenance
 
 
 def _assert_queries_cover_expected_title_terms(

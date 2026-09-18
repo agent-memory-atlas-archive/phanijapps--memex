@@ -13,6 +13,8 @@ from pathlib import Path
 from memex.domain.models import RecallHit, RecallResult, utc_now_iso
 
 _QUERY_TOKENS = re.compile(r"[a-z0-9]+")
+MAX_QUERY_BYTES = 1024
+MAX_QUERY_TOKENS = 64
 _WINNER_SEARCH_ENGINE = "semantic-and-fallback-fts5"
 _WINNER_BODY_WEIGHT = 2.0
 _QUERY_STOP_WORDS = frozenset(
@@ -83,6 +85,17 @@ def _stable_dedupe(tokens: list[str]) -> list[str]:
     return deduped
 
 
+def _query_tokens(query: str) -> list[str]:
+    if len(query) > MAX_QUERY_BYTES or len(query.encode("utf-8")) > MAX_QUERY_BYTES:
+        raise ValueError(f"query exceeds {MAX_QUERY_BYTES} UTF-8 bytes")
+    tokens = _QUERY_TOKENS.findall(query.lower())
+    if not tokens:
+        raise ValueError("query contains no searchable terms")
+    if len(tokens) > MAX_QUERY_TOKENS:
+        raise ValueError(f"query contains too many searchable terms (maximum {MAX_QUERY_TOKENS})")
+    return tokens
+
+
 def _phrase_indexes(tokens: list[str], phrase: tuple[str, ...]) -> set[int]:
     indexes: set[int] = set()
     width = len(phrase)
@@ -150,7 +163,9 @@ def production_ranker_metadata() -> dict[str, object]:
         },
         "snippet_tokens": _WINNER_SNIPPET_TOKENS,
         "tie_break": "score-then-slug",
-        "safe_query_boundary": "alphanumeric tokens only",
+        "safe_query_boundary": "alphanumeric tokens only, capped before FTS5 MATCH",
+        "max_query_bytes": MAX_QUERY_BYTES,
+        "max_query_tokens": MAX_QUERY_TOKENS,
     }
 
 
@@ -178,15 +193,10 @@ class BM25Retriever:
 
     def _match_query(self, query: str) -> str:
         """Reduce free text to safe OR-joined FTS5 terms (untrusted input)."""
-        tokens = _QUERY_TOKENS.findall(query.lower())
-        if not tokens:
-            raise ValueError("query contains no searchable terms")
-        return " OR ".join(tokens)
+        return " OR ".join(_query_tokens(query))
 
     def _semantic_tokens(self, query: str) -> list[str]:
-        raw_tokens = _QUERY_TOKENS.findall(query.lower())
-        if not raw_tokens:
-            raise ValueError("query contains no searchable terms")
+        raw_tokens = _query_tokens(query)
         tokens = _drop_semantic_scaffolding(raw_tokens)
         tokens = [token for token in tokens if token not in _QUERY_STOP_WORDS]
         tokens = _stable_dedupe(tokens)
@@ -273,8 +283,8 @@ class BM25Retriever:
             a normal result, not an error.
 
         Raises:
-            ValueError: Query has no searchable terms, or ``top_k`` outside
-                [1, 100].
+            ValueError: Query has no searchable terms, query work exceeds the
+                retriever cap, or ``top_k`` outside [1, 100].
         """
         result = self.retrieve_without_access(
             query,

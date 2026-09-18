@@ -23,7 +23,8 @@ from eval.selection import (
     validate_workload_metrics,
 )
 from memex.application.memory import Memex
-from memex.domain.models import RecallHit, WriteInput
+from memex.domain.models import RecallHit, RecallResult, WriteInput
+from memex.infrastructure.bm25_retriever import BM25Retriever
 from memex.infrastructure.config import MemexConfig
 
 
@@ -220,6 +221,83 @@ def test_semantic_fallback_weighted_candidate_is_selectable(tmp_path: Path) -> N
     assert "semantic-and-fallback-fts5" in selection.CANDIDATE_NAMES
     assert candidate.ranker_metadata["name"] == "semantic-and-fallback-fts5"
     assert candidate.summary.query_count == len(corpus.queries)
+
+
+def test_semantic_fallback_candidate_executes_production_no_access_ranker(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    snapshot_dir = tmp_path / "snapshot"
+    memex = Memex(MemexConfig(data_dir=snapshot_dir))
+    try:
+        target_slug = _write_memory(
+            memex,
+            title="Atlas risk integration",
+            body=" ".join(["noise"] * 30) + " atlas risk integration atlas risk integration",
+        )
+        _write_memory(memex, title="Atlas risk integration decoy", body="short title-only match")
+    finally:
+        memex.close()
+    corpus = CorpusResult(
+        memories_written=2,
+        queries=[
+            QuerySpec(
+                "atlas risk integration",
+                [target_slug],
+                "hard",
+                family="unit",
+                corpus="realistic",
+            )
+        ],
+    )
+    calls: list[tuple[str, int | None]] = []
+    original = BM25Retriever.retrieve_without_access
+
+    def spy_retrieve_without_access(
+        self: BM25Retriever,
+        query: str,
+        top_k: int | None = None,
+        node_type: str | None = None,
+        time_range: tuple[str, str] | None = None,
+        tags: list[str] | None = None,
+        include_expired: bool = False,
+        include_inactive: bool = False,
+    ) -> RecallResult:
+        calls.append((query, top_k))
+        return original(
+            self,
+            query,
+            top_k=top_k,
+            node_type=node_type,
+            time_range=time_range,
+            tags=tags,
+            include_expired=include_expired,
+            include_inactive=include_inactive,
+        )
+
+    def forbidden_retrieve(self: BM25Retriever, *args: object, **kwargs: object) -> None:
+        del self, args, kwargs
+        raise AssertionError("candidate harness must call retrieve_without_access directly")
+
+    monkeypatch.setattr(
+        BM25Retriever,
+        "retrieve_without_access",
+        spy_retrieve_without_access,
+    )
+    monkeypatch.setattr(BM25Retriever, "retrieve", forbidden_retrieve)
+
+    candidate = selection._run_candidate_pair(
+        name="semantic-and-fallback-fts5",
+        snapshot_dir=snapshot_dir,
+        data_dir=tmp_path / "candidate-semantic-fallback",
+        corpus=corpus,
+        top_k=10,
+    )
+
+    assert calls == [("atlas risk integration", 10)]
+    assert candidate.results[0].actual_slugs[0] == target_slug
+    assert candidate.summary.access_mutations == len(candidate.results[0].actual_slugs)
+    assert candidate.ranker_metadata["name"] == "semantic-and-fallback-fts5"
 
 
 def test_baseline_pair_executes_legacy_or_ranker_not_promoted_recall(tmp_path: Path) -> None:

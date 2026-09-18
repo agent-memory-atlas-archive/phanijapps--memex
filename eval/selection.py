@@ -39,7 +39,7 @@ from eval.corpus import CorpusResult, QuerySpec
 from eval.realistic import RealisticCorpusGenerator
 from eval.rgapi_candidate import rank_rgapi_candidate
 from eval.runner import HitResult
-from eval.weighted_retriever import SemanticAndFallbackFts5Retriever, WeightedLexicalRetriever
+from eval.weighted_retriever import WeightedLexicalRetriever
 from eval.workloads import (
     GUTENBERG_FIXTURE,
     SALESFORCE_FIXTURE,
@@ -55,6 +55,7 @@ from memex.application.memory import Memex
 from memex.domain.frontmatter import serialize_front_matter
 from memex.domain.models import RecallHit, utc_now_iso
 from memex.domain.slugs import unique_slug
+from memex.infrastructure.bm25_retriever import BM25Retriever, production_ranker_metadata
 from memex.infrastructure.config import MemexConfig
 from memex.infrastructure.wiki_store import TYPE_DIRS, hash_body
 
@@ -608,16 +609,18 @@ def _run_candidate_pair(
     metadata: dict[str, JsonValue] = {"name": name}
     candidate_started = time.perf_counter()
     weighted = _weighted_retriever_for_candidate(name, data_dir / "mem.db")
+    production = _production_retriever_for_candidate(name, data_dir / "mem.db")
     rgapi_conn = sqlite3.connect(data_dir / "mem.db") if name == "rgapi-0.1.22" else None
     if rgapi_conn is not None:
         rgapi_conn.row_factory = sqlite3.Row
     try:
         for query in corpus.queries:
-            outcome = (
-                _run_weighted_query(weighted, query, top_k)
-                if weighted is not None
-                else _run_rgapi_query(data_dir, rgapi_conn, query, top_k)
-            )
+            if weighted is not None:
+                outcome = _run_weighted_query(weighted, query, top_k)
+            elif production is not None:
+                outcome = _run_production_query(production, query, top_k)
+            else:
+                outcome = _run_rgapi_query(data_dir, rgapi_conn, query, top_k)
             metadata = outcome.ranker_metadata
             latencies.append(outcome.latency_ms)
             if retain_quality:
@@ -645,6 +648,8 @@ def _run_candidate_pair(
     finally:
         if weighted is not None:
             weighted.close()
+        if production is not None:
+            production.close()
         if rgapi_conn is not None:
             rgapi_conn.close()
     access_mutations = _total_access_count(data_dir) - pre_access
@@ -686,9 +691,34 @@ def _weighted_retriever_for_candidate(
 ) -> WeightedLexicalRetriever | None:
     if name == "field-channel-rrf-k60":
         return WeightedLexicalRetriever(db_path)
-    if name == "semantic-and-fallback-fts5":
-        return SemanticAndFallbackFts5Retriever(db_path)
     return None
+
+
+def _production_retriever_for_candidate(
+    name: CandidateName,
+    db_path: Path,
+) -> BM25Retriever | None:
+    if name == "semantic-and-fallback-fts5":
+        return BM25Retriever(db_path)
+    return None
+
+
+def _run_production_query(
+    retriever: BM25Retriever | None, query: QuerySpec, top_k: int
+) -> _CandidateOutcome:
+    if retriever is None:
+        raise RuntimeError("production retriever is unavailable")
+    started = time.perf_counter()
+    recalled = retriever.retrieve_without_access(query.query, top_k=top_k)
+    latency_ms = (time.perf_counter() - started) * 1000
+    retriever.record_access(recalled.hits)
+    return _CandidateOutcome(
+        recalled.hits,
+        latency_ms,
+        True,
+        None,
+        _json_mapping(production_ranker_metadata()),
+    )
 
 
 def _run_rgapi_query(

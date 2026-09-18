@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from memex import mcp_server
+from memex.infrastructure.bm25_retriever import MAX_QUERY_BYTES
 from memex.mcp_server import (
     memex_export,
     memex_forget,
@@ -140,6 +141,15 @@ def test_errors_are_sanitized() -> None:
         "error": "invalid arguments for this operation"
     }
     assert memex_recall("???") == {"error": "invalid arguments for this operation"}
+
+
+def test_recall_oversized_query_uses_sanitized_error() -> None:
+    query = "leaksecret " + ("é" * MAX_QUERY_BYTES)
+
+    result = memex_recall(query)
+
+    assert result == {"error": "invalid arguments for this operation"}
+    assert "leaksecret" not in json.dumps(result)
 
 
 def test_transcript_and_provenance_tools() -> None:

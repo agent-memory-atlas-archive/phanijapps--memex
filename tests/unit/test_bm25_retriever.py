@@ -4,7 +4,11 @@ from pathlib import Path
 import pytest
 
 from memex.domain.models import WikiNode
-from memex.infrastructure.bm25_retriever import BM25Retriever
+from memex.infrastructure.bm25_retriever import (
+    MAX_QUERY_BYTES,
+    MAX_QUERY_TOKENS,
+    BM25Retriever,
+)
 from memex.infrastructure.index_manager import IndexManager
 from memex.infrastructure.wiki_store import WikiStore
 
@@ -28,6 +32,34 @@ def test_empty_query_raises(indexed: BM25Retriever) -> None:
 
     with pytest.raises(ValueError, match="no searchable terms"):
         indexed.search_fts("---", 5)
+
+
+def test_query_byte_cap_blocks_semantic_and_legacy_match_builders(
+    indexed: BM25Retriever,
+) -> None:
+    query = "leaksecret " + ("é" * MAX_QUERY_BYTES)
+
+    with pytest.raises(ValueError, match=f"exceeds {MAX_QUERY_BYTES} UTF-8 bytes") as retrieve:
+        indexed.retrieve(query)
+    with pytest.raises(ValueError, match=f"exceeds {MAX_QUERY_BYTES} UTF-8 bytes") as legacy:
+        indexed.search_fts(query, 5)
+
+    assert "leaksecret" not in str(retrieve.value)
+    assert "leaksecret" not in str(legacy.value)
+
+
+def test_query_token_cap_blocks_semantic_and_legacy_match_builders(
+    indexed: BM25Retriever,
+) -> None:
+    query = " ".join(f"term{index}" for index in range(MAX_QUERY_TOKENS + 1))
+
+    with pytest.raises(ValueError, match="too many searchable terms") as retrieve:
+        indexed.retrieve(query)
+    with pytest.raises(ValueError, match="too many searchable terms") as legacy:
+        indexed.retrieve_legacy_or(query)
+
+    assert "term0" not in str(retrieve.value)
+    assert "term0" not in str(legacy.value)
 
 
 def test_fts_injection_is_neutralized(indexed: BM25Retriever) -> None:

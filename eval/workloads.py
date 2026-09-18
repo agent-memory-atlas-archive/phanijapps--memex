@@ -218,8 +218,9 @@ def _validate_salesforce_cards(rows: Sequence[Mapping[str, object]]) -> None:
 
 
 def _regular_file(path: Path, *, suffix: str) -> Path:
-    resolved = path.expanduser().resolve(strict=False)
-    if path.is_symlink() or not resolved.is_file() or resolved.suffixes[-2:] != [".csv", ".gz"]:
+    expanded = path.expanduser()
+    resolved = _expanded_regular_file(expanded, error=f"expected regular {suffix} file")
+    if resolved.suffixes[-2:] != [".csv", ".gz"]:
         raise GutenbergImportError("path_rejected", f"expected regular {suffix} file")
     return resolved
 
@@ -233,9 +234,10 @@ def _confined_output(path: Path, root: Path) -> Path:
 
 
 def _load_provenance(path: Path) -> dict[str, object]:
-    resolved = path.expanduser().resolve(strict=False)
-    if path.is_symlink() or not resolved.is_file():
-        raise GutenbergImportError("path_rejected", "provenance must be a regular file")
+    resolved = _expanded_regular_file(
+        path.expanduser(),
+        error="provenance must be a regular file",
+    )
     try:
         data = json.loads(resolved.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
@@ -258,6 +260,12 @@ def _load_provenance(path: Path) -> dict[str, object]:
     if last_modified is not None and not isinstance(last_modified, str):
         raise GutenbergImportError("source_unreproducible", "invalid upstream Last-Modified value")
     return data
+
+
+def _expanded_regular_file(path: Path, *, error: str) -> Path:
+    if path.is_symlink() or not path.is_file():
+        raise GutenbergImportError("path_rejected", error)
+    return path.resolve(strict=True)
 
 
 def _read_catalog_rows(catalog_path: Path) -> list[dict[str, str]]:
