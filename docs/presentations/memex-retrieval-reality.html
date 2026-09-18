@@ -1,0 +1,779 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Memex capabilities, measured retrieval results, and realistic outcomes.">
+  <title>Memex — What we have, what we measured, what we realistically get</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --ink: #eefdf8;
+      --muted: #9bbcb4;
+      --quiet: #668c83;
+      --surface: rgba(10, 35, 34, 0.78);
+      --surface-strong: #0c2928;
+      --line: rgba(148, 210, 194, 0.18);
+      --teal: #5eead4;
+      --teal-deep: #0f766e;
+      --lime: #bef264;
+      --amber: #fbbf24;
+      --rose: #fb7185;
+      --blue: #7dd3fc;
+      --shadow: 0 28px 80px rgba(0, 0, 0, 0.35);
+      --radius: 28px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: #061817;
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 14% 12%, rgba(94, 234, 212, 0.14), transparent 28%),
+        radial-gradient(circle at 88% 82%, rgba(190, 242, 100, 0.09), transparent 28%),
+        linear-gradient(135deg, #071b1a 0%, #061312 52%, #091d1b 100%);
+    }
+
+    a { color: var(--teal); }
+    button { font: inherit; }
+
+    .deck {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      isolation: isolate;
+    }
+
+    .slide {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: clamp(1rem, 2.5vh, 2rem);
+      padding: clamp(1.25rem, 4vw, 4.5rem) clamp(1.25rem, 6vw, 7rem) clamp(4.5rem, 8vh, 6.5rem);
+      opacity: 0;
+      visibility: hidden;
+      transform: translateX(2.5rem) scale(0.985);
+      transition: opacity 260ms ease, transform 320ms ease, visibility 0s linear 320ms;
+    }
+
+    .slide.active {
+      opacity: 1;
+      visibility: visible;
+      transform: none;
+      transition-delay: 0s;
+    }
+
+    .slide::after {
+      content: attr(data-number);
+      position: absolute;
+      top: clamp(1.2rem, 3vw, 2.5rem);
+      right: clamp(1.25rem, 4vw, 4rem);
+      color: var(--quiet);
+      font-size: 0.78rem;
+      letter-spacing: 0.14em;
+    }
+
+    .eyebrow {
+      display: flex;
+      align-items: center;
+      gap: 0.7rem;
+      margin: 0 0 0.8rem;
+      color: var(--teal);
+      font-size: clamp(0.72rem, 1.1vw, 0.9rem);
+      font-weight: 750;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+    }
+
+    .eyebrow::before {
+      content: "";
+      width: 2.2rem;
+      height: 2px;
+      background: currentColor;
+    }
+
+    h1, h2, h3, p { margin-top: 0; }
+
+    h1 {
+      max-width: 14ch;
+      margin-bottom: 1.2rem;
+      font-size: clamp(3rem, 8.4vw, 8.5rem);
+      line-height: 0.91;
+      letter-spacing: -0.065em;
+      text-wrap: balance;
+    }
+
+    h2 {
+      max-width: 19ch;
+      margin-bottom: 0;
+      font-size: clamp(2.25rem, 5.2vw, 5.2rem);
+      line-height: 0.98;
+      letter-spacing: -0.05em;
+      text-wrap: balance;
+    }
+
+    h3 {
+      margin-bottom: 0.65rem;
+      font-size: clamp(1rem, 1.6vw, 1.35rem);
+      letter-spacing: -0.02em;
+    }
+
+    .lede {
+      max-width: 58ch;
+      margin-bottom: 0;
+      color: var(--muted);
+      font-size: clamp(1.05rem, 2vw, 1.55rem);
+      line-height: 1.5;
+    }
+
+    .accent { color: var(--teal); }
+    .lime { color: var(--lime); }
+    .amber { color: var(--amber); }
+    .rose { color: var(--rose); }
+
+    .title-layout {
+      align-self: center;
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.65fr);
+      gap: clamp(2rem, 7vw, 8rem);
+      align-items: center;
+    }
+
+    .mark {
+      position: relative;
+      width: min(34vw, 25rem);
+      aspect-ratio: 1;
+      justify-self: center;
+      filter: drop-shadow(0 30px 60px rgba(15, 118, 110, 0.28));
+    }
+
+    .mark::before, .mark::after {
+      content: "";
+      position: absolute;
+      border-radius: 50%;
+      border: 1px solid rgba(94, 234, 212, 0.24);
+    }
+
+    .mark::before { inset: -12%; }
+    .mark::after { inset: -25%; border-style: dashed; }
+
+    .mark svg { width: 100%; height: 100%; }
+
+    .meta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      margin-top: 2rem;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      padding: 0.52rem 0.82rem;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.035);
+      color: var(--muted);
+      font-size: 0.8rem;
+      font-weight: 650;
+    }
+
+    .pill::before {
+      content: "";
+      width: 0.45rem;
+      height: 0.45rem;
+      border-radius: 50%;
+      background: var(--teal);
+      box-shadow: 0 0 0 4px rgba(94, 234, 212, 0.1);
+    }
+
+    .grid-3, .grid-4, .split, .metric-grid, .roadmap {
+      align-self: center;
+      display: grid;
+      gap: clamp(0.85rem, 1.6vw, 1.4rem);
+    }
+
+    .grid-3 { grid-template-columns: repeat(3, 1fr); }
+    .grid-4 { grid-template-columns: repeat(4, 1fr); }
+    .split { grid-template-columns: 1fr 1fr; gap: clamp(1.4rem, 4vw, 4rem); }
+    .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .roadmap { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+    .card {
+      position: relative;
+      min-width: 0;
+      padding: clamp(1.1rem, 2.2vw, 2rem);
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: linear-gradient(145deg, rgba(16, 49, 47, 0.9), rgba(8, 28, 27, 0.72));
+      box-shadow: var(--shadow);
+    }
+
+    .card::before {
+      content: "";
+      position: absolute;
+      width: 8rem;
+      height: 8rem;
+      top: -5rem;
+      right: -4rem;
+      border-radius: 50%;
+      background: rgba(94, 234, 212, 0.08);
+    }
+
+    .card p, .card li {
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .card p:last-child { margin-bottom: 0; }
+
+    .number {
+      display: block;
+      margin-bottom: 0.55rem;
+      color: var(--ink);
+      font-size: clamp(2rem, 4.2vw, 4.7rem);
+      font-weight: 820;
+      letter-spacing: -0.055em;
+      line-height: 1;
+    }
+
+    .label {
+      color: var(--quiet);
+      font-size: 0.76rem;
+      font-weight: 750;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .metric {
+      display: grid;
+      grid-template-columns: minmax(9rem, 0.8fr) minmax(12rem, 1.2fr) auto;
+      gap: 1rem;
+      align-items: center;
+      padding: 1rem 1.15rem;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(5, 24, 23, 0.7);
+    }
+
+    .metric strong { font-size: clamp(1.1rem, 2vw, 1.6rem); }
+
+    .track {
+      position: relative;
+      height: 0.72rem;
+      overflow: hidden;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.07);
+    }
+
+    .bar {
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: var(--value);
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--teal-deep), var(--teal));
+    }
+
+    .bar.baseline { background: #416a63; }
+    .bar.fail { background: linear-gradient(90deg, #9f1239, var(--rose)); }
+
+    .delta {
+      min-width: 5.8rem;
+      text-align: right;
+      color: var(--lime);
+      font-weight: 780;
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.4rem 0.65rem;
+      border-radius: 999px;
+      font-size: 0.72rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .status.pass { background: rgba(190, 242, 100, 0.1); color: var(--lime); }
+    .status.fail { background: rgba(251, 113, 133, 0.12); color: var(--rose); }
+    .status.now { background: rgba(125, 211, 252, 0.1); color: var(--blue); }
+
+    .flow {
+      align-self: center;
+      display: grid;
+      grid-template-columns: repeat(7, auto);
+      align-items: center;
+      justify-content: center;
+      gap: clamp(0.45rem, 1.2vw, 1rem);
+    }
+
+    .flow .node {
+      max-width: 12rem;
+      padding: 1rem;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--surface);
+      text-align: center;
+      font-weight: 720;
+    }
+
+    .arrow { color: var(--teal); font-size: 1.5rem; }
+
+    .callout {
+      padding: clamp(1rem, 2vw, 1.65rem);
+      border-left: 4px solid var(--teal);
+      border-radius: 0 18px 18px 0;
+      background: rgba(94, 234, 212, 0.07);
+      color: var(--muted);
+      font-size: clamp(1rem, 1.7vw, 1.35rem);
+      line-height: 1.5;
+    }
+
+    .callout strong { color: var(--ink); }
+    .callout.fail { border-left-color: var(--rose); background: rgba(251, 113, 133, 0.07); }
+
+    .checklist {
+      display: grid;
+      gap: 0.8rem;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .checklist li {
+      position: relative;
+      padding-left: 1.8rem;
+    }
+
+    .checklist li::before {
+      content: "✓";
+      position: absolute;
+      left: 0;
+      color: var(--teal);
+      font-weight: 900;
+    }
+
+    .roadmap .card { min-height: 18rem; }
+    .roadmap .step { color: var(--teal); font-size: 0.8rem; font-weight: 820; letter-spacing: 0.12em; }
+    .roadmap .confidence { position: absolute; left: 1.5rem; bottom: 1.25rem; }
+
+    .threshold {
+      position: relative;
+      display: grid;
+      align-content: center;
+      min-height: 15rem;
+      padding: 2rem;
+      border: 1px solid rgba(251, 113, 133, 0.22);
+      border-radius: var(--radius);
+      background: linear-gradient(145deg, rgba(75, 18, 35, 0.32), rgba(8, 28, 27, 0.72));
+      text-align: center;
+    }
+
+    .threshold .actual {
+      color: var(--rose);
+      font-size: clamp(3rem, 7vw, 7rem);
+      font-weight: 850;
+      letter-spacing: -0.07em;
+      line-height: 1;
+    }
+
+    .threshold .target { color: var(--muted); font-size: clamp(1rem, 2vw, 1.4rem); }
+
+    .footer-note {
+      align-self: end;
+      color: var(--quiet);
+      font-size: clamp(0.7rem, 1vw, 0.82rem);
+      line-height: 1.4;
+    }
+
+    .sources {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.8rem 1.4rem;
+    }
+
+    .sources a { color: var(--muted); text-underline-offset: 0.2em; }
+
+    .controls {
+      position: fixed;
+      z-index: 10;
+      left: 50%;
+      bottom: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      transform: translateX(-50%);
+      padding: 0.55rem 0.75rem;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(5, 22, 21, 0.88);
+      backdrop-filter: blur(18px);
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.3);
+    }
+
+    .controls button {
+      display: grid;
+      width: 2.15rem;
+      height: 2.15rem;
+      place-items: center;
+      border: 0;
+      border-radius: 50%;
+      background: transparent;
+      color: var(--ink);
+      cursor: pointer;
+    }
+
+    .controls button:hover, .controls button:focus-visible {
+      outline: none;
+      background: rgba(94, 234, 212, 0.12);
+      color: var(--teal);
+    }
+
+    .counter {
+      min-width: 3.4rem;
+      text-align: center;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+      font-size: 0.78rem;
+    }
+
+    .progress {
+      position: fixed;
+      z-index: 11;
+      left: 0;
+      bottom: 0;
+      width: var(--progress, 10%);
+      height: 3px;
+      background: linear-gradient(90deg, var(--teal-deep), var(--teal), var(--lime));
+      transition: width 240ms ease;
+    }
+
+    .brand {
+      position: fixed;
+      z-index: 10;
+      top: 1.15rem;
+      left: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.55rem;
+      color: var(--muted);
+      font-size: 0.76rem;
+      font-weight: 750;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .brand svg { width: 1.7rem; height: 1.7rem; }
+
+    @media (max-width: 850px), (max-height: 650px) {
+      .slide {
+        bottom: 5.5rem;
+        overflow-y: auto;
+        padding-top: 4.2rem;
+        padding-bottom: 1.5rem;
+        scroll-padding-bottom: 1.5rem;
+      }
+      .title-layout, .split { grid-template-columns: 1fr; }
+      .mark { display: none; }
+      .grid-4 { grid-template-columns: repeat(2, 1fr); }
+      .grid-3, .roadmap { grid-template-columns: 1fr; }
+      .metric-grid { grid-template-columns: 1fr; }
+      .flow { grid-template-columns: 1fr; }
+      .arrow { transform: rotate(90deg); text-align: center; }
+      .roadmap .card { min-height: 13rem; }
+      .metric { grid-template-columns: minmax(7rem, 0.8fr) 1fr auto; }
+    }
+
+    @media (max-width: 520px) {
+      .grid-4 { grid-template-columns: 1fr; }
+      .metric { grid-template-columns: 1fr auto; }
+      .metric .track { grid-column: 1 / -1; grid-row: 2; }
+      .delta { grid-column: 2; grid-row: 1; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
+    }
+
+    @media print {
+      @page { size: 16in 9in; margin: 0; }
+      html, body { height: auto; overflow: visible; background: #061817; print-color-adjust: exact; }
+      .deck { height: auto; }
+      .slide {
+        position: relative;
+        width: 16in;
+        height: 9in;
+        page-break-after: always;
+        opacity: 1;
+        visibility: visible;
+        transform: none;
+      }
+      .controls, .progress, .brand { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <main class="deck" aria-live="polite">
+    <section class="slide active" data-title="Opening" data-number="01 / 10" aria-hidden="false">
+      <div></div>
+      <div class="title-layout">
+        <div>
+          <p class="eyebrow">Memex retrieval, measured honestly</p>
+          <h1>What we have.<br><span class="accent">What we get.</span></h1>
+          <p class="lede">A durable memory layer today, a trustworthy evaluation system now, and a clear boundary between promising gains and production-ready gains.</p>
+          <div class="meta-row">
+            <span class="pill">10,000 memories</span>
+            <span class="pill">20,800 queries</span>
+            <span class="pill">September 18, 2026</span>
+          </div>
+        </div>
+        <div class="mark" aria-hidden="true">
+          <svg viewBox="0 0 64 64">
+            <defs><linearGradient id="logo-gradient" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0f766e"/><stop offset="1" stop-color="#134e4a"/></linearGradient></defs>
+            <rect width="64" height="64" rx="14" fill="url(#logo-gradient)"/>
+            <path d="M15 46V22l12 14 12-14 12 14v10" fill="none" stroke="#f0fdfa" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="15" cy="22" r="5" fill="#5eead4"/><circle cx="39" cy="22" r="5" fill="#5eead4"/><circle cx="51" cy="36" r="5" fill="#5eead4"/>
+          </svg>
+        </div>
+      </div>
+      <p class="footer-note">Use ← →, Space, or swipe. Press Home for the first slide.</p>
+    </section>
+
+    <section class="slide" data-title="What exists" data-number="02 / 10" aria-hidden="true">
+      <header>
+        <p class="eyebrow">The product today</p>
+        <h2>Durable memory without a memory service</h2>
+      </header>
+      <div class="grid-4">
+        <article class="card"><span class="label">Source of truth</span><span class="number">Markdown</span><p>Human-readable pages remain authoritative, editable, and sufficient to rebuild search.</p></article>
+        <article class="card"><span class="label">Search</span><span class="number">FTS5</span><p>Local BM25 retrieval uses a disposable SQLite index. No embeddings or hosted database are required.</p></article>
+        <article class="card"><span class="label">One contract</span><span class="number">4 paths</span><p>Python, CLI, MCP, and lifecycle hooks share the same application facade and datatypes.</p></article>
+        <article class="card"><span class="label">Operational proof</span><span class="number">CI gate</span><p><code>memex verify</code> checks health, index freshness, links, and optional activity evidence.</p></article>
+      </div>
+      <p class="footer-note">No required daemon. No cloud dependency. Consolidation is the only operation that may call an LLM.</p>
+    </section>
+
+    <section class="slide" data-title="Baseline" data-number="03 / 10" aria-hidden="true">
+      <header>
+        <p class="eyebrow">The measured retrieval problem</p>
+        <h2>At 10K, Memex usually finds the neighborhood—not always the best door</h2>
+      </header>
+      <div class="grid-4">
+        <article class="card"><span class="label">Hard Recall@10</span><span class="number">31.98%</span><p>The correct page appears somewhere in the first ten results for roughly one in three hard queries.</p></article>
+        <article class="card"><span class="label">Hard MRR</span><span class="number">0.205</span><p>MRR measures how early the first correct result appears. This is the sharpest remaining weakness.</p></article>
+        <article class="card"><span class="label">Context cost</span><span class="number">4,655</span><p>Rendered tokens per correct hard-query result. High cost means less room for the agent’s actual work.</p></article>
+        <article class="card"><span class="label">Recall p99</span><span class="number">41.9<span style="font-size:.45em"> ms</span></span><p>The slowest 1% remain below the 50 ms gate at 10,000 memories.</p></article>
+      </div>
+      <p class="footer-note">Clean seed-42 paired run · 10,000 generated memories · 20,800 queries · top_k=10.</p>
+    </section>
+
+    <section class="slide" data-title="Evaluation system" data-number="04 / 10" aria-hidden="true">
+      <header>
+        <p class="eyebrow">What we built</p>
+        <h2>A promotion system that makes retrieval earn its way into production</h2>
+      </header>
+      <div class="flow" aria-label="Evaluation flow">
+        <div class="node">Immutable Markdown snapshot</div><div class="arrow">→</div>
+        <div class="node">Fresh baseline store</div><div class="arrow">↔</div>
+        <div class="node">Fresh candidate store</div><div class="arrow">→</div>
+        <div class="node">One conjunctive verdict</div>
+      </div>
+      <div class="grid-3">
+        <article class="card"><h3>Comparable</h3><p>Same corpus, query order, renderer, token estimator, and full recall boundary—including hit hydration and access updates.</p></article>
+        <article class="card"><h3>Reproducible</h3><p>Versioned reports pin Git state, environment class, corpus sizes, parameters, ranker identity, and every gate.</p></article>
+        <article class="card"><h3>Fail-closed</h3><p>Dirty source, incomplete native search, contaminated directories, missing scale evidence, or one failed metric means no promotion.</p></article>
+      </div>
+      <p class="footer-note">The evaluator protects both the configured data root and the default <code>~/.memex</code> boundary.</p>
+    </section>
+
+    <section class="slide" data-title="Measured gains" data-number="05 / 10" aria-hidden="true">
+      <header>
+        <p class="eyebrow">The weighted lexical candidate</p>
+        <h2>Three strong gains—and one decisive miss</h2>
+      </header>
+      <div class="metric-grid">
+        <div class="metric"><div><span class="label">Hard Recall@10</span><br><strong>31.98 → 41.55%</strong></div><div class="track"><span class="bar" style="--value: 83%"></span></div><div class="delta">+9.57 pts<br><span class="status pass">Pass</span></div></div>
+        <div class="metric"><div><span class="label">Hard MRR</span><br><strong>0.205 → 0.227</strong></div><div class="track"><span class="bar fail" style="--value: 43%"></span></div><div class="delta rose">+0.0216<br><span class="status fail">Fail</span></div></div>
+        <div class="metric"><div><span class="label">Tokens / correct hard query</span><br><strong>4,655 → 2,766</strong></div><div class="track"><span class="bar" style="--value: 59%"></span></div><div class="delta">−40.6%<br><span class="status pass">Pass</span></div></div>
+        <div class="metric"><div><span class="label">10K p99 latency</span><br><strong>41.9 → 36.2 ms</strong></div><div class="track"><span class="bar" style="--value: 72%"></span></div><div class="delta">−13.6%<br><span class="status pass">Pass</span></div></div>
+      </div>
+      <p class="footer-note">Candidate: weighted FTS5, strict AND → OR backoff, deterministic fusion, compact snippets, and duplicate-title diversification.</p>
+    </section>
+
+    <section class="slide" data-title="Why it did not ship" data-number="06 / 10" aria-hidden="true">
+      <header>
+        <p class="eyebrow">The honest stop</p>
+        <h2>Better is not the same as good enough</h2>
+      </header>
+      <div class="split">
+        <div class="threshold">
+          <span class="label">Observed hard-MRR gain</span>
+          <span class="actual">+0.0216</span>
+          <span class="target">Required: <strong>+0.0500</strong></span>
+        </div>
+        <div>
+          <div class="callout fail"><strong>The candidate did not ship.</strong> It improves finding the right page in the top ten, but does not move that page near the top often enough.</div>
+          <ul class="checklist" style="margin-top:1.5rem">
+            <li>Production retrieval remains the known SQLite FTS5 baseline.</li>
+            <li>The 100K phase was skipped because no candidate cleared every 10K eligibility gate.</li>
+            <li>The optional <code>rgapi</code> experiment was incomplete at scale and failed closed.</li>
+          </ul>
+        </div>
+      </div>
+      <p class="footer-note">This is the gate doing its job: token savings and recall gains cannot buy permission to weaken ranking quality.</p>
+    </section>
+
+    <section class="slide" data-title="Value now" data-number="07 / 10" aria-hidden="true">
+      <header>
+        <p class="eyebrow">What we realistically get now</p>
+        <h2>Safer optimization, concrete headroom, zero production regression</h2>
+      </header>
+      <div class="grid-3">
+        <article class="card"><span class="status now">Available now</span><h3 style="margin-top:1rem">A trustworthy benchmark</h3><p>Every future ranker can be tested on accuracy, context cost, and latency with the same paired evidence.</p></article>
+        <article class="card"><span class="status now">Available now</span><h3 style="margin-top:1rem">A proven optimization seam</h3><p>In-process FTS weighting, backoff, compact snippets, and diversification can be iterated without touching runtime defaults.</p></article>
+        <article class="card"><span class="status now">Available now</span><h3 style="margin-top:1rem">A safer decision boundary</h3><p>Clean-revision enforcement, isolated stores, privacy canaries, bounded optional search, and independent reviews prevent optimistic promotion.</p></article>
+      </div>
+      <div class="callout"><strong>What users feel today:</strong> no change in recall behavior. <strong>What maintainers gain today:</strong> a fast, auditable way to find a genuinely better default.</div>
+      <p class="footer-note">Implemented on <code>feature/memory-optimization</code>; production T5 remains blocked by the approved MRR gate.</p>
+    </section>
+
+    <section class="slide" data-title="Outcome bands" data-number="08 / 10" aria-hidden="true">
+      <header>
+        <p class="eyebrow">Realistic outcome bands</p>
+        <h2>Separate demonstrated value from conditional value</h2>
+      </header>
+      <div class="roadmap">
+        <article class="card"><span class="step">01 · Demonstrated</span><h3 style="margin-top:.8rem">Evaluation foundation</h3><p>Repeatable selection, lower-risk experiments, and proof that meaningful token and recall headroom exists in deterministic local retrieval.</p><span class="status pass confidence">High confidence</span></article>
+        <article class="card"><span class="step">02 · Conditional</span><h3 style="margin-top:.8rem">A production ranker</h3><p>If one candidate also gains at least 0.05 MRR, users get ≥5-point hard recall and MRR gains, ≥20% token reduction, and bounded p99—together.</p><span class="status now confidence">Gate-backed</span></article>
+        <article class="card"><span class="step">03 · Separate slices</span><h3 style="margin-top:.8rem">Evidence-aware memory</h3><p>Section provenance, temporal supersession, contradiction handling, and identity-aware consolidation remain promising but unimplemented.</p><span class="status fail confidence" style="color:var(--amber);background:rgba(251,191,36,.1)">Not yet measured</span></article>
+      </div>
+      <p class="footer-note">The current candidate’s 40.6% token reduction is evidence of headroom—not a promise that the same number survives the MRR gate.</p>
+    </section>
+
+    <section class="slide" data-title="Next move" data-number="09 / 10" aria-hidden="true">
+      <header>
+        <p class="eyebrow">The rational next move</p>
+        <h2>Optimize rank position—not just candidate coverage</h2>
+      </header>
+      <div class="split">
+        <article class="card">
+          <h3>Keep</h3>
+          <ul class="checklist">
+            <li>The existing accuracy, token, and latency gates.</li>
+            <li>SQLite FTS5 as the portable production baseline.</li>
+            <li>The in-process Python evaluator and isolated-store discipline.</li>
+            <li>The gains already proven in recall, context size, and speed.</li>
+          </ul>
+        </article>
+        <article class="card">
+          <h3>Change next</h3>
+          <ul class="checklist">
+            <li>Target first-correct-result position directly.</li>
+            <li>Test section-aware evidence and query-intent signals behind the same gate.</li>
+            <li>Reject any approach that only reshuffles ambiguous duplicates.</li>
+            <li>Run 100K only after one candidate clears every 10K gate.</li>
+          </ul>
+        </article>
+      </div>
+      <div class="callout"><strong>Recommendation:</strong> do not relax MRR. Use the new evaluator to develop one stronger deterministic candidate, then promote only the measured winner.</div>
+      <p class="footer-note">This preserves the priority order: accuracy and token efficiency are co-primary; speed remains a hard constraint.</p>
+    </section>
+
+    <section class="slide" data-title="Close" data-number="10 / 10" aria-hidden="true">
+      <header>
+        <p class="eyebrow">Bottom line</p>
+        <h2>We did not ship a faster wrong answer.</h2>
+      </header>
+      <div class="split">
+        <div>
+          <p class="lede"><span class="accent">We have</span> durable local memory, a shared recall contract, and a production baseline that stays intact.</p>
+          <p class="lede" style="margin-top:1.3rem"><span class="lime">We gained</span> a credible path to improve retrieval with evidence instead of intuition.</p>
+          <p class="lede" style="margin-top:1.3rem"><span class="amber">We still need</span> a candidate that moves the correct result materially closer to rank one.</p>
+        </div>
+        <article class="card">
+          <span class="label">Decision</span>
+          <span class="number" style="font-size:clamp(2rem,4vw,4rem);margin-top:.7rem">Hold production.<br><span class="accent">Keep optimizing.</span></span>
+          <p>The benchmark is now an asset. The failed promotion is useful evidence. The next change has a precise target.</p>
+        </article>
+      </div>
+      <div class="sources footer-note">
+        <a href="../architecture/overview.md">Architecture overview</a>
+        <a href="../product/briefs/memory-retrieval-and-evidence.md">Retrieval brief</a>
+        <a href="../specs/quality-gated-retrieval/notes/verification-ledger.md">10K verification ledger</a>
+        <a href="../memory-optimization-survey.md">Research application</a>
+      </div>
+    </section>
+  </main>
+
+  <div class="brand" aria-hidden="true">
+    <svg viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#0f766e"/><path d="M15 46V22l12 14 12-14 12 14v10" fill="none" stroke="#f0fdfa" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span>memex</span>
+  </div>
+
+  <nav class="controls" aria-label="Slide controls">
+    <button id="previous" type="button" aria-label="Previous slide">←</button>
+    <span class="counter" id="counter" aria-label="Current slide">1 / 10</span>
+    <button id="next" type="button" aria-label="Next slide">→</button>
+  </nav>
+  <div class="progress" id="progress" aria-hidden="true"></div>
+
+  <script>
+    (() => {
+      const slides = [...document.querySelectorAll('.slide')];
+      const counter = document.getElementById('counter');
+      const progress = document.getElementById('progress');
+      let index = Math.max(0, Math.min(slides.length - 1, Number(location.hash.slice(1)) - 1 || 0));
+      let touchStartX = null;
+
+      function show(nextIndex, updateHash = true) {
+        index = Math.max(0, Math.min(slides.length - 1, nextIndex));
+        slides.forEach((slide, slideIndex) => {
+          const active = slideIndex === index;
+          slide.classList.toggle('active', active);
+          slide.setAttribute('aria-hidden', String(!active));
+        });
+        counter.textContent = `${index + 1} / ${slides.length}`;
+        progress.style.setProperty('--progress', `${((index + 1) / slides.length) * 100}%`);
+        document.title = `${slides[index].dataset.title} — Memex`;
+        if (updateHash) history.replaceState(null, '', `#${index + 1}`);
+      }
+
+      document.getElementById('previous').addEventListener('click', () => show(index - 1));
+      document.getElementById('next').addEventListener('click', () => show(index + 1));
+      document.addEventListener('keydown', (event) => {
+        if (['ArrowRight', 'PageDown', ' '].includes(event.key)) { event.preventDefault(); show(index + 1); }
+        if (['ArrowLeft', 'PageUp'].includes(event.key)) { event.preventDefault(); show(index - 1); }
+        if (event.key === 'Home') { event.preventDefault(); show(0); }
+        if (event.key === 'End') { event.preventDefault(); show(slides.length - 1); }
+      });
+      document.addEventListener('touchstart', (event) => { touchStartX = event.changedTouches[0].screenX; }, { passive: true });
+      document.addEventListener('touchend', (event) => {
+        if (touchStartX === null) return;
+        const distance = event.changedTouches[0].screenX - touchStartX;
+        if (Math.abs(distance) > 50) show(index + (distance < 0 ? 1 : -1));
+        touchStartX = null;
+      }, { passive: true });
+      window.addEventListener('hashchange', () => show(Number(location.hash.slice(1)) - 1 || 0, false));
+      show(index, false);
+    })();
+  </script>
+</body>
+</html>
