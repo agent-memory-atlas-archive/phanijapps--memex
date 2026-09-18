@@ -1,7 +1,7 @@
 # Brief: Memory retrieval and evidence quality
 
 - **Slug:** `memory-retrieval-and-evidence`
-- **Status:** Draft
+- **Status:** Ready
 - **Received:** 2026-09-17
 - **Owner:** Memex maintainers
 - **Initiative:** `ini-001`
@@ -157,10 +157,3 @@ Repository sources in this section were reviewed at Git commit
 ## Spec map
 
 No delivery slices have been confirmed.
-
-## Ready gaps
-
-No canonical Ready gaps remain. The initial success thresholds are binding and
-may be tightened when comparison evidence warrants it; they cannot be weakened
-merely to admit a candidate. Delivery-slice selection remains a separate human
-decision after the Ready transition, so no spec is authorized by this Draft.
