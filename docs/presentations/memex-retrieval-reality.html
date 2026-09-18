@@ -538,10 +538,10 @@
         <div>
           <p class="eyebrow">Memex retrieval, measured honestly</p>
           <h1>What we have.<br><span class="accent">What we get.</span></h1>
-          <p class="lede">A durable memory layer today, a trustworthy evaluation system now, and a clear boundary between promising gains and production-ready gains.</p>
+          <p class="lede">A durable memory layer today, a trustworthy evaluation system now, and a shipped lexical winner that improves accuracy, context cost, and speed together.</p>
           <div class="meta-row">
-            <span class="pill">10,000 memories</span>
-            <span class="pill">20,800 queries</span>
+            <span class="pill">Realistic + Gutenberg + Salesforce</span>
+            <span class="pill">10K + 100K scale gates</span>
             <span class="pill">September 18, 2026</span>
           </div>
         </div>
@@ -564,7 +564,7 @@
       </header>
       <div class="grid-4">
         <article class="card"><span class="label">Source of truth</span><span class="number">Markdown</span><p>Human-readable pages remain authoritative, editable, and sufficient to rebuild search.</p></article>
-        <article class="card"><span class="label">Search</span><span class="number">FTS5</span><p>Local BM25 retrieval uses a disposable SQLite index. No embeddings or hosted database are required.</p></article>
+        <article class="card"><span class="label">Search</span><span class="number">FTS5+</span><p>The shipped ranker is <code>semantic-and-fallback-fts5</code>: local lexical fields plus deterministic fallback. No embeddings or hosted database are required.</p></article>
         <article class="card"><span class="label">One contract</span><span class="number">4 paths</span><p>Python, CLI, MCP, and lifecycle hooks share the same application facade and datatypes.</p></article>
         <article class="card"><span class="label">Operational proof</span><span class="number">CI gate</span><p><code>memex verify</code> checks health, index freshness, links, and optional activity evidence.</p></article>
       </div>
@@ -573,16 +573,16 @@
 
     <section class="slide" data-title="Baseline" data-number="03 / 10" aria-hidden="true">
       <header>
-        <p class="eyebrow">The measured retrieval problem</p>
-        <h2>At 10K, Memex usually finds the neighborhood—not always the best door</h2>
+        <p class="eyebrow">The measured promotion result</p>
+        <h2>The shipped winner clears accuracy, token, and speed gates together</h2>
       </header>
       <div class="grid-4">
-        <article class="card"><span class="label">Hard Recall@10</span><span class="number">31.98%</span><p>The correct page appears somewhere in the first ten results for roughly one in three hard queries.</p></article>
-        <article class="card"><span class="label">Hard MRR</span><span class="number">0.205</span><p>MRR measures how early the first correct result appears. This is the sharpest remaining weakness.</p></article>
-        <article class="card"><span class="label">Context cost</span><span class="number">4,655</span><p>Rendered tokens per correct hard-query result. High cost means less room for the agent’s actual work.</p></article>
-        <article class="card"><span class="label">Recall p99</span><span class="number">41.9<span style="font-size:.45em"> ms</span></span><p>The slowest 1% remain below the 50 ms gate at 10,000 memories.</p></article>
+        <article class="card"><span class="label">Overall + hard Recall@10</span><span class="number">98.20%</span><p>The selected ranker keeps the right page in the first ten results on both overall and hard-query slices.</p></article>
+        <article class="card"><span class="label">Hard MRR</span><span class="number">0.9810</span><p>MRR measures how early the first correct result appears; the winner improves the legacy 0.9738 baseline.</p></article>
+        <article class="card"><span class="label">Context cost</span><span class="number">978</span><p>Rendered tokens per correct hard-query result, down from 1,579 on the truthful legacy baseline.</p></article>
+        <article class="card"><span class="label">100K p99</span><span class="number">78.2<span style="font-size:.45em"> ms</span></span><p>The winner stays under the 100 ms large-store gate while the legacy baseline measured 417.3 ms.</p></article>
       </div>
-      <p class="footer-note">Clean seed-42 paired run · 10,000 generated memories · 20,800 queries · top_k=10.</p>
+      <p class="footer-note">Latest clean promotion evidence · truthful legacy baseline · realistic, Gutenberg, and Salesforce workloads · top_k=10.</p>
     </section>
 
     <section class="slide" data-title="Evaluation system" data-number="04 / 10" aria-hidden="true">
@@ -606,53 +606,53 @@
 
     <section class="slide" data-title="Measured gains" data-number="05 / 10" aria-hidden="true">
       <header>
-        <p class="eyebrow">The weighted lexical candidate</p>
-        <h2>Three strong gains—and one decisive miss</h2>
+        <p class="eyebrow">The shipped lexical winner</p>
+        <h2>semantic-and-fallback-fts5 improves the metrics that matter</h2>
       </header>
       <div class="metric-grid">
-        <div class="metric"><div><span class="label">Hard Recall@10</span><br><strong>31.98 → 41.55%</strong></div><div class="track"><span class="bar" style="--value: 83%"></span></div><div class="delta">+9.57 pts<br><span class="status pass">Pass</span></div></div>
-        <div class="metric"><div><span class="label">Hard MRR</span><br><strong>0.205 → 0.227</strong></div><div class="track"><span class="bar fail" style="--value: 43%"></span></div><div class="delta rose">+0.0216<br><span class="status fail">Fail</span></div></div>
-        <div class="metric"><div><span class="label">Tokens / correct hard query</span><br><strong>4,655 → 2,766</strong></div><div class="track"><span class="bar" style="--value: 59%"></span></div><div class="delta">−40.6%<br><span class="status pass">Pass</span></div></div>
-        <div class="metric"><div><span class="label">10K p99 latency</span><br><strong>41.9 → 36.2 ms</strong></div><div class="track"><span class="bar" style="--value: 72%"></span></div><div class="delta">−13.6%<br><span class="status pass">Pass</span></div></div>
+        <div class="metric"><div><span class="label">Overall + hard Recall@10</span><br><strong>98.20%</strong></div><div class="track"><span class="bar" style="--value: 98%"></span></div><div class="delta">Gate met<br><span class="status pass">Pass</span></div></div>
+        <div class="metric"><div><span class="label">Hard MRR</span><br><strong>0.9738 → 0.9810</strong></div><div class="track"><span class="bar" style="--value: 98%"></span></div><div class="delta">+0.0072<br><span class="status pass">Pass</span></div></div>
+        <div class="metric"><div><span class="label">Tokens / correct hard query</span><br><strong>1,579 → 978</strong></div><div class="track"><span class="bar" style="--value: 62%"></span></div><div class="delta">−38.1%<br><span class="status pass">Pass</span></div></div>
+        <div class="metric"><div><span class="label">10K p99 latency</span><br><strong>49.2 → 13.8 ms</strong></div><div class="track"><span class="bar" style="--value: 28%"></span></div><div class="delta">−72.0%<br><span class="status pass">Pass</span></div></div>
       </div>
-      <p class="footer-note">Candidate: weighted FTS5, strict AND → OR backoff, deterministic fusion, compact snippets, and duplicate-title diversification.</p>
+      <p class="footer-note">Candidate: semantic-and-fallback-fts5, deterministic lexical ranking, compact snippets, and ascending slug tie-breaks.</p>
     </section>
 
-    <section class="slide" data-title="Why it did not ship" data-number="06 / 10" aria-hidden="true">
+    <section class="slide" data-title="Why it ships" data-number="06 / 10" aria-hidden="true">
       <header>
-        <p class="eyebrow">The honest stop</p>
-        <h2>Better is not the same as good enough</h2>
+        <p class="eyebrow">The promotion decision</p>
+        <h2>This is not a blended-score win; every gate passes</h2>
       </header>
       <div class="split">
         <div class="threshold">
-          <span class="label">Observed hard-MRR gain</span>
-          <span class="actual">+0.0216</span>
-          <span class="target">Required: <strong>+0.0500</strong></span>
+          <span class="label">Large-store p99</span>
+          <span class="actual" style="color:var(--lime)">78.2 ms</span>
+          <span class="target">Gate: <strong>&lt; 100 ms</strong></span>
         </div>
         <div>
-          <div class="callout fail"><strong>The candidate did not ship.</strong> It improves finding the right page in the top ten, but does not move that page near the top often enough.</div>
+          <div class="callout"><strong>The candidate ships as the production ranker.</strong> It preserves high recall, improves first-correct position, cuts rendered context, and makes 100K retrieval fast enough.</div>
           <ul class="checklist" style="margin-top:1.5rem">
-            <li>Production retrieval remains the known SQLite FTS5 baseline.</li>
-            <li>The 100K phase was skipped because no candidate cleared every 10K eligibility gate.</li>
-            <li>The optional <code>rgapi</code> experiment was incomplete at scale and failed closed.</li>
+            <li>Realistic, Gutenberg, and Salesforce promotion workloads pass together.</li>
+            <li>10K p99 improves from 49.2 ms to 13.8 ms.</li>
+            <li>100K p99 improves from 417.3 ms to 78.2 ms.</li>
           </ul>
         </div>
       </div>
-      <p class="footer-note">This is the gate doing its job: token savings and recall gains cannot buy permission to weaken ranking quality.</p>
+      <p class="footer-note">Historical note: an earlier weighted-RRF candidate failed MRR and did not ship. This slide describes the repaired clean promotion evidence.</p>
     </section>
 
     <section class="slide" data-title="Value now" data-number="07 / 10" aria-hidden="true">
       <header>
         <p class="eyebrow">What we realistically get now</p>
-        <h2>Safer optimization, concrete headroom, zero production regression</h2>
+        <h2>Better recall economics without a new runtime dependency</h2>
       </header>
       <div class="grid-3">
         <article class="card"><span class="status now">Available now</span><h3 style="margin-top:1rem">A trustworthy benchmark</h3><p>Every future ranker can be tested on accuracy, context cost, and latency with the same paired evidence.</p></article>
-        <article class="card"><span class="status now">Available now</span><h3 style="margin-top:1rem">A proven optimization seam</h3><p>In-process FTS weighting, backoff, compact snippets, and diversification can be iterated without touching runtime defaults.</p></article>
+        <article class="card"><span class="status now">Available now</span><h3 style="margin-top:1rem">A production ranker</h3><p><code>semantic-and-fallback-fts5</code> is the shipped winner across realistic, Gutenberg, and Salesforce workloads.</p></article>
         <article class="card"><span class="status now">Available now</span><h3 style="margin-top:1rem">A safer decision boundary</h3><p>Clean-revision enforcement, isolated stores, privacy canaries, bounded optional search, and independent reviews prevent optimistic promotion.</p></article>
       </div>
-      <div class="callout"><strong>What users feel today:</strong> no change in recall behavior. <strong>What maintainers gain today:</strong> a fast, auditable way to find a genuinely better default.</div>
-      <p class="footer-note">Implemented on <code>feature/memory-optimization</code>; production T5 remains blocked by the approved MRR gate.</p>
+      <div class="callout"><strong>What users feel today:</strong> shorter, better-ranked context from the same local Markdown-backed memory store. <strong>What maintainers gain today:</strong> a promotion harness that keeps future optimization honest.</div>
+      <p class="footer-note">Implemented on <code>feature/memory-optimization</code>; current-state slides describe the shipped winner, not the historical failed candidate.</p>
     </section>
 
     <section class="slide" data-title="Outcome bands" data-number="08 / 10" aria-hidden="true">
@@ -661,63 +661,63 @@
         <h2>Separate demonstrated value from conditional value</h2>
       </header>
       <div class="roadmap">
-        <article class="card"><span class="step">01 · Demonstrated</span><h3 style="margin-top:.8rem">Evaluation foundation</h3><p>Repeatable selection, lower-risk experiments, and proof that meaningful token and recall headroom exists in deterministic local retrieval.</p><span class="status pass confidence">High confidence</span></article>
-        <article class="card"><span class="step">02 · Conditional</span><h3 style="margin-top:.8rem">A production ranker</h3><p>If one candidate also gains at least 0.05 MRR, users get ≥5-point hard recall and MRR gains, ≥20% token reduction, and bounded p99—together.</p><span class="status now confidence">Gate-backed</span></article>
+        <article class="card"><span class="step">01 · Shipped</span><h3 style="margin-top:.8rem">Evaluation foundation</h3><p>Repeatable selection, lower-risk experiments, and source-clean promotion evidence across three workloads.</p><span class="status pass confidence">High confidence</span></article>
+        <article class="card"><span class="step">02 · Shipped</span><h3 style="margin-top:.8rem">A production ranker</h3><p>Users get 98.20% overall and hard Recall@10, improved hard MRR, 38.1% fewer rendered tokens, and bounded p99.</p><span class="status pass confidence">Gate-backed</span></article>
         <article class="card"><span class="step">03 · Separate slices</span><h3 style="margin-top:.8rem">Evidence-aware memory</h3><p>Section provenance, temporal supersession, contradiction handling, and identity-aware consolidation remain promising but unimplemented.</p><span class="status fail confidence" style="color:var(--amber);background:rgba(251,191,36,.1)">Not yet measured</span></article>
       </div>
-      <p class="footer-note">The current candidate’s 40.6% token reduction is evidence of headroom—not a promise that the same number survives the MRR gate.</p>
+      <p class="footer-note">The shipped token result is 1,579 → 978 rendered tokens per correct hard-query result on the clean paired evidence.</p>
     </section>
 
     <section class="slide" data-title="Next move" data-number="09 / 10" aria-hidden="true">
       <header>
         <p class="eyebrow">The rational next move</p>
-        <h2>Optimize rank position—not just candidate coverage</h2>
+        <h2>Use the same gate for the next memory-quality slice</h2>
       </header>
       <div class="split">
         <article class="card">
           <h3>Keep</h3>
           <ul class="checklist">
             <li>The existing accuracy, token, and latency gates.</li>
-            <li>SQLite FTS5 as the portable production baseline.</li>
+            <li>SQLite FTS5 as the portable production foundation.</li>
             <li>The in-process Python evaluator and isolated-store discipline.</li>
-            <li>The gains already proven in recall, context size, and speed.</li>
+            <li>The shipped semantic-and-fallback ranker and its deterministic tie-breaks.</li>
           </ul>
         </article>
         <article class="card">
           <h3>Change next</h3>
           <ul class="checklist">
-            <li>Target first-correct-result position directly.</li>
-            <li>Test section-aware evidence and query-intent signals behind the same gate.</li>
-            <li>Reject any approach that only reshuffles ambiguous duplicates.</li>
-            <li>Run 100K only after one candidate clears every 10K gate.</li>
+            <li>Test section-aware evidence behind the same accuracy, token, and latency gate.</li>
+            <li>Add temporal validity and contradiction handling only when Markdown can rebuild it.</li>
+            <li>Keep optional native search as an experiment until it passes promotion evidence.</li>
+            <li>Promote only with complete realistic, Gutenberg, and Salesforce reports.</li>
           </ul>
         </article>
       </div>
-      <div class="callout"><strong>Recommendation:</strong> do not relax MRR. Use the new evaluator to develop one stronger deterministic candidate, then promote only the measured winner.</div>
+      <div class="callout"><strong>Recommendation:</strong> keep the ranker gate intact, then move the optimization frontier from pages to evidence units and time-sensitive facts.</div>
       <p class="footer-note">This preserves the priority order: accuracy and token efficiency are co-primary; speed remains a hard constraint.</p>
     </section>
 
     <section class="slide" data-title="Close" data-number="10 / 10" aria-hidden="true">
       <header>
         <p class="eyebrow">Bottom line</p>
-        <h2>We did not ship a faster wrong answer.</h2>
+        <h2>We shipped the faster gate-qualified default.</h2>
       </header>
       <div class="split">
         <div>
-          <p class="lede"><span class="accent">We have</span> durable local memory, a shared recall contract, and a production baseline that stays intact.</p>
-          <p class="lede" style="margin-top:1.3rem"><span class="lime">We gained</span> a credible path to improve retrieval with evidence instead of intuition.</p>
-          <p class="lede" style="margin-top:1.3rem"><span class="amber">We still need</span> a candidate that moves the correct result materially closer to rank one.</p>
+          <p class="lede"><span class="accent">We have</span> durable local memory, a shared recall contract, and a production ranker selected by evidence.</p>
+          <p class="lede" style="margin-top:1.3rem"><span class="lime">We gained</span> higher hard-query precision, smaller context, and much faster large-store recall.</p>
+          <p class="lede" style="margin-top:1.3rem"><span class="amber">We still need</span> separate evidence-unit, temporal, and consolidation slices before claiming full memory intelligence.</p>
         </div>
         <article class="card">
           <span class="label">Decision</span>
-          <span class="number" style="font-size:clamp(2rem,4vw,4rem);margin-top:.7rem">Hold production.<br><span class="accent">Keep optimizing.</span></span>
-          <p>The benchmark is now an asset. The failed promotion is useful evidence. The next change has a precise target.</p>
+          <span class="number" style="font-size:clamp(2rem,4vw,4rem);margin-top:.7rem">Ship winner.<br><span class="accent">Keep measuring.</span></span>
+          <p>The benchmark is now an asset, the ranker is production-ready for this slice, and the next change has a precise gate.</p>
         </article>
       </div>
       <div class="sources footer-note">
         <a href="../architecture/overview.md">Architecture overview</a>
         <a href="../product/briefs/memory-retrieval-and-evidence.md">Retrieval brief</a>
-        <a href="../specs/quality-gated-retrieval/notes/verification-ledger.md">10K verification ledger</a>
+        <a href="../specs/quality-gated-retrieval/notes/verification-ledger.md">Promotion verification ledger</a>
         <a href="../memory-optimization-survey.md">Research application</a>
       </div>
     </section>

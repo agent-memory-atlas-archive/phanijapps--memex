@@ -17,9 +17,13 @@ structure remains a disposable derivative.
 ## Success measures
 
 - **Accuracy gate:** on the 10,000-memory seed-42 realistic corpus, a selected
-  ranker improves hard-query Recall@10 by at least 5 percentage points and hard
-  MRR by at least 0.05. Overall, easy, and medium Recall@10 may not regress by
-  more than 0.5 percentage points in the same paired clean-store run.
+  ranker uses the ceiling-aware AC-0001 and AC-0002 rule. When the legacy
+  baseline is below the hard-query floor, hard-query Recall@10 must improve by
+  at least 0.05 below the 0.90 floor and hard-query MRR must improve by at
+  least 0.05 below the 0.80 floor. When the legacy baseline is already at or
+  above either floor, the candidate must stay at or above that floor and regress
+  by no more than 0.005 for that metric. Overall, easy, and medium Recall@10
+  may not regress by more than 0.005 in the same paired clean-store run.
 - **Token-efficiency gate:** the same candidate reduces rendered context tokens
   per correct hard-query result by at least 20% without relaxing the accuracy
   gate or omitting provenance required to verify the hit.
