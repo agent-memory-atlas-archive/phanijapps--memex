@@ -137,12 +137,13 @@ def memex_recall(
 ) -> RecallResultDict:
     """Search the index with BM25 and return ranked hits.
 
-    The query is reduced to alphanumeric tokens joined by OR, so
-    untrusted input never reaches the FTS5 MATCH parser. Expired and
-    soft-forgotten nodes are hidden by default.
+    The query is reduced to bounded alphanumeric tokens, searched with strict
+    AND matching, and retried with OR only when strict matching returns no
+    rows. Expired and soft-forgotten nodes are hidden by default.
 
     Args:
-        query: Free text; must contain one alphanumeric token.
+        query: Free text; must contain one alphanumeric token and stay within
+            the shared query-work cap.
         top_k: Default 10; schema bounds [1, 100].
         node_type: Optional equality filter on node type.
 
