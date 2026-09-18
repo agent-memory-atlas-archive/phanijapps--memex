@@ -95,7 +95,7 @@ experiment and never a required command-line tool.
   observable only across corpus generation, indexing, retrieval, and report
   serialization.
 - **Ranking and compatibility (AC-0011, AC-0012, AC-0013, AC-0020, AC-0021,
-  AC-0022): TDD plus integration.** Pure
+  AC-0022, AC-0023, AC-0024): TDD plus integration.** Pure
   fusion and tie-breaking fixtures pin deterministic order; the existing
   retriever and facade suites exercise the filter matrix, side effects, and
   output datatypes through the real SQLite index.
@@ -161,9 +161,8 @@ The sibling plan owns exact stubs and command lines.
 - [ ] **AC-0011.** For identical indexed pages and recall arguments, the shipped
       candidate makes the same per-page eligible/ineligible decision as the
       baseline for every member of `{node_type, time_range, all-tags matching,
-      include_expired, include_inactive}` and preserves the existing `top_k`
-      validation bounds. Ranked membership and order may differ after this
-      eligibility step.
+      include_expired, include_inactive}`. Ranked membership and order may
+      differ after this eligibility step.
 - [ ] **AC-0012.** Every returned hit has a unique slug after multiple candidate
       sources contribute the same page.
 - [ ] **AC-0013.** One explicit recall increments `access_count` exactly once
@@ -193,8 +192,13 @@ The sibling plan owns exact stubs and command lines.
 - [ ] **AC-0022.** A committed winner-discriminating fixture for which the
       paired report's selected candidate and baseline produce different first
       slugs returns the selected candidate's first slug through both
-      `Memex.recall` and `memex recall`; the production ranker identity recorded
-      by the test equals the selected candidate identity in that report.
+      `Memex.recall` and `memex recall`.
+- [ ] **AC-0023.** The shipped candidate preserves the existing `top_k`
+      validation bounds: 1 and 100 are accepted, while 0 and 101 raise the
+      existing `ValueError`.
+- [ ] **AC-0024.** The production ranker identity observed by the
+      winner-discriminating integration test equals the selected candidate
+      identity in the paired promotion report.
 
 ## Follow-ons
 

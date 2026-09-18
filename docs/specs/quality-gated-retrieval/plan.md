@@ -334,7 +334,7 @@ before production promotion.
 **Depends on:** T4
 
 **Spec map:** AC-0011, AC-0012, AC-0013, AC-0017, AC-0018, AC-0019, AC-0020,
-AC-0021, AC-0022
+AC-0021, AC-0022, AC-0023, AC-0024
 
 **Mode:** TDD plus manual QA
 
@@ -343,8 +343,9 @@ whether the production seam remains inside `BM25Retriever` or needs one narrow
 infrastructure collaborator. The discovery predicate is the T4 winner's input
 requirements; the constraint is the unchanged `Memex.recall` contract. The
 proof obligation is a real-index compatibility matrix for AC-0011, AC-0012,
-AC-0013, AC-0020, and AC-0021; a committed winner-discriminating API/CLI
-fixture for AC-0022; and isolated CLI observations for AC-0017, AC-0018, and
+AC-0013, AC-0020, AC-0021, and AC-0023; a committed winner-discriminating
+API/CLI fixture for AC-0022; an identity comparison with the paired promotion
+report for AC-0024; and isolated CLI observations for AC-0017, AC-0018, and
 AC-0019.
 
 **Approach:** move only the selected deterministic mechanism into the existing
