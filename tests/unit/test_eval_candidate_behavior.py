@@ -2,6 +2,7 @@ import pytest
 
 from eval.candidates import (
     MAX_RANK_SPACE_BOOST,
+    RRF_RANK_CONSTANT,
     CandidateRequest,
     CandidateSource,
     RankedCandidate,
@@ -34,6 +35,20 @@ def test_fusion_assigns_consecutive_one_based_ranks() -> None:
     ranked = reciprocal_rank_fusion(sources, top_k=3)
 
     assert [candidate.rank for candidate in ranked] == [1, 2, 3]
+
+
+def test_reciprocal_rank_fusion_uses_k60_formula() -> None:
+    sources = [
+        [RankedCandidate("beta", 1), RankedCandidate("alpha", 2)],
+        [RankedCandidate("alpha", 1), RankedCandidate("beta", 2)],
+    ]
+
+    ranked = reciprocal_rank_fusion(sources)
+
+    assert [(candidate.slug, candidate.score) for candidate in ranked] == [
+        ("alpha", (1 / (RRF_RANK_CONSTANT + 2)) + (1 / (RRF_RANK_CONSTANT + 1))),
+        ("beta", (1 / (RRF_RANK_CONSTANT + 1)) + (1 / (RRF_RANK_CONSTANT + 2))),
+    ]
 
 
 def test_title_body_tag_weights_feed_reciprocal_rank_fusion() -> None:

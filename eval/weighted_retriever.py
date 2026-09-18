@@ -11,6 +11,7 @@ from pathlib import Path
 
 from eval.candidates import (
     DEFAULT_LEXICAL_RECIPE,
+    RRF_RANK_CONSTANT,
     CandidateSource,
     RankedCandidate,
     fuse_candidate_sources,
@@ -19,6 +20,15 @@ from memex.domain.models import RecallHit, RecallResult, utc_now_iso
 
 _QUERY_TOKENS = re.compile(r"[a-z0-9]+")
 _CANDIDATE_SNIPPET_TOKENS = 12
+_SOURCE_LIMIT_MULTIPLIER = 4
+_SOURCE_LIMIT_CAP = 400
+_FIELD_CHANNELS = ("title", "body", "tags", "slug")
+_FIELD_CHANNEL_WEIGHTS = {
+    "title": DEFAULT_LEXICAL_RECIPE.title_weight,
+    "body": DEFAULT_LEXICAL_RECIPE.body_weight,
+    "tags": DEFAULT_LEXICAL_RECIPE.tag_weight,
+    "slug": DEFAULT_LEXICAL_RECIPE.title_weight,
+}
 _QUERY_STOP_WORDS = frozenset(
     {
         "a",
@@ -39,9 +49,7 @@ _QUERY_STOP_WORDS = frozenset(
     }
 )
 _SOURCE_SQL = """
-SELECT w.slug, bm25(
-    wiki_fts, :slug_weight, :title_weight, :body_weight, :tag_weight
-) AS score
+SELECT w.slug, bm25(wiki_fts) AS score
 FROM wiki_fts
 JOIN wiki_index w ON w.rowid = wiki_fts.rowid
 WHERE wiki_fts MATCH :match
@@ -70,7 +78,7 @@ WHERE wiki_fts MATCH ?
 class WeightedLexicalRetriever:
     """Run the weighted lexical candidate across the full recall boundary."""
 
-    identity = DEFAULT_LEXICAL_RECIPE.name
+    identity = "field-channel-rrf-k60"
 
     def __init__(self, db_path: Path) -> None:
         self._conn = sqlite3.connect(db_path)
@@ -92,16 +100,11 @@ class WeightedLexicalRetriever:
 
         started = time.perf_counter()
         now = utc_now_iso()
-        candidate_limit = min(top_k * 4, 400)
-        strict = self._search(" AND ".join(tokens), candidate_limit, now)
-        if len(strict) >= DEFAULT_LEXICAL_RECIPE.min_strict_candidates:
-            ranked = strict
-        else:
-            broad = self._search(" OR ".join(tokens), candidate_limit, now)
-            ranked = fuse_candidate_sources(
-                [CandidateSource("strict", strict, 3.0), CandidateSource("backoff", broad)],
-                top_k=candidate_limit,
-            )
+        candidate_limit = min(top_k * _SOURCE_LIMIT_MULTIPLIER, _SOURCE_LIMIT_CAP)
+        sources = [
+            self._search_channel(field, tokens, candidate_limit, now) for field in _FIELD_CHANNELS
+        ]
+        ranked = fuse_candidate_sources(sources, top_k=candidate_limit)
         ranked = self._diversify_titles(ranked, top_k)
         hits = self._hydrate(ranked, " OR ".join(tokens))
         self._record_access(hits)
@@ -114,31 +117,41 @@ class WeightedLexicalRetriever:
             search_time_ms=round(elapsed_ms, 3),
         )
 
-    def metadata(self) -> dict[str, str | int | float | bool]:
+    def metadata(self) -> dict[str, object]:
         return {
             **DEFAULT_LEXICAL_RECIPE.metadata(),
-            "query_strategy": "field-qualified-and-with-or-backoff",
+            "name": self.identity,
+            "query_strategy": "independent-field-channel-rrf",
+            "channels": _FIELD_CHANNELS,
+            "channel_weights": _FIELD_CHANNEL_WEIGHTS,
+            "source_limit_multiplier": _SOURCE_LIMIT_MULTIPLIER,
+            "source_limit_cap": _SOURCE_LIMIT_CAP,
+            "rank_constant": RRF_RANK_CONSTANT,
             "snippet_tokens": _CANDIDATE_SNIPPET_TOKENS,
             "complete": True,
         }
 
-    def _search(self, match: str, limit: int, now: str) -> list[RankedCandidate]:
+    def _search_channel(
+        self,
+        field: str,
+        tokens: Sequence[str],
+        limit: int,
+        now: str,
+    ) -> CandidateSource:
+        match = " OR ".join(f"{field}:{token}" for token in tokens)
         rows = self._conn.execute(
             _SOURCE_SQL,
             {
                 "match": match,
                 "limit": limit,
                 "now": now,
-                "slug_weight": 0.0,
-                "title_weight": DEFAULT_LEXICAL_RECIPE.title_weight,
-                "body_weight": DEFAULT_LEXICAL_RECIPE.body_weight,
-                "tag_weight": DEFAULT_LEXICAL_RECIPE.tag_weight,
             },
         ).fetchall()
-        return [
+        ranked = [
             RankedCandidate(str(row["slug"]), rank, float(row["score"]))
             for rank, row in enumerate(rows, start=1)
         ]
+        return CandidateSource(field, ranked, _FIELD_CHANNEL_WEIGHTS[field])
 
     def _hydrate(
         self,

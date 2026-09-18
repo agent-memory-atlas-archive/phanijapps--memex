@@ -16,6 +16,98 @@ def _build_index(data_dir: Path, pages: list[tuple[str, str]]) -> IndexManager:
     return index
 
 
+def _index_nodes(data_dir: Path, nodes: list[WikiNode]) -> IndexManager:
+    store = WikiStore(data_dir)
+    index = IndexManager(data_dir / "mem.db")
+    for node in nodes:
+        index.update_record(store.write(node))
+    return index
+
+
+def _node(
+    title: str,
+    body: str,
+    *,
+    slug: str = "",
+    tags: list[str] | None = None,
+    status: str = "active",
+) -> WikiNode:
+    return WikiNode(
+        type="entity",
+        title=title,
+        body=body,
+        id=slug or "",
+        slug=slug,
+        tags=tags or [],
+        status=status,
+    )
+
+
+def test_multichannel_rrf_searches_fields_independently(data_dir: Path) -> None:
+    index = _index_nodes(
+        data_dir,
+        [
+            _node("Atlas title", "neutral details"),
+            _node("Body only", "atlas details"),
+            _node("Tagged only", "neutral details", tags=["atlas"]),
+            _node("Stable identifier", "neutral details", slug="atlas-identifier"),
+        ],
+    )
+    retriever = WeightedLexicalRetriever(data_dir / "mem.db")
+
+    result = retriever.retrieve("atlas", top_k=10)
+
+    assert result.search_engine == "field-channel-rrf-k60"
+    assert {hit.title for hit in result.hits} == {
+        "Atlas title",
+        "Body only",
+        "Tagged only",
+        "Stable identifier",
+    }
+    retriever.close()
+    index.close()
+
+
+def test_multichannel_rrf_overfetches_before_k60_fusion(data_dir: Path) -> None:
+    index = _index_nodes(
+        data_dir,
+        [
+            _node("Atlas title blocker", "neutral", slug="aardvark-title"),
+            _node("Body blocker", "atlas", slug="aardvark-body"),
+            _node("Slug blocker", "neutral", slug="atlas-aardvark"),
+            _node("Atlas target", "atlas", slug="atlas-target"),
+        ],
+    )
+    retriever = WeightedLexicalRetriever(data_dir / "mem.db")
+
+    result = retriever.retrieve("atlas", top_k=1)
+
+    assert [hit.slug for hit in result.hits] == ["atlas-target"]
+    retriever.close()
+    index.close()
+
+
+def test_multichannel_rrf_deduplicates_with_stable_ties(data_dir: Path) -> None:
+    index = _index_nodes(
+        data_dir,
+        [
+            _node("Beta", "atlas"),
+            _node("Alpha", "atlas"),
+            _node("Gamma", "atlas"),
+        ],
+    )
+    retriever = WeightedLexicalRetriever(data_dir / "mem.db")
+
+    first = retriever.retrieve("atlas", top_k=3)
+    second = retriever.retrieve("atlas", top_k=3)
+
+    assert [hit.slug for hit in first.hits] == ["alpha", "beta", "gamma"]
+    assert [hit.slug for hit in second.hits] == ["alpha", "beta", "gamma"]
+    assert [hit.rank for hit in first.hits] == [1, 2, 3]
+    retriever.close()
+    index.close()
+
+
 def test_weighted_candidate_diversifies_duplicate_titles_and_records_access_once(
     data_dir: Path,
 ) -> None:
@@ -83,7 +175,7 @@ def test_weighted_candidate_prefers_title_match_over_repeated_body_match(
     index.close()
 
 
-def test_weighted_candidate_uses_or_backoff_after_strict_results(data_dir: Path) -> None:
+def test_weighted_candidate_searches_all_query_terms(data_dir: Path) -> None:
     index = _build_index(
         data_dir,
         [
@@ -96,7 +188,6 @@ def test_weighted_candidate_uses_or_backoff_after_strict_results(data_dir: Path)
 
     result = retriever.retrieve("alpha beta", top_k=3)
 
-    assert result.hits[0].title == "Exact"
     assert {hit.title for hit in result.hits} == {"Exact", "Alpha only", "Beta only"}
     retriever.close()
     index.close()
