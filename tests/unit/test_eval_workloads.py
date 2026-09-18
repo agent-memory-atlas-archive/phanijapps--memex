@@ -1,0 +1,155 @@
+# STUB: AC-0033
+import gzip
+import hashlib
+import json
+import socket
+import urllib.request
+from pathlib import Path
+
+import pytest
+
+from eval.corpus import QuerySpec
+from eval.realistic import RealisticCorpusGenerator
+from eval.workloads import (
+    GUTENBERG_SOURCE_URL,
+    GutenbergImportError,
+    first_hit_rank,
+    import_gutenberg_catalog,
+    load_gutenberg_workload,
+    load_salesforce_workload,
+    ndcg_at_k,
+    validate_queries,
+)
+
+
+def test_positive_queries_require_relevance_and_family() -> None:
+    with pytest.raises(ValueError, match="query family"):
+        validate_queries([QuerySpec("find book", ["book"], "hard", family="")])
+
+
+def test_realistic_queries_are_answerable_and_family_labeled(tmp_path: Path) -> None:
+    corpus = RealisticCorpusGenerator(tmp_path, seed=42).generate(120)
+
+    validate_queries(corpus.queries)
+
+    debug = [query for query in corpus.queries if query.family == "debug-symptom"]
+    sessions = [query for query in corpus.queries if query.family == "session-verb"]
+    assert debug
+    assert sessions
+    assert any(len(query.expected_slugs) > 1 for query in debug)
+    assert any(len(query.expected_slugs) > 1 for query in sessions)
+
+
+def test_gutenberg_import_is_bounded_offline_and_deterministic(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    catalog = tmp_path / "pg_catalog.csv.gz"
+    rows = (
+        "Text#,Type,Issued,Title,Language,Authors,Subjects,LoCC,Bookshelves\n"
+        '1342,Text,1998-06-01,Pride and Prejudice,en,"Austen, Jane",Fiction,PR,\n'
+        '158,Text,1994-09-01,Emma,en,"Austen, Jane",Fiction,PR,\n'
+    )
+    with gzip.open(catalog, "wt", encoding="utf-8", newline="") as handle:
+        handle.write(rows)
+    digest = hashlib.sha256(catalog.read_bytes()).hexdigest()
+    provenance = tmp_path / "pg_catalog.provenance.json"
+    provenance.write_text(
+        json.dumps(
+            {
+                "canonical_source_url": GUTENBERG_SOURCE_URL,
+                "retrieved_at": "2026-09-18",
+                "upstream_last_modified": "Fri, 18 Sep 2026 00:00:00 GMT",
+                "sha256": digest,
+            }
+        ),
+        encoding="utf-8",
+    )
+    fixture_root = tmp_path / "fixtures"
+    output = fixture_root / "gutenberg-books.jsonl"
+
+    monkeypatch.setattr(socket, "create_connection", _fail_network)
+    monkeypatch.setattr(urllib.request, "urlopen", _fail_network)
+    first = import_gutenberg_catalog(
+        catalog=catalog,
+        provenance=provenance,
+        output=output,
+        fixture_root=fixture_root,
+    )
+    first_bytes = output.read_bytes()
+    second = import_gutenberg_catalog(
+        catalog=catalog,
+        provenance=provenance,
+        output=output,
+        fixture_root=fixture_root,
+    )
+
+    assert first == second
+    assert output.read_bytes() == first_bytes
+    loaded = load_gutenberg_workload(output)
+    author_queries = [query for query in loaded.queries if query.family == "book-author"]
+    assert any(
+        set(query.expected_slugs) == {"gutenberg-1342", "gutenberg-158"} for query in author_queries
+    )
+    assert b"Pride and Prejudice" in first_bytes
+    assert b"It is a truth universally acknowledged" not in first_bytes
+
+
+def test_gutenberg_import_rejects_schema_and_output_escape(tmp_path: Path) -> None:
+    catalog = tmp_path / "pg_catalog.csv.gz"
+    with gzip.open(catalog, "wt", encoding="utf-8", newline="") as handle:
+        handle.write("Text#,Title,Unexpected\n1,Example,nope\n")
+    provenance = tmp_path / "pg_catalog.provenance.json"
+    provenance.write_text("{}", encoding="utf-8")
+
+    with pytest.raises(GutenbergImportError, match="schema_invalid"):
+        import_gutenberg_catalog(
+            catalog=catalog,
+            provenance=provenance,
+            output=tmp_path / "fixtures" / "books.jsonl",
+            fixture_root=tmp_path / "fixtures",
+        )
+    with pytest.raises(GutenbergImportError, match="path_rejected"):
+        import_gutenberg_catalog(
+            catalog=catalog,
+            provenance=provenance,
+            output=tmp_path / "outside.jsonl",
+            fixture_root=tmp_path / "fixtures",
+        )
+
+
+def test_salesforce_fixture_is_fact_only_and_offline(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(socket, "create_connection", _fail_network)
+    monkeypatch.setattr(urllib.request, "urlopen", _fail_network)
+
+    workload = load_salesforce_workload()
+
+    validate_queries(workload.queries)
+    hard_alias = [
+        query for query in workload.queries if query.query == "FSC customer financial relationships"
+    ]
+    assert hard_alias
+    assert set(hard_alias[0].expected_slugs) == {
+        "salesforce-actionable-segmentation",
+        "salesforce-financial-account",
+    }
+    raw_fixture = Path("eval/data/salesforce-facts.jsonl").read_text(encoding="utf-8")
+    assert "source_url" in raw_fixture
+    assert "page_body" not in raw_fixture
+    assert "automated scraping" not in raw_fixture
+
+
+def test_multi_label_metrics_ignore_negative_queries() -> None:
+    assert first_hit_rank(["miss", "target-b"], ["target-a", "target-b"]) == 2
+    assert ndcg_at_k(["target-b", "miss", "target-a"], ["target-a", "target-b"], 10) > 0.90
+    validate_queries(
+        [
+            QuerySpec("no known book", [], "hard", family="negative", negative=True),
+            QuerySpec("known book", ["book"], "hard", family="book-title"),
+        ]
+    )
+
+
+def _fail_network(*args: object, **kwargs: object) -> None:
+    del args, kwargs
+    raise AssertionError("network access is forbidden")

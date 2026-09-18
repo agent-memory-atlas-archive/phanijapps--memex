@@ -100,3 +100,30 @@ def test_weighted_candidate_uses_or_backoff_after_strict_results(data_dir: Path)
     assert {hit.title for hit in result.hits} == {"Exact", "Alpha only", "Beta only"}
     retriever.close()
     index.close()
+
+
+def test_eligibility_filters_apply_before_source_limit(data_dir: Path) -> None:
+    index = _build_index(
+        data_dir,
+        [
+            ("Alpha expired", "alpha alpha alpha alpha alpha"),
+            ("Alpha active", "alpha beta"),
+        ],
+    )
+    expired_slug = str(
+        index.connection.execute(
+            "SELECT slug FROM wiki_index WHERE title = ?", ("Alpha expired",)
+        ).fetchone()["slug"]
+    )
+    index.connection.execute(
+        "UPDATE wiki_index SET expires_at = ? WHERE slug = ?",
+        ("2000-01-01T00:00:00Z", expired_slug),
+    )
+    index.connection.commit()
+    retriever = WeightedLexicalRetriever(data_dir / "mem.db")
+
+    result = retriever.retrieve("alpha", top_k=1)
+
+    assert [hit.title for hit in result.hits] == ["Alpha active"]
+    retriever.close()
+    index.close()

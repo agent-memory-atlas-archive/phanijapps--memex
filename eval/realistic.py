@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import random
 import uuid
+from collections.abc import Sequence
 from pathlib import Path
 
 from eval.corpus import CorpusResult, QuerySpec
@@ -381,8 +382,8 @@ class RealisticCorpusGenerator:
             ]
         )
         trigger = rng.choice(["deploying", "under load", "after failover", "during scale-up"])
-        adjective = rng.choice(["failing", "slow", "erroring"])
-        topic = f"debug:{symptom}:{system}"
+        symptom_topic = f"debug-symptom:{symptom}"
+        system_topic = f"debug-system:{symptom}:{system}"
 
         body = (
             f"When {trigger}, {system} exhibits {symptom}.\n\n"
@@ -395,9 +396,9 @@ class RealisticCorpusGenerator:
         )
         title = f"{symptom} in {system}"
         tags = ["debugging", system.split()[-1] if " " in system else system]
-        self._write("entity", title, body, tags, topic=topic)
-        self._add_query(symptom, topic, "medium")
-        self._add_query(f"why is {system} {adjective}", topic, "hard")
+        self._write("entity", title, body, tags, topic=[symptom_topic, system_topic])
+        self._add_query(symptom, symptom_topic, "medium")
+        self._add_query(f"why is {system} showing {symptom}", system_topic, "hard")
 
     def _gen_api_contract(self) -> None:
         rng = self._rng
@@ -574,7 +575,8 @@ class RealisticCorpusGenerator:
         month = rng.randint(1, 12)
         day = rng.randint(1, 28)
         date = f"2024-{month:02d}-{day:02d}"
-        topic = f"session:{date}"
+        task_verb = task.split()[0]
+        topic = f"session-verb:{task_verb}"
         pattern = rng.choice(PATTERNS)
         service = rng.choice(SERVICES)
         topics = rng.choice(
@@ -604,7 +606,7 @@ class RealisticCorpusGenerator:
             session_id=f"sess-{uuid.uuid4().hex[:8]}",
             topic=topic,
         )
-        self._add_query(task.split()[0], topic, "hard")
+        self._add_query(task_verb, topic, "hard")
 
     # ------------------------------------------------------------- helpers
 
@@ -615,13 +617,15 @@ class RealisticCorpusGenerator:
         body: str,
         tags: list[str],
         session_id: str | None = None,
-        topic: str | None = None,
+        topic: str | Sequence[str] | None = None,
     ) -> WikiNode:
         base = slugify(title)[:64] or "node"
         slug = unique_slug(base, self._used_slugs)
         self._used_slugs.add(slug)
         if topic is not None:
-            self._topic_slugs.setdefault(topic, []).append(slug)
+            topics = [topic] if isinstance(topic, str) else topic
+            for item in topics:
+                self._topic_slugs.setdefault(item, []).append(slug)
 
         now = utc_now_iso()
         node_id = str(uuid.uuid4())
@@ -671,5 +675,13 @@ class RealisticCorpusGenerator:
             expected = list(self._topic_slugs.get(topic, []))
             if not expected:
                 continue
-            resolved.append(QuerySpec(query=query, expected_slugs=expected, difficulty=difficulty))
+            resolved.append(
+                QuerySpec(
+                    query=query,
+                    expected_slugs=expected,
+                    difficulty=difficulty,
+                    family=topic.split(":", 1)[0],
+                    corpus="realistic",
+                )
+            )
         return resolved

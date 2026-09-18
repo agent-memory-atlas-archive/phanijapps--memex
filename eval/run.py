@@ -87,6 +87,14 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Empty root for paired stores (default: a fresh temporary directory)",
     )
+
+    import_cmd = sub.add_parser(
+        "import-gutenberg",
+        help="Import a local official Project Gutenberg catalog into the committed fixture",
+    )
+    import_cmd.add_argument("--catalog", type=Path, required=True)
+    import_cmd.add_argument("--provenance", type=Path, required=True)
+    import_cmd.add_argument("--output", type=Path, required=True)
     return parser
 
 
@@ -226,6 +234,21 @@ def main(argv: list[str] | None = None) -> int:
                 sort_keys=True,
             )
         )
+        return 0
+
+    if args.command == "import-gutenberg":
+        from eval.workloads import GutenbergImportError, import_gutenberg_catalog
+
+        try:
+            source = import_gutenberg_catalog(
+                catalog=args.catalog,
+                provenance=args.provenance,
+                output=args.output,
+            )
+        except GutenbergImportError as exc:
+            print(json.dumps({"category": exc.category, "reason": str(exc)}), file=sys.stderr)
+            return 2
+        print(json.dumps(source.to_dict(), sort_keys=True))
         return 0
 
     if args.data_dir is not None:
