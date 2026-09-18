@@ -77,6 +77,7 @@ CANDIDATE_NAMES: tuple[CandidateName, ...] = (
     "rgapi-0.1.22",
 )
 WORKLOAD_NAMES: tuple[WorkloadName, ...] = ("realistic", "gutenberg", "salesforce")
+PROMOTION_WORKLOADS: tuple[WorkloadName, ...] = ("realistic", "gutenberg", "salesforce")
 CLOSED_FAILURE_CATEGORIES: set[FailureCategory] = {
     "dependency_unavailable",
     "invalid_query",
@@ -360,6 +361,12 @@ def _validate_config(config: EvaluationConfig) -> None:
         raise ValueError(f"unknown workload: {unknown[0]}")
     if config.promotion_mode and (config.seed, config.top_k) != (PROMOTION_SEED, PROMOTION_TOP_K):
         raise ValueError("promotion mode requires seed=42 and top_k=10")
+    if config.promotion_mode:
+        missing = [name for name in PROMOTION_WORKLOADS if name not in config.workloads]
+        if missing:
+            required = ", ".join(PROMOTION_WORKLOADS)
+            absent = ", ".join(missing)
+            raise ValueError(f"promotion mode requires workloads: {required}; missing: {absent}")
 
 
 def _preflight_output_dirs(config: EvaluationConfig) -> None:

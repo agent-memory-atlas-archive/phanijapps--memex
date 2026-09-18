@@ -44,6 +44,7 @@ _SEMANTIC_SCAFFOLDING_PHRASES = (
 # example used column 1 while documenting it as body; body is column 2.
 _SNIPPET_BODY_COLUMN = 2
 _SNIPPET_TITLE_COLUMN = 1
+_WINNER_SNIPPET_TOKENS = 12
 
 _LEGACY_BASE_SQL = """
 SELECT
@@ -61,9 +62,9 @@ SELECT
     w.slug, w.file_path, w.title, w.node_type, w.importance,
     w.tags, w.created, w.updated, w.last_access, w.transcript_ref, w.status,
     bm25(wiki_fts, 1.0, 1.0, :body_weight, 1.0) AS score,
-    snippet(wiki_fts, 2, '<mark>', '</mark>', '...', 12)
+    snippet(wiki_fts, 2, '<mark>', '</mark>', '...', :snippet_tokens)
         AS body_snippet,
-    snippet(wiki_fts, 1, '<mark>', '</mark>', '...', 12)
+    snippet(wiki_fts, 1, '<mark>', '</mark>', '...', :snippet_tokens)
         AS title_snippet
 FROM wiki_fts
 JOIN wiki_index w ON w.rowid = wiki_fts.rowid
@@ -125,6 +126,32 @@ def _drop_semantic_scaffolding(tokens: list[str]) -> list[str]:
     rejected.update(_how_does_handle_indexes(tokens))
     rejected.update(_why_is_showing_indexes(tokens))
     return [token for index, token in enumerate(tokens) if index not in rejected]
+
+
+def production_ranker_metadata() -> dict[str, object]:
+    """Describe the promoted production retrieval algorithm."""
+    return {
+        "name": _WINNER_SEARCH_ENGINE,
+        "query_strategy": "strict-and-weighted-fts5",
+        "zero_hit_fallback": "broad-or-weighted-fts5",
+        "token_strategy": "lowercase-alphanumeric-safe-stable-dedupe",
+        "removed_scaffolding": (
+            "instead of",
+            "how does ... handle",
+            "how many",
+            "why is ... showing",
+            "switch from",
+        ),
+        "column_weights": {
+            "slug": 1.0,
+            "title": 1.0,
+            "body": _WINNER_BODY_WEIGHT,
+            "tags": 1.0,
+        },
+        "snippet_tokens": _WINNER_SNIPPET_TOKENS,
+        "tie_break": "score-then-slug",
+        "safe_query_boundary": "alphanumeric tokens only",
+    }
 
 
 class BM25Retriever:
@@ -285,7 +312,10 @@ class BM25Retriever:
             tags=tags,
             include_expired=include_expired,
             include_inactive=include_inactive,
-            extra_params={"body_weight": _WINNER_BODY_WEIGHT},
+            extra_params={
+                "body_weight": _WINNER_BODY_WEIGHT,
+                "snippet_tokens": _WINNER_SNIPPET_TOKENS,
+            },
         )
         if not rows:
             rows, total = self._execute_ranked_query(
@@ -297,7 +327,10 @@ class BM25Retriever:
                 tags=tags,
                 include_expired=include_expired,
                 include_inactive=include_inactive,
-                extra_params={"body_weight": _WINNER_BODY_WEIGHT},
+                extra_params={
+                    "body_weight": _WINNER_BODY_WEIGHT,
+                    "snippet_tokens": _WINNER_SNIPPET_TOKENS,
+                },
             )
 
         hits = self._hits_from_rows(rows, limit)

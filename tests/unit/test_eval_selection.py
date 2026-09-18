@@ -14,6 +14,7 @@ from eval.corpus import CorpusResult, QuerySpec
 from eval.runner import HitResult
 from eval.selection import (
     CLOSED_FAILURE_CATEGORIES,
+    PROMOTION_WORKLOADS,
     EvaluationConfig,
     GitState,
     WorkloadMetrics,
@@ -308,6 +309,7 @@ def test_promotion_uses_one_baseline_per_actual_scale_and_never_duplicates_p99(
         EvaluationConfig(
             promotion_mode=True,
             candidates=("field-channel-rrf-k60",),
+            workloads=PROMOTION_WORKLOADS,
             git_state=GitState(source_revision="abc123", git_dirty=False),
         )
     )
@@ -357,6 +359,7 @@ def test_promotion_skips_large_scale_when_no_candidate_clears_quality_gate(
         EvaluationConfig(
             promotion_mode=True,
             candidates=("field-channel-rrf-k60",),
+            workloads=PROMOTION_WORKLOADS,
             git_state=GitState(source_revision="abc123", git_dirty=False),
         )
     )
@@ -432,7 +435,11 @@ def test_incomplete_large_scale_retains_closed_failure_and_scale_status() -> Non
         baselines={10_000: _fake_measured(1.0), 100_000: _fake_measured(2.0)},
         candidates={10_000: _fake_measured(1.0), 100_000: large_candidate},
         corpora={10_000: _fake_corpus(10_000), 100_000: _fake_corpus(100_000)},
-        config=EvaluationConfig(promotion_mode=True, candidates=("field-channel-rrf-k60",)),
+        config=EvaluationConfig(
+            promotion_mode=True,
+            candidates=("field-channel-rrf-k60",),
+            workloads=PROMOTION_WORKLOADS,
+        ),
         git_state=GitState(source_revision="abc123", git_dirty=False),
     )
 
@@ -457,6 +464,50 @@ def test_promotion_rejects_noncanonical_seed_or_top_k(seed: int, top_k: int) -> 
                 candidates=("field-channel-rrf-k60",),
             )
         )
+
+
+def test_promotion_rejects_missing_workload_set() -> None:
+    with pytest.raises(
+        ValueError,
+        match=(
+            "promotion mode requires workloads: realistic, gutenberg, salesforce; "
+            "missing: gutenberg, salesforce"
+        ),
+    ):
+        run_selection(
+            EvaluationConfig(
+                promotion_mode=True,
+                candidates=("field-channel-rrf-k60",),
+                workloads=("realistic",),
+            )
+        )
+
+
+def test_promotion_accepts_explicit_complete_workload_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        selection,
+        "_run_in_root",
+        lambda config, root, sizes, git_state, started: selection.SelectionReport(
+            metadata={"promotion_mode": True, "promotion_eligible": False},
+            query_manifest=(),
+            candidates={},
+            selected_candidate=None,
+            failures=(),
+        ),
+    )
+
+    report = run_selection(
+        EvaluationConfig(
+            promotion_mode=True,
+            candidates=("field-channel-rrf-k60",),
+            workloads=PROMOTION_WORKLOADS,
+            git_state=GitState(source_revision="abc123", git_dirty=False),
+        )
+    )
+
+    assert report.failures == ()
 
 
 def test_selection_failure_categories_are_closed_and_bounded(tmp_path: Path) -> None:

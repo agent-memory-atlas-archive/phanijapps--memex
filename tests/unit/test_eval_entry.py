@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from eval.run import main as eval_main
+from memex.infrastructure.bm25_retriever import production_ranker_metadata
 
 
 def test_eval_corpus_basic(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -77,7 +78,13 @@ def test_eval_retrieval_writes_reproducible_json(tmp_path: Path) -> None:
     assert payload["run"]["seed"] == 7
     assert payload["run"]["git_commit"]
     assert isinstance(payload["run"]["git_dirty"], bool)
-    assert payload["run"]["ranker"]["name"] == "sqlite-fts5-bm25"
+    assert payload["run"]["ranker"] == json.loads(json.dumps(production_ranker_metadata()))
+    assert payload["run"]["ranker"]["name"] == "semantic-and-fallback-fts5"
+    assert payload["run"]["ranker"]["query_strategy"] == "strict-and-weighted-fts5"
+    assert payload["run"]["ranker"]["zero_hit_fallback"] == "broad-or-weighted-fts5"
+    assert payload["run"]["ranker"]["column_weights"]["body"] == 2.0
+    assert payload["run"]["ranker"]["snippet_tokens"] == 12
+    assert payload["run"]["ranker"]["tie_break"] == "score-then-slug"
     assert payload["metrics"]["total_queries"] > 0
 
 
@@ -98,6 +105,28 @@ def test_eval_retrieval_rejects_nonempty_store(tmp_path: Path) -> None:
         eval_main(["retrieval", "--size", "20", "--data-dir", str(tmp_path)])
 
     assert (tmp_path / "unrelated.txt").read_text(encoding="utf-8") == "do not delete"
+
+
+def test_eval_selection_promotion_requires_explicit_complete_workload_set(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(
+        ValueError,
+        match=(
+            "promotion mode requires workloads: realistic, gutenberg, salesforce; "
+            "missing: gutenberg, salesforce"
+        ),
+    ):
+        eval_main(
+            [
+                "selection",
+                "--promotion",
+                "--candidate",
+                "field-channel-rrf-k60",
+                "--data-dir",
+                str(tmp_path / "paired"),
+            ]
+        )
 
 
 def test_cli_no_longer_has_eval_subcommand() -> None:

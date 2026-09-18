@@ -51,7 +51,7 @@ def rank_rgapi_candidate(query: str, docs_dir: Path, *, top_k: int) -> RgapiCand
     if top_k < 1:
         raise ValueError("top_k must be positive")
     try:
-        import rgapi  # type: ignore[import-untyped]
+        import rgapi  # type: ignore[import-not-found]
     except ImportError:
         return _incomplete("dependency_unavailable")
 

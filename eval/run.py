@@ -21,6 +21,7 @@ from eval.corpus import CorpusResult
 from eval.runner import format_report, run_retrieval_eval
 from eval.selection import CANDIDATE_NAMES, WORKLOAD_NAMES, EvaluationConfig, run_selection
 from memex import Memex
+from memex.infrastructure.bm25_retriever import production_ranker_metadata
 from memex.infrastructure.config import MemexConfig
 
 
@@ -186,11 +187,7 @@ def _run_retrieval(args: argparse.Namespace, eval_dir: Path, *, ephemeral: bool)
                 "realistic": args.realistic,
                 "data_dir": str(eval_dir),
                 "ephemeral_data_dir": ephemeral,
-                "ranker": {
-                    "name": "sqlite-fts5-bm25",
-                    "query_strategy": "or",
-                    "fields": ["slug", "title", "body", "tags"],
-                },
+                "ranker": production_ranker_metadata(),
             },
             "metrics": asdict(report),
         }
