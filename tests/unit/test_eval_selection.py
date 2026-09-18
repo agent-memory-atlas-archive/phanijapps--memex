@@ -572,13 +572,13 @@ def test_selection_rejects_workload_without_hard_queries() -> None:
 
 
 def test_selection_report_includes_workload_manifest_and_ndcg() -> None:
-    measured = _fake_measured(1.0)
+    measured = _difficulty_measured()
 
     result = selection._candidate_selection(
         name="field-channel-rrf-k60",
         baselines={10_000: measured},
         candidates={10_000: measured},
-        corpora={10_000: _fake_corpus(10_000)},
+        corpora={10_000: _difficulty_corpus(10_000)},
         config=EvaluationConfig(
             promotion_mode=True,
             candidates=("field-channel-rrf-k60",),
@@ -589,9 +589,15 @@ def test_selection_report_includes_workload_manifest_and_ndcg() -> None:
 
     workload_metrics = cast(dict[str, selection.JsonValue], result.to_dict()["workload_metrics"])
     overall = cast(dict[str, selection.JsonValue], workload_metrics["overall"])
+    by_difficulty = cast(
+        dict[str, dict[str, selection.JsonValue]], workload_metrics["by_difficulty"]
+    )
     by_workload = cast(dict[str, selection.JsonValue], workload_metrics["by_workload"])
     realistic = cast(dict[str, selection.JsonValue], by_workload["realistic"])
     realistic_family = cast(dict[str, selection.JsonValue], realistic["by_family"])
+    realistic_difficulty = cast(
+        dict[str, dict[str, selection.JsonValue]], realistic["by_difficulty"]
+    )
 
     assert result.to_dict()["workload_manifest"] == [
         {"name": "realistic", "fixture_version": "generated", "source_manifest": "seed-42"},
@@ -606,8 +612,28 @@ def test_selection_report_includes_workload_manifest_and_ndcg() -> None:
             "source_manifest": "salesforce-facts.jsonl citations",
         },
     ]
-    assert overall["ndcg_at_10"] == 1.0
-    assert realistic_family["unit"] == 1.0
+    assert overall["ndcg_at_10"] == pytest.approx(2 / 3)
+    assert realistic_family["unit"] == pytest.approx(2 / 3)
+    assert by_difficulty["easy"] == {
+        "query_count": 1,
+        "recall_at_10": 1.0,
+        "mrr": 1.0,
+        "ndcg_at_10": 1.0,
+    }
+    assert by_difficulty["medium"] == {
+        "query_count": 1,
+        "recall_at_10": 1.0,
+        "mrr": 1.0,
+        "ndcg_at_10": 1.0,
+    }
+    assert by_difficulty["hard"] == {
+        "query_count": 1,
+        "recall_at_10": 0.0,
+        "mrr": 0.0,
+        "ndcg_at_10": 0.0,
+    }
+    assert realistic_difficulty == by_difficulty
+    assert "easy query" not in json.dumps(workload_metrics)
 
 
 def test_large_selection_manifest_is_bounded_by_family_and_difficulty() -> None:
@@ -682,6 +708,19 @@ def _fake_corpus(size: int) -> CorpusResult:
     )
 
 
+def _difficulty_corpus(size: int) -> CorpusResult:
+    return CorpusResult(
+        memories_written=size,
+        queries=[
+            QuerySpec("easy query", ["easy-target"], "easy", family="unit", corpus="realistic"),
+            QuerySpec(
+                "medium query", ["medium-target"], "medium", family="unit", corpus="realistic"
+            ),
+            QuerySpec("hard query", ["hard-target"], "hard", family="unit", corpus="realistic"),
+        ],
+    )
+
+
 def _fake_measured(p99_ms: float) -> selection._MeasuredRun:
     hit = _recall_hit("target", snippet="hard query")
     result = HitResult("hard query", "hard", ["target"], ["target"], 1, p99_ms)
@@ -693,6 +732,38 @@ def _fake_measured(p99_ms: float) -> selection._MeasuredRun:
     )
     summary = selection.RunSummary(1, (0,), (("target",),), p99_ms, 1, 0, True)
     return selection._MeasuredRun([result], [observation], summary, {"name": "fake"})
+
+
+def _difficulty_measured() -> selection._MeasuredRun:
+    queries = [
+        QuerySpec("easy query", ["easy-target"], "easy", family="unit", corpus="realistic"),
+        QuerySpec("medium query", ["medium-target"], "medium", family="unit", corpus="realistic"),
+        QuerySpec("hard query", ["hard-target"], "hard", family="unit", corpus="realistic"),
+    ]
+    results = [
+        HitResult("easy query", "easy", ["easy-target"], ["easy-target"], 1, 1.0),
+        HitResult("medium query", "medium", ["medium-target"], ["medium-target"], 1, 1.0),
+        HitResult("hard query", "hard", ["hard-target"], ["miss"], None, 1.0),
+    ]
+    observations = [
+        QueryContextObservation(
+            query=query.query,
+            difficulty=query.difficulty,
+            expected_slugs=query.expected_slugs,
+            hits=[_recall_hit(result.actual_slugs[0])],
+        )
+        for query, result in zip(queries, results, strict=True)
+    ]
+    summary = selection.RunSummary(
+        len(results),
+        tuple(range(len(results))),
+        tuple(tuple(result.actual_slugs) for result in results),
+        1.0,
+        2,
+        0,
+        True,
+    )
+    return selection._MeasuredRun(results, observations, summary, {"name": "fake"})
 
 
 def _write_memory(memex: Memex, *, title: str, body: str) -> str:

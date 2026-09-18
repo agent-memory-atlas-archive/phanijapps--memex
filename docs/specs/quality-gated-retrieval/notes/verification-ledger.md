@@ -1,6 +1,6 @@
 # Quality-gated retrieval verification ledger
 
-## 2026-09-18 — T4 canonical selection
+## 2026-09-18 — T4 pre-repair selection evidence
 
 Command:
 
@@ -14,6 +14,11 @@ The run used source revision
 `top_k=10`, 10,000 generated memories, and all 20,800 generated queries. The
 retained PR-only report was
 `/tmp/memex-t4-promotion-oegQXl/selection-promotion.json`.
+
+This entry is historical pre-repair evidence. It predates the amended
+AC-0037/AC-0038 workload-label and multi-workload gates, so its synthetic
+scores are not comparable promotion evidence for the repaired benchmark series.
+Only post-repair sections in this ledger are comparable promotion evidence.
 
 The `weighted-lexical-rrf` candidate completed the 10K run:
 
@@ -32,8 +37,9 @@ evaluation budget expired. It was recorded as incomplete and failed closed.
 
 No candidate cleared the complete 10K eligibility gate. The evaluator
 therefore did not run the 100K phase, selected no candidate, and left production
-retrieval unchanged, as required by T4's no-winner path. T5 and T6 remain
-blocked on a candidate that satisfies the approved hard-query MRR threshold.
+retrieval unchanged, as required by T4's no-winner path. At that time, T5 and
+T6 were blocked on a candidate that satisfied the then-approved hard-query MRR
+threshold.
 
 Repository verification after the bounded-evaluation change:
 

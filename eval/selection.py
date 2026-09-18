@@ -19,7 +19,7 @@ from contextlib import nullcontext
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal
+from typing import Literal, cast
 
 from eval.comparison import (
     ABSOLUTE_P99_LIMITS_MS,
@@ -1017,11 +1017,23 @@ def _workload_report(
         )
         by_workload[name] = {
             **metrics.to_dict(),
+            "by_difficulty": cast(
+                dict[str, JsonValue],
+                _metrics_by_difficulty(
+                    [query for query in queries if query.corpus == name],
+                    [
+                        result
+                        for query, result in zip(queries, results, strict=False)
+                        if query.corpus == name
+                    ],
+                ),
+            ),
             "verdict": validate_workload_metrics(metrics).to_dict(),
         }
     overall = _metrics_for_queries(queries, results)
     return {
         "overall": overall.to_dict(),
+        "by_difficulty": cast(dict[str, JsonValue], _metrics_by_difficulty(queries, results)),
         "overall_verdict": validate_workload_metrics(overall).to_dict(),
         "by_workload": by_workload,
     }
@@ -1048,15 +1060,38 @@ def _metrics_for_queries(
     return WorkloadMetrics(
         recall_at_10=_paired_recall_at_10(paired),
         mrr=sum(_reciprocal_rank(query, result) for query, result in paired) / len(paired),
-        ndcg_at_10=sum(
-            ndcg_at_k(result.actual_slugs, query.expected_slugs, 10) for query, result in paired
-        )
-        / len(paired),
+        ndcg_at_10=_paired_ndcg_at_10(paired),
         hard_recall_at_10=_paired_recall_at_10(hard) if hard else 0.0,
         hard_mrr=_paired_mrr(hard) if hard else 0.0,
         by_family=by_family,
         hard_query_count=len(hard),
     )
+
+
+def _metrics_by_difficulty(
+    queries: Sequence[QuerySpec],
+    results: Sequence[HitResult],
+) -> dict[str, dict[str, JsonValue]]:
+    paired = [
+        (query, result)
+        for query, result in zip(queries, results, strict=False)
+        if not query.negative
+    ]
+    return {
+        difficulty: _difficulty_metrics(
+            [(query, result) for query, result in paired if query.difficulty == difficulty]
+        )
+        for difficulty in ("easy", "medium", "hard")
+    }
+
+
+def _difficulty_metrics(paired: Sequence[tuple[QuerySpec, HitResult]]) -> dict[str, JsonValue]:
+    return {
+        "query_count": len(paired),
+        "recall_at_10": _paired_recall_at_10(paired),
+        "mrr": _paired_mrr(paired),
+        "ndcg_at_10": _paired_ndcg_at_10(paired),
+    }
 
 
 def _paired_recall_at_10(paired: Sequence[tuple[QuerySpec, HitResult]]) -> float:
@@ -1078,6 +1113,14 @@ def _paired_mrr(paired: Sequence[tuple[QuerySpec, HitResult]]) -> float:
     if not paired:
         return 0.0
     return sum(_reciprocal_rank(query, result) for query, result in paired) / len(paired)
+
+
+def _paired_ndcg_at_10(paired: Sequence[tuple[QuerySpec, HitResult]]) -> float:
+    if not paired:
+        return 0.0
+    return sum(
+        ndcg_at_k(result.actual_slugs, query.expected_slugs, 10) for query, result in paired
+    ) / len(paired)
 
 
 def _overall_workload_metrics(report: Mapping[str, JsonValue]) -> WorkloadMetrics:
