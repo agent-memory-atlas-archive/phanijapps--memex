@@ -68,7 +68,10 @@ leave the repository working after each task.
   empty explicit directories. No test or measurement touches `~/.memex`.
 - The `rgapi` experiment is pinned to 0.1.22, isolated from base installation,
   and covered by Apache-2.0 license evidence. Its transitive `fastcore`
-  dependency is part of the dependency review.
+  dependency and embedded Rust crates are part of the dependency review.
+- Candidate paths canonicalize under the resolved eval store's `docs` root;
+  path rejection, query sanitization, and retained diagnostic sanitization
+  follow the controls owned by the spec and `docs/architecture/overview.md`.
 - Logs and reports contain queries only when they come from the generated eval
   corpus; production memory content and tool inputs are never logged.
 
@@ -84,7 +87,9 @@ leave the repository working after each task.
   compatibility, deduplication, rank numbering, production-path determinism,
   winner identity, and access-statistic behavior.
 - `tests/integration/test_rgapi_candidate.py` owns the optional native binding
-  and subprocess prohibition and skips only when the optional extra is absent.
+  subprocess prohibition, path confinement, literal query boundary, bounded
+  work, and dependency admission, and skips only when the optional extra is
+  absent.
 - Paired seed-42 reports at 10K and 100K are goal-based PR evidence, not
   committed golden outputs; committed tests use small deterministic fixtures.
 
@@ -93,7 +98,7 @@ leave the repository working after each task.
 | Output | Task | Verification | Retention |
 | --- | --- | --- | --- |
 | User guide | T6 | `uv run mkdocs build --strict` and content pin | Repository-durable at `docs/gitpages/guide.md` |
-| Architecture map | T6 | architecture content pin and strict docs build | Repository-durable at `docs/architecture/overview.md` |
+| Architecture map | T6 | retrieval trust-boundary content pin and strict docs build | Repository-durable at `docs/architecture/overview.md` |
 | Decision rationale | T4, T6 | paired report plus implementation-note content pin | Repository-durable at `docs/gitpages/implementation-notes.md` |
 | Evaluation evidence | T4 | schema validation, rerun command, and reviewer inspection | PR-only generated JSON; stable post-closeout owner is the committed evaluator plus implementation note |
 | Release history | T6, only if default changes | changelog content pin | Repository-durable at `docs/product/changelog.md` |
@@ -154,7 +159,10 @@ An invalid query keeps the existing `ValueError`. Empty results remain valid.
 An optional dependency import failure disables only that experiment. An
 incomplete candidate result is represented explicitly and fails promotion.
 A failed measurement or malformed report stops selection rather than falling
-back to a partial comparison.
+back to a partial comparison. File-search results canonicalize and confine
+under the eval store's resolved `docs` root before they are read or reported;
+path resolution failures become a sanitized incomplete result. Retained error
+records use a closed category set and never serialize exception strings.
 
 ### Quality attributes
 
@@ -170,7 +178,11 @@ device names, usernames, profile paths, and user-specific filesystem paths.
 extra. Static contract evidence comes from its PyPI metadata and source
 manifests. The official ripgrep crates embedded by the package supply walking
 and matching; Memex supplies ranking, filters, deduplication, and promotion
-policy. Base installation and production fallback depend only on SQLite FTS5.
+policy. Query patterns reuse the current safe-token language, literal-escape
+terms, and carry explicit byte, time, and result limits. Base installation and
+production fallback depend only on SQLite FTS5. Dependency admission records
+lock integrity, provenance, maintenance, licenses, and Python plus Rust SCA
+coverage; absent coverage requires the spec's Ask-first decision.
 
 ## Tasks
 
@@ -290,7 +302,7 @@ baseline.
 
 **Depends on:** T1
 
-**Spec map:** AC-0014, AC-0015, AC-0016
+**Spec map:** AC-0014, AC-0015, AC-0016, AC-0025, AC-0026, AC-0027
 
 **Mode:** goal-based integration
 
@@ -298,11 +310,19 @@ baseline.
 uses the optional environment, structured rows, an incomplete-result fixture,
 and a process-spawn sentinel (AC-0015, AC-0016). A base-environment job removes the extra and runs
 the existing write/rebuild/recall smoke path with `PATH` containing no `rg`.
-That base job verifies AC-0014.
+That base job verifies AC-0014. The optional job adds escape, traversal,
+symlink, junction, non-regular-file, resolve-error, regex-metacharacter,
+1,024-byte boundary, timeout, and max-result fixtures for AC-0025 and AC-0026.
+The dependency admission check verifies AC-0027 and stops for the Ask-first
+decision when either ecosystem lacks scanner coverage.
 
 **Approach:** declare a pinned optional evaluation dependency, adapt structured
 search rows to candidate slugs, sort explicitly, and propagate `complete` and
-`stop_reason` into the comparison record. Do not import it from `src/memex`.
+`stop_reason` into the comparison record. Resolve each returned file before
+reading it, require confinement under the canonical docs root, and reject
+aliases and non-regular files. Build literal patterns from the existing safe
+token language before applying the fixed work limits. Do not import the
+optional package from `src/memex`.
 
 **Done when:** the optional integration and dependency/license audit pass while
 the base environment remains fully functional without the module or CLI.
@@ -312,7 +332,7 @@ the base environment remains fully functional without the module or CLI.
 **Depends on:** T2, T3
 
 **Spec map:** AC-0001, AC-0002, AC-0003, AC-0004, AC-0005, AC-0006, AC-0007,
-AC-0008, AC-0009, AC-0010, AC-0016
+AC-0008, AC-0009, AC-0010, AC-0016, AC-0028
 
 **Mode:** goal-based integration
 
@@ -320,7 +340,8 @@ AC-0008, AC-0009, AC-0010, AC-0016
 10K for every candidate and at 100K for the baseline plus candidates still
 eligible after the 10K gate. Validate report schema and rerun the selected 10K
 candidate once for deterministic quality and ordering. The explicit empty and
-non-empty data-directory cases verify AC-0010.
+non-empty data-directory cases verify AC-0010. Failure-category and prohibited-
+content canaries verify AC-0028 against the retained JSON.
 
 **Approach:** execute baseline and candidate in one runner environment at one
 source revision, retain sanitized JSON as PR evidence, select only a candidate

@@ -34,7 +34,7 @@ experiment and never a required command-line tool.
 | Semantic role | Applicability | Destination | Owner | Expected evidence | Closeout condition |
 | --- | --- | --- | --- | --- | --- |
 | User-facing promise | Recall ranking and result compactness change when a candidate ships | `docs/gitpages/guide.md` | Memex maintainers | Updated recall description and verified commands | The guide describes the selected behavior without exposing experimental candidates as supported configuration |
-| Current architecture | Retrieval ownership and the offline evaluation boundary change | `docs/architecture/overview.md` | Memex maintainers | Updated recall flow and `eval/` responsibility | The map names the shipped ranker, deterministic ordering, and disposable derived state |
+| Current architecture | Retrieval ownership and the offline evaluation boundary change | `docs/architecture/overview.md` | Memex maintainers | Updated recall flow, `eval/` responsibility, search confinement, safe-query, and report-sanitization controls | The map names the shipped ranker, deterministic ordering, disposable derived state, and retrieval-specific trust boundaries |
 | Decision rationale | A dependency and default-ranker decision must remain explainable | `docs/gitpages/implementation-notes.md` | Memex maintainers | Paired-result summary and dependency disposition | The note identifies the winning candidate or records that no candidate shipped |
 | Reproducible evidence | The promotion gate depends on measured comparisons | Evaluation JSON emitted by `eval.run` and retained as PR evidence | Implementing contributor | Baseline and candidate configuration, source revision, environment, metrics, and gate verdict | Reviewers can reproduce the decision from the committed evaluator and the recorded command; generated corpora and reports are not committed |
 | Release history | Applicable only when the default ranker changes | `docs/product/changelog.md` | Memex maintainers | One user-visible retrieval entry | Closeout verifies an entry exists only if the default changed |
@@ -54,6 +54,9 @@ experiment and never a required command-line tool.
   `RecallHit` and `RecallResult` shapes.
 - Treat a timed-out or truncated candidate search as incomplete and ineligible
   for promotion; never score partial results as a complete run.
+- Confine every candidate file to the resolved `MEMEX_DATA_DIR/docs` root,
+  preserve the existing safe query-token boundary, and emit only bounded,
+  sanitized evaluation diagnostics.
 - Run every evaluation with a fresh `MEMEX_DATA_DIR` outside the developer's
   real `~/.memex` and leave Markdown pages as the source of truth.
 
@@ -65,6 +68,8 @@ experiment and never a required command-line tool.
   contract.
 - Relax a corpus, accuracy, token, latency, determinism, portability, or
   compatibility gate.
+- Accept degraded dependency-vulnerability coverage when a Python or Rust SCA
+  scanner cannot inspect the pinned dependency tree.
 - Add a persistent field, index schema, top-level package, storage engine, or
   network service.
 
@@ -81,6 +86,8 @@ experiment and never a required command-line tool.
   a hosted search service, or a background daemon in this slice.
 - Never expose an experimental ranker as user-selectable production
   configuration before it passes the promotion gate.
+- Never include memory content, credentials, raw non-generated queries,
+  absolute or user-specific paths, or stack traces in retained reports.
 
 ## Testing Strategy
 
@@ -88,8 +95,8 @@ experiment and never a required command-line tool.
   AC-0005, AC-0006): TDD.** Unit tests use
   fixed baseline/candidate records at the exact threshold and immediately on
   each failing side, so every comparison can independently turn red.
-- **Reproducible corpus evaluation (AC-0007, AC-0008, AC-0009,
-  AC-0010): goal-based integration.**
+- **Reproducible corpus evaluation (AC-0007, AC-0008, AC-0009, AC-0010,
+  AC-0028): goal-based integration.**
   The offline evaluator runs baseline and candidate against fresh seed-42
   stores because accuracy, rendered-token cost, latency, and completeness are
   observable only across corpus generation, indexing, retrieval, and report
@@ -99,8 +106,8 @@ experiment and never a required command-line tool.
   fusion and tie-breaking fixtures pin deterministic order; the existing
   retriever and facade suites exercise the filter matrix, side effects, and
   output datatypes through the real SQLite index.
-- **Optional Python integration (AC-0014, AC-0015, AC-0016): goal-based
-  packaging and integration.** Base-install tests run without `rgapi`; the optional path runs
+- **Optional Python integration (AC-0014, AC-0015, AC-0016, AC-0025,
+  AC-0026, AC-0027): goal-based packaging and integration.** Base-install tests run without `rgapi`; the optional path runs
   only where the pinned package is available and proves structured in-process
   search without invoking a child process.
 - **User path (AC-0017, AC-0018, AC-0019): manual QA backed by an end-to-end
@@ -202,6 +209,31 @@ The sibling plan owns exact stubs and command lines.
 - [ ] **AC-0024.** The production ranker identity observed by the
       winner-discriminating integration test equals the selected candidate
       identity in the paired promotion report.
+- [ ] **AC-0025.** The optional file-search candidate admits only relative
+      results that resolve to regular `.md` files under the resolved
+      `MEMEX_DATA_DIR/docs` root. Absolute results, `..` traversal, symlink or
+      junction escapes, non-regular files, and `Path.resolve()` failures
+      (`OSError` or `RuntimeError`) mark the candidate incomplete and make its
+      promotion verdict fail without exposing the rejected path.
+- [ ] **AC-0026.** The optional candidate derives its pattern only from the
+      same lower-case `[a-z0-9]+` tokens accepted by the FTS5 path and
+      literal-escapes every token before regex compilation. Compilation is
+      refused before search when the joined UTF-8 pattern first exceeds 1,024
+      bytes; search uses `timeout_ms=100` and `max_results=10_000`, and either
+      limit marks the result incomplete under AC-0016.
+- [ ] **AC-0027.** Before the optional dependency lands, its admission record
+      contains the intended PyPI identity, exact version and lockfile integrity,
+      publisher provenance, maintenance evidence, direct and transitive
+      licenses, and Python and embedded-Rust vulnerability-scan results. A
+      missing scanner or uninspectable dependency tree blocks admission unless
+      the owner explicitly approves the degraded coverage under `Ask first`.
+- [ ] **AC-0028.** Every retained evaluator failure uses one category from
+      `{dependency_unavailable, invalid_query, path_rejected,
+      incomplete_search, measurement_failed, report_invalid}` and a bounded
+      non-identifying stop reason. A canary fixture proves the report contains
+      no memory content, credentials, raw non-generated query, absolute or
+      user-specific path, hostname, device name, username, profile path, or
+      stack trace.
 
 ## Follow-ons
 
