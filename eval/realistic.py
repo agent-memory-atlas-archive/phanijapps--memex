@@ -362,7 +362,11 @@ class RealisticCorpusGenerator:
         self._write("entity", title, body, tags, topic=topic)
         self._add_query(f"how does {service} handle {concern}", topic, "medium")
         self._add_query(f"{service} architecture", topic, "easy")
-        self._add_query(f"why {pattern} instead of {alternative}", topic, "hard")
+        self._add_query(
+            f"why {pattern} instead of {alternative} for {service} {concern}",
+            topic,
+            "hard",
+        )
 
     def _gen_debugging(self) -> None:
         rng = self._rng

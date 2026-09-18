@@ -2,6 +2,7 @@
 import gzip
 import hashlib
 import json
+import re
 import socket
 import urllib.request
 from pathlib import Path
@@ -38,6 +39,25 @@ def test_realistic_queries_are_answerable_and_family_labeled(tmp_path: Path) -> 
     assert sessions
     assert any(len(query.expected_slugs) > 1 for query in debug)
     assert any(len(query.expected_slugs) > 1 for query in sessions)
+
+
+def test_realistic_architecture_hard_queries_expose_expected_discriminators(
+    tmp_path: Path,
+) -> None:
+    corpus = RealisticCorpusGenerator(tmp_path, seed=42).generate(120)
+
+    hard_architecture = [
+        query for query in corpus.queries if query.family == "arch" and query.difficulty == "hard"
+    ]
+
+    assert hard_architecture
+    for query in hard_architecture:
+        query_tokens = set(re.findall(r"[a-z0-9]+", query.query.casefold()))
+        for slug in query.expected_slugs:
+            slug_tokens = {
+                part for part in slug.split("-") if part != "design" and not part.isdigit()
+            }
+            assert slug_tokens <= query_tokens
 
 
 def test_gutenberg_import_is_bounded_offline_and_deterministic(
