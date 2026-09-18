@@ -46,10 +46,8 @@ class RgapiCandidateResult:
         }
 
 
-def rank_rgapi_candidate(query: str, docs_dir: Path, *, top_k: int) -> RgapiCandidateResult:
+def rank_rgapi_candidate(query: str, docs_dir: Path) -> RgapiCandidateResult:
     """Return deterministic Markdown slugs from the optional in-process rgapi binding."""
-    if top_k < 1:
-        raise ValueError("top_k must be positive")
     try:
         import rgapi  # type: ignore[import-not-found]
     except ImportError:
@@ -84,7 +82,7 @@ def rank_rgapi_candidate(query: str, docs_dir: Path, *, top_k: int) -> RgapiCand
 
     slugs = sorted({path.stem for path in validated})
     ranked = tuple(
-        RankedCandidate(slug=slug, rank=rank) for rank, slug in enumerate(slugs[:top_k], start=1)
+        RankedCandidate(slug=slug, rank=rank) for rank, slug in enumerate(slugs, start=1)
     )
     return RgapiCandidateResult(ranked=ranked, complete=True)
 

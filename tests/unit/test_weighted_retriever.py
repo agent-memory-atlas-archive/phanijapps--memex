@@ -322,27 +322,36 @@ def test_semantic_fallback_fts5_stabilizes_ties_ranks_and_access(data_dir: Path)
     index.close()
 
 
-def test_weighted_candidate_diversifies_duplicate_titles_and_records_access_once(
+def test_weighted_candidate_uses_pure_rrf_tie_break_and_records_access_once(
     data_dir: Path,
 ) -> None:
-    index = _build_index(
+    index = _index_nodes(
         data_dir,
         [
-            ("Alpha repeated", "alpha beta details"),
-            ("Alpha repeated", "alpha beta details"),
-            ("Alpha repeated", "alpha beta details"),
-            ("Alpha second", "alpha beta details"),
-            ("Alpha third", "alpha beta details"),
+            _node("Alpha repeated", "alpha beta details", slug="aaa-repeated"),
+            _node("Alpha repeated", "alpha beta details", slug="aab-repeated"),
+            _node("Alpha repeated", "alpha beta details", slug="aac-repeated"),
+            _node("Alpha second", "alpha beta details", slug="zzz-second"),
+            _node("Alpha third", "alpha beta details", slug="zzz-third"),
         ],
     )
     retriever = WeightedLexicalRetriever(data_dir / "mem.db")
 
     result = retriever.retrieve("alpha beta", top_k=3)
+    metadata = retriever.metadata()
 
-    assert len(result.hits) == 3
-    assert len({hit.slug for hit in result.hits}) == 3
-    assert len({hit.title for hit in result.hits}) == 3
+    assert [hit.slug for hit in result.hits] == [
+        "aaa-repeated",
+        "aab-repeated",
+        "aac-repeated",
+    ]
+    assert [hit.title for hit in result.hits] == [
+        "Alpha repeated",
+        "Alpha repeated",
+        "Alpha repeated",
+    ]
     assert [hit.rank for hit in result.hits] == [1, 2, 3]
+    assert metadata["final_tie_break"] == "descending-rrf-score-then-ascending-slug"
     counts = {
         str(row["slug"]): int(row["access_count"])
         for row in index.connection.execute(
@@ -350,7 +359,11 @@ def test_weighted_candidate_diversifies_duplicate_titles_and_records_access_once
         ).fetchall()
     }
     assert sum(counts.values()) == 3
-    assert {counts[hit.slug] for hit in result.hits} == {1}
+    assert {slug: counts[slug] for slug in [hit.slug for hit in result.hits]} == {
+        "aaa-repeated": 1,
+        "aab-repeated": 1,
+        "aac-repeated": 1,
+    }
     retriever.close()
     index.close()
 

@@ -95,6 +95,7 @@ SELECTION_SCHEMA_VERSION = 1
 SELECTION_MAX_QUERIES_PER_GROUP = 25
 SELECTION_QUERY_BOUND_THRESHOLD = 2_000
 TOKEN_BUDGET = context_injection.DEFAULT_MAX_TOKENS
+SQLITE_IN_BATCH_SIZE = 500
 WORKLOAD_RECALL_FLOOR = 0.90
 WORKLOAD_MRR_FLOOR = 0.50
 WORKLOAD_NDCG_FLOOR = 0.75
@@ -697,7 +698,7 @@ def _run_rgapi_query(
         raise RuntimeError("rgapi database is unavailable")
     started = time.perf_counter()
     try:
-        ranking = rank_rgapi_candidate(query.query, data_dir / "docs", top_k=top_k)
+        ranking = rank_rgapi_candidate(query.query, data_dir / "docs")
     except ValueError:
         return _CandidateOutcome(
             [],
@@ -715,7 +716,7 @@ def _run_rgapi_query(
             stop_reason,
             _json_mapping(ranking.ranker_metadata()),
         )
-    hits = _hydrate_rgapi_hits(conn, query.query, ranking.actual_slugs)
+    hits = _hydrate_rgapi_hits(conn, query.query, ranking.actual_slugs, top_k)
     _record_access(conn, hits)
     return _CandidateOutcome(
         hits,
@@ -727,26 +728,44 @@ def _run_rgapi_query(
 
 
 def _hydrate_rgapi_hits(
-    conn: sqlite3.Connection, query: str, slugs: Sequence[str]
+    conn: sqlite3.Connection, query: str, slugs: Sequence[str], top_k: int
 ) -> list[RecallHit]:
     if not slugs:
         return []
-    placeholders = ",".join("?" for _ in slugs)
     now = utc_now_iso()
-    rows = conn.execute(
-        "SELECT * FROM wiki_index WHERE slug IN (" + placeholders + ") "  # noqa: S608
-        "AND (expires_at IS NULL OR expires_at >= ?) "
-        "AND (valid_to IS NULL OR valid_to >= ?) "
-        "AND (status IS NULL OR status = 'active')",
-        (*slugs, now, now),
-    ).fetchall()
-    by_slug = {str(row["slug"]): row for row in rows}
-    links = _links_for_slugs(conn, slugs)
-    retained_slugs = [slug for slug in slugs if slug in by_slug]
+    by_slug: dict[str, sqlite3.Row] = {}
+    retained_slugs: list[str] = []
+    for batch in _batches(slugs, SQLITE_IN_BATCH_SIZE):
+        placeholders = ",".join("?" for _ in batch)
+        rows = conn.execute(
+            "SELECT * FROM wiki_index WHERE slug IN (" + placeholders + ") "  # noqa: S608
+            "AND (expires_at IS NULL OR expires_at >= ?) "
+            "AND (valid_to IS NULL OR valid_to >= ?) "
+            "AND (status IS NULL OR status = 'active')",
+            (*batch, now, now),
+        ).fetchall()
+        batch_by_slug = {str(row["slug"]): row for row in rows}
+        for slug in batch:
+            row = batch_by_slug.get(slug)
+            if row is None:
+                continue
+            by_slug[slug] = row
+            retained_slugs.append(slug)
+            if len(retained_slugs) == top_k:
+                break
+        if len(retained_slugs) == top_k:
+            break
+    if not retained_slugs:
+        return []
+    links = _links_for_slugs(conn, retained_slugs)
     return [
         _rgapi_hit(by_slug[slug], rank, query, links.get(slug, []))
         for rank, slug in enumerate(retained_slugs, start=1)
     ]
+
+
+def _batches(values: Sequence[str], size: int) -> list[Sequence[str]]:
+    return [values[index : index + size] for index in range(0, len(values), size)]
 
 
 def _links_for_slugs(conn: sqlite3.Connection, slugs: Sequence[str]) -> dict[str, list[str]]:

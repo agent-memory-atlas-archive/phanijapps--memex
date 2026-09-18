@@ -18,6 +18,10 @@ from eval.rgapi_candidate import (
     rank_rgapi_candidate,
     safe_rgapi_pattern,
 )
+from eval.selection import _hydrate_rgapi_hits
+from memex.domain.models import WikiNode
+from memex.infrastructure.index_manager import IndexManager
+from memex.infrastructure.wiki_store import WikiStore
 
 
 def test_base_install_recalls_without_rgapi_or_rg_executable(tmp_path: Path) -> None:
@@ -85,7 +89,7 @@ def test_rgapi_candidate_uses_in_process_structured_rows_without_spawn(
 
     monkeypatch.setattr(subprocess, "Popen", record_spawn)
 
-    result = rank_rgapi_candidate("needle", docs_dir, top_k=10)
+    result = rank_rgapi_candidate("needle", docs_dir)
 
     assert result == RgapiCandidateResult(
         ranked=result.ranked,
@@ -108,7 +112,7 @@ def test_rgapi_candidate_does_not_follow_symlink_outside_docs(tmp_path: Path) ->
     (docs_dir / "inside.md").write_text("ordinary page", encoding="utf-8")
     (docs_dir / "linked.md").symlink_to(outside)
 
-    result = rank_rgapi_candidate("outside-root-canary", docs_dir, top_k=10)
+    result = rank_rgapi_candidate("outside-root-canary", docs_dir)
 
     assert result.complete is True
     assert result.actual_slugs == []
@@ -135,7 +139,7 @@ def test_rgapi_candidate_hands_native_walker_non_following_symlink_policy(
         walker=_symlink_walker_canary(docs_dir, outside, open_outside_canary),
     )
 
-    result = rank_rgapi_candidate("outside-root-canary", docs_dir, top_k=10)
+    result = rank_rgapi_candidate("outside-root-canary", docs_dir)
 
     assert result.complete is True
     assert result.actual_slugs == []
@@ -166,7 +170,7 @@ def test_rgapi_candidate_rejects_bad_returned_paths_without_exposing_path(
     prepare(docs_dir)
     _install_fake_rgapi(monkeypatch, rows)
 
-    result = rank_rgapi_candidate("needle", docs_dir, top_k=10)
+    result = rank_rgapi_candidate("needle", docs_dir)
 
     assert result.complete is False
     assert result.stop_reason == "path_rejected"
@@ -191,7 +195,7 @@ def test_rgapi_candidate_rejects_returned_junction_before_admission(
 
     monkeypatch.setattr(Path, "is_junction", fake_is_junction)
 
-    result = rank_rgapi_candidate("needle", docs_dir, top_k=10)
+    result = rank_rgapi_candidate("needle", docs_dir)
 
     assert result.complete is False
     assert result.stop_reason == "path_rejected"
@@ -207,7 +211,7 @@ def test_rgapi_candidate_marks_timeout_or_max_results_incomplete(
     docs_dir.mkdir()
     _install_fake_rgapi(monkeypatch, [], complete=False, stop_reason=stop_reason)
 
-    result = rank_rgapi_candidate("needle", docs_dir, top_k=10)
+    result = rank_rgapi_candidate("needle", docs_dir)
 
     assert result.complete is False
     assert result.stop_reason == "incomplete_search"
@@ -224,7 +228,7 @@ def test_rgapi_candidate_passes_bounded_literal_pattern_and_work_limits(
     calls: list[dict[str, object]] = []
     _install_fake_rgapi(monkeypatch, ["alpha.md"], calls=calls)
 
-    result = rank_rgapi_candidate("C++ needle.*", docs_dir, top_k=10)
+    result = rank_rgapi_candidate("C++ needle.*", docs_dir)
 
     assert result.actual_slugs == ["alpha"]
     assert calls == [
@@ -240,6 +244,46 @@ def test_rgapi_candidate_passes_bounded_literal_pattern_and_work_limits(
             "case_sensitive": False,
         }
     ]
+
+
+def test_rgapi_selection_filters_eligibility_before_top_k(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    data_dir = tmp_path / "store"
+    docs_dir = data_dir / "docs"
+    docs_dir.mkdir(parents=True)
+    index = _rgapi_index(
+        data_dir,
+        [
+            WikiNode(type="entity", title="Alpha expired", body="needle", id="alpha-expired"),
+            WikiNode(type="entity", title="Beta inactive", body="needle", id="beta-inactive"),
+            WikiNode(type="entity", title="Gamma active", body="needle", id="gamma-active"),
+        ],
+    )
+    index.connection.execute(
+        "UPDATE wiki_index SET expires_at = ? WHERE slug = ?",
+        ("2000-01-01T00:00:00Z", "alpha-expired"),
+    )
+    index.connection.execute(
+        "UPDATE wiki_index SET status = ? WHERE slug = ?",
+        ("archived", "beta-inactive"),
+    )
+    index.connection.commit()
+    for slug in ("alpha-expired", "beta-inactive", "gamma-active"):
+        (docs_dir / f"{slug}.md").write_text("needle", encoding="utf-8")
+    _install_fake_rgapi(
+        monkeypatch,
+        ["alpha-expired.md", "beta-inactive.md", "gamma-active.md"],
+    )
+
+    ranking = rank_rgapi_candidate("needle", docs_dir)
+    hits = _hydrate_rgapi_hits(index.connection, "needle", ranking.actual_slugs, top_k=1)
+
+    assert ranking.actual_slugs[:3] == ["alpha-expired", "beta-inactive", "gamma-active"]
+    assert [hit.slug for hit in hits] == ["gamma-active"]
+    assert [hit.rank for hit in hits] == [1]
+    index.close()
 
 
 def test_rgapi_pattern_refuses_empty_or_oversized_queries() -> None:
@@ -294,3 +338,11 @@ def _symlink_walker_canary(
         assert follow_links is False
 
     return walk
+
+
+def _rgapi_index(data_dir: Path, nodes: list[WikiNode]) -> IndexManager:
+    store = WikiStore(data_dir)
+    index = IndexManager(data_dir / "mem.db")
+    for node in nodes:
+        index.update_record(store.write(node))
+    return index

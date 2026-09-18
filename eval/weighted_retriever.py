@@ -201,8 +201,7 @@ class WeightedLexicalRetriever:
         sources = [
             self._search_channel(field, tokens, candidate_limit, now) for field in _FIELD_CHANNELS
         ]
-        ranked = fuse_candidate_sources(sources, top_k=candidate_limit)
-        ranked = self._diversify_titles(ranked, top_k)
+        ranked = fuse_candidate_sources(sources, top_k=top_k)
         hits = self._hydrate(ranked, " OR ".join(tokens))
         self._record_access(hits)
         elapsed_ms = (time.perf_counter() - started) * 1000
@@ -224,6 +223,7 @@ class WeightedLexicalRetriever:
             "source_limit_multiplier": _SOURCE_LIMIT_MULTIPLIER,
             "source_limit_cap": _SOURCE_LIMIT_CAP,
             "rank_constant": RRF_RANK_CONSTANT,
+            "final_tie_break": "descending-rrf-score-then-ascending-slug",
             "snippet_tokens": _CANDIDATE_SNIPPET_TOKENS,
             "complete": True,
         }
@@ -282,36 +282,6 @@ class WeightedLexicalRetriever:
         for row in rows:
             links.setdefault(str(row["source_slug"]), []).append(str(row["target_slug"]))
         return links
-
-    def _diversify_titles(
-        self,
-        ranked: Sequence[RankedCandidate],
-        top_k: int,
-    ) -> list[RankedCandidate]:
-        if not ranked:
-            return []
-        placeholders = ",".join("?" for _ in ranked)
-        sql = f"SELECT slug, title FROM wiki_index WHERE slug IN ({placeholders})"  # noqa: S608
-        rows = self._conn.execute(sql, tuple(candidate.slug for candidate in ranked)).fetchall()
-        titles = {str(row["slug"]): str(row["title"]).casefold() for row in rows}
-        selected: list[RankedCandidate] = []
-        deferred: list[RankedCandidate] = []
-        seen_titles: set[str] = set()
-        for candidate in ranked:
-            title = titles.get(candidate.slug, candidate.slug)
-            if title in seen_titles:
-                deferred.append(candidate)
-                continue
-            seen_titles.add(title)
-            selected.append(candidate)
-            if len(selected) == top_k:
-                break
-        if len(selected) < top_k:
-            selected.extend(deferred[: top_k - len(selected)])
-        return [
-            RankedCandidate(candidate.slug, rank, candidate.score)
-            for rank, candidate in enumerate(selected, start=1)
-        ]
 
     def _record_access(self, hits: Sequence[RecallHit]) -> None:
         now = utc_now_iso()
