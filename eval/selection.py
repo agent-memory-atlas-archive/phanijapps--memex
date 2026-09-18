@@ -39,7 +39,7 @@ from eval.corpus import CorpusResult, QuerySpec
 from eval.realistic import RealisticCorpusGenerator
 from eval.rgapi_candidate import rank_rgapi_candidate
 from eval.runner import HitResult
-from eval.weighted_retriever import SinglePassWeightedFts5Retriever, WeightedLexicalRetriever
+from eval.weighted_retriever import SemanticAndFallbackFts5Retriever, WeightedLexicalRetriever
 from eval.workloads import (
     GUTENBERG_FIXTURE,
     SALESFORCE_FIXTURE,
@@ -58,7 +58,7 @@ from memex.domain.slugs import unique_slug
 from memex.infrastructure.config import MemexConfig
 from memex.infrastructure.wiki_store import TYPE_DIRS, hash_body
 
-type CandidateName = Literal["field-channel-rrf-k60", "single-pass-weighted-fts5", "rgapi-0.1.22"]
+type CandidateName = Literal["field-channel-rrf-k60", "semantic-and-fallback-fts5", "rgapi-0.1.22"]
 type WorkloadName = Literal["realistic", "gutenberg", "salesforce"]
 type FailureCategory = Literal[
     "dependency_unavailable",
@@ -73,7 +73,7 @@ type JsonValue = str | int | float | bool | list[JsonValue] | dict[str, JsonValu
 
 CANDIDATE_NAMES: tuple[CandidateName, ...] = (
     "field-channel-rrf-k60",
-    "single-pass-weighted-fts5",
+    "semantic-and-fallback-fts5",
     "rgapi-0.1.22",
 )
 WORKLOAD_NAMES: tuple[WorkloadName, ...] = ("realistic", "gutenberg", "salesforce")
@@ -671,8 +671,8 @@ def _weighted_retriever_for_candidate(
 ) -> WeightedLexicalRetriever | None:
     if name == "field-channel-rrf-k60":
         return WeightedLexicalRetriever(db_path)
-    if name == "single-pass-weighted-fts5":
-        return SinglePassWeightedFts5Retriever(db_path)
+    if name == "semantic-and-fallback-fts5":
+        return SemanticAndFallbackFts5Retriever(db_path)
     return None
 
 

@@ -202,20 +202,20 @@ def test_candidate_run_is_independent_of_baseline_access_state(tmp_path: Path) -
     ]
 
 
-def test_single_pass_weighted_candidate_is_selectable(tmp_path: Path) -> None:
+def test_semantic_fallback_weighted_candidate_is_selectable(tmp_path: Path) -> None:
     snapshot_dir = tmp_path / "snapshot"
     corpus = selection._generate_snapshot(snapshot_dir, size=12, seed=42)
 
     candidate = selection._run_candidate_pair(
-        name="single-pass-weighted-fts5",
+        name="semantic-and-fallback-fts5",
         snapshot_dir=snapshot_dir,
-        data_dir=tmp_path / "candidate-single-pass",
+        data_dir=tmp_path / "candidate-semantic-fallback",
         corpus=corpus,
         top_k=10,
     )
 
-    assert "single-pass-weighted-fts5" in selection.CANDIDATE_NAMES
-    assert candidate.ranker_metadata["name"] == "single-pass-weighted-fts5"
+    assert "semantic-and-fallback-fts5" in selection.CANDIDATE_NAMES
+    assert candidate.ranker_metadata["name"] == "semantic-and-fallback-fts5"
     assert candidate.summary.query_count == len(corpus.queries)
 
 
