@@ -47,6 +47,8 @@ from eval.workloads import (
     load_gutenberg_workload,
     load_salesforce_workload,
     ndcg_at_k,
+    validate_fixture_slug,
+    validate_fixture_slug_value,
     validate_queries,
 )
 from memex import __version__ as MEMEX_VERSION
@@ -476,9 +478,10 @@ def _append_fixture_workload(snapshot_dir: Path, fixture: Path, *, corpus: str) 
     rows = _fixture_rows(fixture)
     used_slugs = {path.stem for path in (snapshot_dir / "docs").rglob("*.md")}
     for row in rows:
-        slug = str(row["slug"])
+        slug = validate_fixture_slug_value(row.get("slug"), field=f"{corpus} fixture slug")
         if slug in used_slugs:
             slug = unique_slug(slug, used_slugs)
+            slug = validate_fixture_slug(slug, field=f"{corpus} fixture slug")
         used_slugs.add(slug)
         body = _fixture_body(row, corpus=corpus)
         now = utc_now_iso()
@@ -500,14 +503,46 @@ def _append_fixture_workload(snapshot_dir: Path, fixture: Path, *, corpus: str) 
             "links": [],
             "content_hash": hash_body(body),
         }
-        path = snapshot_dir / "docs" / TYPE_DIRS["entity"] / f"{slug}.md"
-        path.parent.mkdir(parents=True, exist_ok=True)
+        path = _fixture_page_path(snapshot_dir, slug)
         path.write_text(serialize_front_matter(front_matter, body), encoding="utf-8")
 
 
 def _fixture_rows(fixture: Path) -> list[dict[str, object]]:
     with fixture.open(encoding="utf-8") as handle:
-        return [json.loads(line) for line in handle]
+        rows = [json.loads(line) for line in handle]
+    for row in rows:
+        validate_fixture_slug_value(row.get("slug"), field="fixture slug")
+    return rows
+
+
+def _fixture_page_path(snapshot_dir: Path, slug: str) -> Path:
+    safe_slug = validate_fixture_slug(slug, field="fixture slug")
+    docs_root = snapshot_dir / "docs"
+    entity_root = docs_root / TYPE_DIRS["entity"]
+    if docs_root.is_symlink():
+        raise ValueError("fixture page destination escapes snapshot")
+    docs_root.mkdir(parents=True, exist_ok=True)
+    _reject_existing_symlink(docs_root, root=snapshot_dir)
+    if entity_root.is_symlink():
+        raise ValueError("fixture page destination escapes snapshot")
+    entity_root.mkdir(parents=True, exist_ok=True)
+    _reject_existing_symlink(entity_root, root=snapshot_dir)
+    path = entity_root / f"{safe_slug}.md"
+    if path.is_symlink():
+        raise ValueError("fixture page destination escapes snapshot")
+    resolved_root = entity_root.resolve(strict=True)
+    resolved_path = path.resolve(strict=False)
+    if not resolved_path.is_relative_to(resolved_root):
+        raise ValueError("fixture page destination escapes snapshot")
+    return path
+
+
+def _reject_existing_symlink(path: Path, *, root: Path) -> None:
+    current = root
+    for part in path.relative_to(root).parts:
+        current /= part
+        if current.is_symlink():
+            raise ValueError("fixture page destination escapes snapshot")
 
 
 def _fixture_body(row: Mapping[str, object], *, corpus: str) -> str:

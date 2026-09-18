@@ -16,6 +16,8 @@ from pathlib import Path
 from typing import Literal, cast
 
 from eval.corpus import CorpusResult, QuerySpec
+from memex.domain.errors import IndexManagerError
+from memex.infrastructure.index_manager import check_slug
 
 GUTENBERG_SOURCE_URL = "https://www.gutenberg.org/cache/epub/feeds/pg_catalog.csv.gz"
 GUTENBERG_MAX_COMPRESSED_BYTES = 16 * 1024 * 1024
@@ -78,10 +80,31 @@ def validate_queries(queries: Sequence[QuerySpec]) -> None:
     for query in queries:
         if not query.family:
             raise ValueError("query family is required")
+        for slug in query.expected_slugs:
+            validate_fixture_slug(slug, field="query relevant_slug")
         if query.negative:
             continue
         if not query.expected_slugs:
             raise ValueError("positive query requires relevant slugs")
+
+
+def validate_fixture_slug(slug: str, *, field: str = "slug") -> str:
+    """Return a fixture slug only when it is already a safe Memex slug."""
+    candidate = slug.strip()
+    try:
+        safe = check_slug(candidate)
+    except IndexManagerError as exc:
+        raise ValueError(f"invalid {field}") from exc
+    if safe != candidate:
+        raise ValueError(f"invalid {field}")
+    return safe
+
+
+def validate_fixture_slug_value(value: object, *, field: str = "slug") -> str:
+    """Reject non-string fixture values before slug validation."""
+    if not isinstance(value, str):
+        raise ValueError(f"invalid {field}")
+    return validate_fixture_slug(value, field=field)
 
 
 def ndcg_at_k(actual_slugs: Sequence[str], relevant_slugs: Sequence[str], k: int) -> float:
@@ -159,9 +182,12 @@ def _load_jsonl_workload(path: Path, *, corpus: str, default_family: str) -> Cor
         _validate_salesforce_cards(rows)
     queries: list[QuerySpec] = []
     for row in rows:
-        slug = _required_str(row, "slug")
+        slug = validate_fixture_slug(_required_str(row, "slug"), field=f"{corpus} fixture slug")
         for query in cast(list[Mapping[str, object]], row.get("queries", [])):
-            slugs = [str(value) for value in cast(list[object], query.get("relevant_slugs", []))]
+            slugs = [
+                validate_fixture_slug_value(value, field=f"{corpus} relevant_slug")
+                for value in cast(list[object], query.get("relevant_slugs", []))
+            ]
             queries.append(
                 QuerySpec(
                     _required_str(query, "query"),
@@ -309,8 +335,7 @@ def _read_gzip_limited(path: Path) -> bytes:
 def _author_index(rows: Sequence[Mapping[str, str]]) -> dict[str, list[str]]:
     index: dict[str, list[str]] = {}
     for row in rows:
-        book_id = _required_str(row, "Text#")
-        slug = f"gutenberg-{book_id}"
+        slug = _gutenberg_slug(row)
         for author in _authors(row):
             index.setdefault(_author_query_name(author), []).append(slug)
     return {author: sorted(slugs) for author, slugs in index.items()}
@@ -355,7 +380,7 @@ def _book_record(
     title = _required_str(row, "Title")
     authors = _authors(row)
     author_query = _author_query_name(authors[0]) if authors else ""
-    slug = f"gutenberg-{book_id}"
+    slug = _gutenberg_slug(row)
     relevant = [slug]
     author_slugs = list(author_index.get(author_query, relevant)) if author_query else relevant
     return {
@@ -390,6 +415,16 @@ def _book_record(
             },
         ],
     }
+
+
+def _gutenberg_slug(row: Mapping[str, str]) -> str:
+    try:
+        return validate_fixture_slug(
+            f"gutenberg-{_required_str(row, 'Text#')}",
+            field="Gutenberg Text#",
+        )
+    except ValueError as exc:
+        raise GutenbergImportError("schema_invalid", "invalid Gutenberg Text#") from exc
 
 
 def _hard_metadata_query(title: str, author_query: str) -> str:

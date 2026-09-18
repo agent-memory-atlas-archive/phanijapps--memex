@@ -844,6 +844,59 @@ def test_retained_report_excludes_prohibited_content_canaries(
     assert all(value not in retained for value in prohibited if value)
 
 
+def test_fixture_workload_rejects_unsafe_raw_row_slug(tmp_path: Path) -> None:
+    fixture = tmp_path / "fixture.jsonl"
+    _write_fixture_row(
+        fixture,
+        {
+            "slug": "../../escape",
+            "title": "Escaping Book",
+            "authors": [],
+            "metadata_only": True,
+        },
+    )
+
+    with pytest.raises(ValueError, match="invalid fixture slug"):
+        selection._append_fixture_workload(tmp_path / "snapshot", fixture, corpus="gutenberg")
+
+
+def test_fixture_page_path_rejects_symlinked_target(tmp_path: Path) -> None:
+    snapshot_dir = tmp_path / "snapshot"
+    entity_root = snapshot_dir / "docs" / "entities"
+    entity_root.mkdir(parents=True)
+    outside = tmp_path / "outside.md"
+    outside.write_text("outside", encoding="utf-8")
+    (entity_root / "gutenberg-1342.md").symlink_to(outside)
+
+    with pytest.raises(ValueError, match="destination escapes"):
+        selection._fixture_page_path(snapshot_dir, "gutenberg-1342")
+
+    assert outside.read_text(encoding="utf-8") == "outside"
+
+
+def test_fixture_workload_rejects_symlinked_entity_parent_before_write(tmp_path: Path) -> None:
+    fixture = tmp_path / "fixture.jsonl"
+    _write_fixture_row(
+        fixture,
+        {
+            "slug": "gutenberg-1342",
+            "title": "Pride and Prejudice",
+            "authors": [],
+            "metadata_only": True,
+        },
+    )
+    snapshot_dir = tmp_path / "snapshot"
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (snapshot_dir / "docs").mkdir(parents=True)
+    (snapshot_dir / "docs" / "entities").symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(ValueError, match="destination escapes"):
+        selection._append_fixture_workload(snapshot_dir, fixture, corpus="gutenberg")
+
+    assert list(outside.iterdir()) == []
+
+
 def _fake_corpus(size: int) -> CorpusResult:
     return CorpusResult(
         memories_written=size,
@@ -911,6 +964,10 @@ def _difficulty_measured() -> selection._MeasuredRun:
 
 def _write_memory(memex: Memex, *, title: str, body: str) -> str:
     return memex.write(WriteInput(type="entity", title=title, body=body)).slug
+
+
+def _write_fixture_row(path: Path, row: dict[str, object]) -> None:
+    path.write_text(json.dumps(row) + "\n", encoding="utf-8")
 
 
 def _patch_quality_metrics(

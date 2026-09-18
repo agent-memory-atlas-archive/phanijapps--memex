@@ -192,6 +192,38 @@ def test_gutenberg_import_rejects_schema_and_output_escape(tmp_path: Path) -> No
         )
 
 
+def test_gutenberg_import_rejects_unsafe_text_number_before_write(tmp_path: Path) -> None:
+    catalog = tmp_path / "pg_catalog.csv.gz"
+    with gzip.open(catalog, "wt", encoding="utf-8", newline="") as handle:
+        handle.write(
+            "Text#,Type,Issued,Title,Language,Authors,Subjects,LoCC,Bookshelves\n"
+            '"../../escape",Text,1998-06-01,Escaping Book,en,"Austen, Jane",Fiction,PR,\n'
+        )
+    digest = hashlib.sha256(catalog.read_bytes()).hexdigest()
+    provenance = tmp_path / "pg_catalog.provenance.json"
+    provenance.write_text(
+        json.dumps(
+            {
+                "canonical_source_url": GUTENBERG_SOURCE_URL,
+                "retrieved_at": "2026-09-18",
+                "sha256": digest,
+            }
+        ),
+        encoding="utf-8",
+    )
+    output = tmp_path / "fixtures" / "books.jsonl"
+
+    with pytest.raises(GutenbergImportError, match="schema_invalid"):
+        import_gutenberg_catalog(
+            catalog=catalog,
+            provenance=provenance,
+            output=output,
+            fixture_root=tmp_path / "fixtures",
+        )
+
+    assert not output.exists()
+
+
 def test_gutenberg_import_rejects_tilde_catalog_symlink(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -309,6 +341,46 @@ def test_salesforce_fixture_is_fact_only_and_offline(monkeypatch: pytest.MonkeyP
     assert "automated scraping" not in raw_fixture
 
 
+def test_gutenberg_fixture_load_rejects_unsafe_row_slug(tmp_path: Path) -> None:
+    fixture = tmp_path / "gutenberg-books.jsonl"
+    _write_workload_row(
+        fixture,
+        {
+            "slug": "../escape",
+            "title": "Escaping Book",
+            "metadata_only": True,
+            "provenance": _valid_gutenberg_provenance(),
+        },
+    )
+
+    with pytest.raises(ValueError, match="invalid gutenberg fixture slug"):
+        load_gutenberg_workload(fixture)
+
+
+def test_gutenberg_fixture_load_rejects_unsafe_relevant_slug(tmp_path: Path) -> None:
+    fixture = tmp_path / "gutenberg-books.jsonl"
+    _write_workload_row(
+        fixture,
+        {
+            "slug": "gutenberg-1342",
+            "title": "Pride and Prejudice",
+            "metadata_only": True,
+            "provenance": _valid_gutenberg_provenance(),
+            "queries": [
+                {
+                    "query": "Jane Austen",
+                    "relevant_slugs": ["../../escape"],
+                    "difficulty": "hard",
+                    "family": "book-author",
+                }
+            ],
+        },
+    )
+
+    with pytest.raises(ValueError, match="invalid gutenberg relevant_slug"):
+        load_gutenberg_workload(fixture)
+
+
 def test_multi_label_metrics_ignore_negative_queries() -> None:
     assert first_hit_rank(["miss", "target-b"], ["target-a", "target-b"]) == 2
     assert ndcg_at_k(["target-b", "miss", "target-a"], ["target-a", "target-b"], 10) > 0.90
@@ -345,6 +417,19 @@ def _write_valid_gutenberg_inputs(tmp_path: Path) -> tuple[Path, Path]:
         encoding="utf-8",
     )
     return catalog, provenance
+
+
+def _valid_gutenberg_provenance() -> dict[str, object]:
+    return {
+        "canonical_source_url": GUTENBERG_SOURCE_URL,
+        "retrieved_at": "2026-09-18",
+        "input_byte_size": 1,
+        "sha256": "0" * 64,
+    }
+
+
+def _write_workload_row(path: Path, row: dict[str, object]) -> None:
+    path.write_text(json.dumps(row) + "\n", encoding="utf-8")
 
 
 def _assert_queries_cover_expected_title_terms(
