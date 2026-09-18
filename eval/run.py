@@ -19,6 +19,7 @@ from pathlib import Path
 
 from eval.corpus import CorpusResult
 from eval.runner import format_report, run_retrieval_eval
+from eval.selection import CANDIDATE_NAMES, EvaluationConfig, run_selection
 from memex import Memex
 from memex.infrastructure.config import MemexConfig
 
@@ -54,6 +55,37 @@ def _build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=None,
         help="Write reproducibility metadata and metrics as JSON",
+    )
+
+    selection_cmd = sub.add_parser(
+        "selection",
+        help="Run paired baseline-versus-candidate retrieval selection",
+    )
+    selection_cmd.add_argument("--top-k", type=int, default=10)
+    selection_cmd.add_argument("--size", type=int, default=100)
+    selection_cmd.add_argument("--seed", type=int, default=42)
+    selection_cmd.add_argument(
+        "--promotion",
+        action="store_true",
+        help="Run the canonical seed-42/top-10 evaluation at 10K and 100K",
+    )
+    selection_cmd.add_argument(
+        "--candidate",
+        action="append",
+        choices=CANDIDATE_NAMES,
+        help="Candidate to evaluate; repeat for multiple (default: all)",
+    )
+    selection_cmd.add_argument(
+        "--evidence-dir",
+        type=Path,
+        default=None,
+        help="Empty directory where the sanitized selection report is written",
+    )
+    selection_cmd.add_argument(
+        "--data-dir",
+        type=Path,
+        default=None,
+        help="Empty root for paired stores (default: a fresh temporary directory)",
     )
     return parser
 
@@ -164,6 +196,34 @@ def main(argv: list[str] | None = None) -> int:
                     "data_dir": str(eval_dir),
                     "domain_counts": result.domain_counts,
                 }
+            )
+        )
+        return 0
+
+    if args.command == "selection":
+        report = run_selection(
+            EvaluationConfig(
+                size=args.size,
+                seed=args.seed,
+                top_k=args.top_k,
+                candidates=tuple(args.candidate) if args.candidate else CANDIDATE_NAMES,
+                evidence_dir=args.evidence_dir.expanduser() if args.evidence_dir else None,
+                data_root=args.data_dir.expanduser() if args.data_dir else None,
+                promotion_mode=args.promotion,
+            )
+        )
+        print(
+            json.dumps(
+                {
+                    "schema_version": report.to_dict()["schema_version"],
+                    "requested_corpus_size": report.metadata["requested_corpus_size"],
+                    "query_count": report.metadata["query_count"],
+                    "selected_candidate": report.selected_candidate,
+                    "promotion_eligible": report.metadata["promotion_eligible"],
+                    "failures": [failure.to_dict() for failure in report.failures],
+                    "report_path": str(report.report_path) if report.report_path else None,
+                },
+                sort_keys=True,
             )
         )
         return 0
