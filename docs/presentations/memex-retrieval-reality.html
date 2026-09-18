@@ -580,7 +580,7 @@
         <article class="card"><span class="label">Overall Recall@10</span><span class="number">98.20%</span><p>The hard-query slice is 98.10%; both keep the right page in the first ten results.</p></article>
         <article class="card"><span class="label">Hard MRR</span><span class="number">0.9810</span><p>MRR measures how early the first correct result appears; the winner improves the legacy 0.9738 baseline.</p></article>
         <article class="card"><span class="label">Context cost</span><span class="number">966</span><p>Rendered tokens per correct hard-query result, down from 1,565 on the truthful legacy baseline.</p></article>
-        <article class="card"><span class="label">100K p99</span><span class="number">72.5<span style="font-size:.45em"> ms</span></span><p>The winner stays under the 100 ms large-store gate while the legacy baseline measured 396.9 ms.</p></article>
+        <article class="card"><span class="label">100K p99</span><span class="number">74.3<span style="font-size:.45em"> ms</span></span><p>The winner stays under the 100 ms large-store gate while the legacy baseline measured 400.7 ms.</p></article>
       </div>
       <p class="footer-note">Definitive clean production-path evidence · truthful legacy baseline · realistic, Gutenberg, and Salesforce workloads · top_k=10.</p>
     </section>
@@ -613,7 +613,7 @@
         <div class="metric"><div><span class="label">Overall / hard Recall@10</span><br><strong>98.20% / 98.10%</strong></div><div class="track"><span class="bar" style="--value: 98%"></span></div><div class="delta">Gates met<br><span class="status pass">Pass</span></div></div>
         <div class="metric"><div><span class="label">Hard MRR</span><br><strong>0.9738 → 0.9810</strong></div><div class="track"><span class="bar" style="--value: 98%"></span></div><div class="delta">+0.0071<br><span class="status pass">Pass</span></div></div>
         <div class="metric"><div><span class="label">Tokens / correct hard query</span><br><strong>1,565 → 966</strong></div><div class="track"><span class="bar" style="--value: 62%"></span></div><div class="delta">−38.2%<br><span class="status pass">Pass</span></div></div>
-        <div class="metric"><div><span class="label">10K p99 latency</span><br><strong>45.3 → 10.0 ms</strong></div><div class="track"><span class="bar" style="--value: 22%"></span></div><div class="delta">−77.9%<br><span class="status pass">Pass</span></div></div>
+        <div class="metric"><div><span class="label">10K p99 latency</span><br><strong>48.0 → 10.1 ms</strong></div><div class="track"><span class="bar" style="--value: 21%"></span></div><div class="delta">−78.9%<br><span class="status pass">Pass</span></div></div>
       </div>
       <p class="footer-note">Candidate: semantic-and-fallback-fts5, deterministic lexical ranking, compact snippets, and ascending slug tie-breaks.</p>
     </section>
@@ -626,7 +626,7 @@
       <div class="split">
         <div class="threshold">
           <span class="label">Large-store p99</span>
-          <span class="actual" style="color:var(--lime)">72.5 ms</span>
+          <span class="actual" style="color:var(--lime)">74.3 ms</span>
           <span class="target">Gate: <strong>&lt; 100 ms</strong></span>
         </div>
         <div>
@@ -634,8 +634,8 @@
           <ul class="checklist" style="margin-top:1.5rem">
             <li>Realistic, Gutenberg, and Salesforce promotion workloads pass together.</li>
             <li>Overall nDCG@10 is 0.9324 in the final clean report.</li>
-            <li>10K p99 improves from 45.3 ms to 10.0 ms.</li>
-            <li>100K p99 improves from 396.9 ms to 72.5 ms.</li>
+            <li>10K p99 improves from 48.0 ms to 10.1 ms.</li>
+            <li>100K p99 improves from 400.7 ms to 74.3 ms.</li>
             <li>Candidate metadata caps safe queries at 64 tokens and 1,024 bytes.</li>
             <li>One Salesforce hard negative-control query returns zero non-empty results without retaining raw query text.</li>
           </ul>

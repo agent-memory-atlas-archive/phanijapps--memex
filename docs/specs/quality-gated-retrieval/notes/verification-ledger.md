@@ -89,7 +89,7 @@ was promotion-eligible, and recorded no failures.
 
 This entry is historical earlier clean evidence. It was superseded as the
 current promotion evidence by the definitive clean production-path report
-below, after review hardening and final rerun on source revision `ca87b15`.
+below, after review hardening and final rerun on source revision `226bad7`.
 
 - Overall Recall@10/MRR/nDCG@10: `0.9819587629`, `0.9819587629`,
   `0.9323851353`.
@@ -114,13 +114,13 @@ uv run python -m eval.run selection --promotion \
   --workload realistic \
   --workload gutenberg \
   --workload salesforce \
-  --evidence-dir /tmp/memex-final-evidence-ca87b15
+  --evidence-dir /tmp/memex-final-evidence-226bad7
 ```
 
 The definitive retained PR-only report is
-`/tmp/memex-final-evidence-ca87b15/selection-promotion.json`, with SHA-256
-`5b5b0382f5875e0252cd22876ff3ee5e37b324f79e86d518b381db11971baa0c`.
-The run used source revision `ca87b155511499208dcc4ebe7663a0f4eac25d9c` with
+`/tmp/memex-final-evidence-226bad7/selection-promotion.json`, with SHA-256
+`8a810445ff9587c0a8c5e346461dc9ee0f7982f83ae4619cf2e5cd52ae46e705`.
+The run used source revision `226bad7ab7a6b05c12d32a8a04afb6a33f5a2473` with
 `git_dirty=false`, seed 42, `top_k=10`, 10,005 generated 10K memories,
 100,005 generated 100K memories, and 389 sampled queries.
 
@@ -136,10 +136,10 @@ query caps: `max_query_bytes=1024` and `max_query_tokens=64`.
 - Rendered tokens per correct hard query: baseline `1564.7669902913`,
   threshold `1251.8135922330`, candidate `966.4854368932`; reduction
   `38.23%`.
-- 10K p99: baseline `45.2941250405 ms`, candidate `10.0048540044 ms`;
-  reduction `77.91%`.
-- 100K p99: baseline `396.9289439847 ms`, candidate `72.5206179777 ms`;
-  reduction `81.73%`.
+- 10K p99: baseline `48.0492539937 ms`, candidate `10.1166139939 ms`;
+  reduction `78.95%`.
+- 100K p99: baseline `400.7201319910 ms`, candidate `74.3253649562 ms`;
+  reduction `81.45%`.
 - Workload gates: repaired realistic, Gutenberg, and Salesforce each passed
   Recall@10, MRR, nDCG@10, hard Recall@10, hard MRR, and family Recall@10.
 - Negative-control diagnostics: one Salesforce hard negative-control query,
