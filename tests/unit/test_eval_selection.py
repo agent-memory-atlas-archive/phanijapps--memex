@@ -636,6 +636,71 @@ def test_selection_report_includes_workload_manifest_and_ndcg() -> None:
     assert "easy query" not in json.dumps(workload_metrics)
 
 
+def test_selection_report_keeps_negative_controls_diagnostic_and_redacted() -> None:
+    negative_query_text = "raw negative query should stay out"
+    queries = [
+        QuerySpec("positive hard", ["target"], "hard", family="unit", corpus="salesforce"),
+        QuerySpec(
+            negative_query_text,
+            [],
+            "hard",
+            family="negative-control",
+            corpus="salesforce",
+            negative=True,
+        ),
+    ]
+    results = [
+        HitResult("positive hard", "hard", ["target"], ["target"], 1, 1.0),
+        HitResult(negative_query_text, "hard", [], ["unexpected"], None, 99.0, True),
+    ]
+    observations = [
+        QueryContextObservation(
+            query="positive hard",
+            difficulty="hard",
+            expected_slugs=["target"],
+            hits=[_recall_hit("target")],
+        ),
+        QueryContextObservation(
+            query=negative_query_text,
+            difficulty="hard",
+            expected_slugs=[],
+            hits=[_recall_hit("unexpected", snippet="negative " * 100)],
+            negative=True,
+        ),
+    ]
+    measured = selection._MeasuredRun(
+        results,
+        observations,
+        selection.RunSummary(2, (0, 1), (("target",), ("unexpected",)), 99.0, 0, 0, True),
+        {"name": "fake"},
+    )
+
+    workload_report = selection._workload_report(queries, results)
+    quality = selection._quality_metrics(measured, {10_000: 99.0})
+    manifest = selection._query_manifest(queries)
+    payload = json.dumps({"workload": workload_report, "manifest": manifest})
+
+    negative_controls = cast(dict[str, selection.JsonValue], workload_report["negative_controls"])
+    by_workload = cast(dict[str, selection.JsonValue], workload_report["by_workload"])
+    salesforce = cast(dict[str, selection.JsonValue], by_workload["salesforce"])
+
+    assert quality.hard_recall_at_10 == 1.0
+    assert quality.hard_mrr == 1.0
+    assert quality.tokens_per_correct_hard_query < 100
+    assert negative_controls["query_count"] == 1
+    assert negative_controls["non_empty_result_count"] == 1
+    assert salesforce["negative_controls"] == negative_controls
+    assert manifest[1] == {
+        "id": 1,
+        "corpus": "salesforce",
+        "family": "negative-control",
+        "difficulty": "hard",
+        "negative": True,
+        "expected_slugs": [],
+    }
+    assert negative_query_text not in payload
+
+
 def test_large_selection_manifest_is_bounded_by_family_and_difficulty() -> None:
     queries = [
         QuerySpec(f"query {index}", ["target"], "hard", family="unit", corpus="realistic")

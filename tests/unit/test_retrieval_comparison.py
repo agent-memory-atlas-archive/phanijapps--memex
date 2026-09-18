@@ -288,6 +288,34 @@ def test_tokens_per_correct_hard_query_rejects_zero_correct_hard_queries() -> No
         tokens_per_correct_hard_query([miss])
 
 
+def test_token_metric_excludes_negative_hard_queries() -> None:
+    positive = QueryContextObservation(
+        query="needle",
+        difficulty="hard",
+        expected_slugs=["target"],
+        hits=[_recall_hit("target", snippet="x" * 10)],
+    )
+    negative = QueryContextObservation(
+        query="lunar orchard inventory",
+        difficulty="hard",
+        expected_slugs=[],
+        hits=[_recall_hit("unexpected", snippet="y" * 200)],
+        negative=True,
+    )
+    packed = pack_to_budget(list(positive.hits), max_tokens=4096)
+    rendered = format_context_block(
+        RecallResult(
+            query=positive.query,
+            hits=packed,
+            total_indexed=0,
+            search_engine="eval",
+            search_time_ms=0.0,
+        )
+    )
+
+    assert tokens_per_correct_hard_query([positive, negative]) == float(estimate_tokens(rendered))
+
+
 def test_comparison_report_separates_stable_and_volatile_fields() -> None:
     report = build_comparison_report(
         baseline=_passing_baseline(),

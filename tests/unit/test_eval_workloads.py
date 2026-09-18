@@ -256,6 +256,11 @@ def test_salesforce_fixture_is_fact_only_and_offline(monkeypatch: pytest.MonkeyP
         "salesforce-actionable-segmentation",
         "salesforce-financial-account",
     }
+    negative_controls = [query for query in workload.queries if query.negative]
+    assert len(negative_controls) == 1
+    assert negative_controls[0].corpus == "salesforce"
+    assert negative_controls[0].family == "negative-control"
+    assert negative_controls[0].expected_slugs == []
     raw_fixture = Path("eval/data/salesforce-facts.jsonl").read_text(encoding="utf-8")
     assert "source_url" in raw_fixture
     assert "page_body" not in raw_fixture

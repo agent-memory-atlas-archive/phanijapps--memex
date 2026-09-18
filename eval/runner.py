@@ -17,6 +17,7 @@ class HitResult:
     actual_slugs: list[str]
     found_rank: int | None  # 1-based rank of first expected hit found
     latency_ms: float
+    negative: bool = False
 
 
 @dataclass(slots=True)
@@ -62,6 +63,7 @@ def run_retrieval_eval(
                 actual_slugs=actual,
                 found_rank=found_rank,
                 latency_ms=round(elapsed, 2),
+                negative=q.negative,
             )
         )
 
@@ -69,30 +71,31 @@ def run_retrieval_eval(
 
 
 def _compute_metrics(results: list[HitResult], corpus_size: int) -> EvalReport:
-    n = len(results)
-    if n == 0:
+    positives = [result for result in results if not result.negative]
+    n = len(positives)
+    if not positives:
         return EvalReport(0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
 
     def _recall(k: int) -> float:
-        return sum(1 for r in results if r.found_rank is not None and r.found_rank <= k) / n
+        return sum(1 for r in positives if r.found_rank is not None and r.found_rank <= k) / n
 
     def _precision_at_5() -> float:
         """Fraction of top-5 results that are in the expected set."""
         scores = []
-        for r in results:
+        for r in positives:
             top5 = r.actual_slugs[:5]
             relevant = sum(1 for s in top5 if s in r.expected_slugs)
             scores.append(relevant / 5 if top5 else 0.0)
         return sum(scores) / len(scores) if scores else 0.0
 
-    mrr = sum(1.0 / r.found_rank for r in results if r.found_rank is not None) / n
+    mrr = sum(1.0 / r.found_rank for r in positives if r.found_rank is not None) / n
     latencies = sorted(r.latency_ms for r in results)
     p99_idx = min(int(len(latencies) * 0.99), len(latencies) - 1)
 
     # By-difficulty breakdown
     by_difficulty: dict[str, dict[str, float]] = {}
     for diff in ("easy", "medium", "hard", "discriminator"):
-        subset = [r for r in results if r.difficulty == diff]
+        subset = [r for r in positives if r.difficulty == diff]
         if not subset:
             continue
         sub_n = len(subset)
@@ -107,18 +110,18 @@ def _compute_metrics(results: list[HitResult], corpus_size: int) -> EvalReport:
             "mrr": sum(1.0 / r.found_rank for r in subset if r.found_rank is not None) / sub_n,
         }
 
-    distractors = [r for r in results if r.difficulty == "discriminator"]
+    distractors = [r for r in positives if r.difficulty == "discriminator"]
     disc_score = (
         sum(1 for r in distractors if r.found_rank is not None) / len(distractors)
         if distractors
         else 0.0
     )
 
-    misses = [r for r in results if r.found_rank is None][:20]  # top 20 for review
+    misses = [r for r in positives if r.found_rank is None][:20]  # top 20 for review
 
     return EvalReport(
         corpus_size=corpus_size,
-        total_queries=n,
+        total_queries=len(results),
         recall_at_1=_recall(1),
         recall_at_5=_recall(5),
         recall_at_10=_recall(10),

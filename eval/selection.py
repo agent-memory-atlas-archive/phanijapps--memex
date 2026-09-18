@@ -824,6 +824,7 @@ def _observation(
         difficulty=query.difficulty,
         expected_slugs=query.expected_slugs,
         hits=hits,
+        negative=query.negative,
         total_indexed=total_indexed,
         search_engine=engine,
         search_time_ms=latency_ms,
@@ -1026,35 +1027,36 @@ def _workload_report(
 ) -> dict[str, JsonValue]:
     by_workload: dict[str, JsonValue] = {}
     for name in sorted({query.corpus for query in queries}):
+        workload_pairs = [
+            (query, result)
+            for query, result in zip(queries, results, strict=False)
+            if query.corpus == name
+        ]
+        workload_queries = [query for query in queries if query.corpus == name]
         metrics = _metrics_for_queries(
-            [query for query in queries if query.corpus == name],
-            [
-                result
-                for query, result in zip(queries, results, strict=False)
-                if query.corpus == name
-            ],
+            workload_queries,
+            [result for _, result in workload_pairs],
         )
         by_workload[name] = {
             **metrics.to_dict(),
             "by_difficulty": cast(
                 dict[str, JsonValue],
                 _metrics_by_difficulty(
-                    [query for query in queries if query.corpus == name],
-                    [
-                        result
-                        for query, result in zip(queries, results, strict=False)
-                        if query.corpus == name
-                    ],
+                    workload_queries,
+                    [result for _, result in workload_pairs],
                 ),
             ),
+            "negative_controls": _negative_control_report(workload_pairs),
             "verdict": validate_workload_metrics(metrics).to_dict(),
         }
     overall = _metrics_for_queries(queries, results)
+    pairs = _query_result_pairs(queries, results)
     return {
         "overall": overall.to_dict(),
         "by_difficulty": cast(dict[str, JsonValue], _metrics_by_difficulty(queries, results)),
         "overall_verdict": validate_workload_metrics(overall).to_dict(),
         "by_workload": by_workload,
+        "negative_controls": _negative_control_report(pairs),
     }
 
 
@@ -1062,11 +1064,7 @@ def _metrics_for_queries(
     queries: Sequence[QuerySpec],
     results: Sequence[HitResult],
 ) -> WorkloadMetrics:
-    paired = [
-        (query, result)
-        for query, result in zip(queries, results, strict=False)
-        if not query.negative
-    ]
+    paired = _positive_query_result_pairs(queries, results)
     if not paired:
         return WorkloadMetrics(0.0, 0.0, 0.0, 0.0, 0.0, {})
     hard = [(query, result) for query, result in paired if query.difficulty == "hard"]
@@ -1091,11 +1089,7 @@ def _metrics_by_difficulty(
     queries: Sequence[QuerySpec],
     results: Sequence[HitResult],
 ) -> dict[str, dict[str, JsonValue]]:
-    paired = [
-        (query, result)
-        for query, result in zip(queries, results, strict=False)
-        if not query.negative
-    ]
+    paired = _positive_query_result_pairs(queries, results)
     return {
         difficulty: _difficulty_metrics(
             [(query, result) for query, result in paired if query.difficulty == difficulty]
@@ -1140,6 +1134,58 @@ def _paired_ndcg_at_10(paired: Sequence[tuple[QuerySpec, HitResult]]) -> float:
     return sum(
         ndcg_at_k(result.actual_slugs, query.expected_slugs, 10) for query, result in paired
     ) / len(paired)
+
+
+def _positive_query_result_pairs(
+    queries: Sequence[QuerySpec],
+    results: Sequence[HitResult],
+) -> list[tuple[QuerySpec, HitResult]]:
+    return [
+        (query, result)
+        for query, result in _query_result_pairs(queries, results)
+        if not query.negative
+    ]
+
+
+def _query_result_pairs(
+    queries: Sequence[QuerySpec],
+    results: Sequence[HitResult],
+) -> list[tuple[QuerySpec, HitResult]]:
+    return list(zip(queries, results, strict=False))
+
+
+def _negative_control_report(
+    paired: Sequence[tuple[QuerySpec, HitResult]],
+) -> dict[str, JsonValue]:
+    negative_pairs = [(query, result) for query, result in paired if query.negative]
+    count = len(negative_pairs)
+    non_empty_count = sum(1 for _, result in negative_pairs if result.actual_slugs)
+    return {
+        "query_count": count,
+        "non_empty_result_count": non_empty_count,
+        "non_empty_result_rate": non_empty_count / count if count else 0.0,
+        "by_family": _negative_counts_by(negative_pairs, "family"),
+        "by_difficulty": _negative_counts_by(negative_pairs, "difficulty"),
+    }
+
+
+def _negative_counts_by(
+    paired: Sequence[tuple[QuerySpec, HitResult]], field: Literal["family", "difficulty"]
+) -> dict[str, JsonValue]:
+    counts: dict[str, dict[str, int]] = {}
+    for query, result in paired:
+        name = getattr(query, field)
+        bucket = counts.setdefault(name, {"query_count": 0, "non_empty_result_count": 0})
+        bucket["query_count"] += 1
+        if result.actual_slugs:
+            bucket["non_empty_result_count"] += 1
+    return {
+        name: {
+            **bucket,
+            "non_empty_result_rate": bucket["non_empty_result_count"] / bucket["query_count"],
+        }
+        for name, bucket in sorted(counts.items())
+    }
 
 
 def _overall_workload_metrics(report: Mapping[str, JsonValue]) -> WorkloadMetrics:
@@ -1231,15 +1277,18 @@ def _quality_metrics(
     *,
     complete: bool | None = None,
 ) -> CandidateMetrics:
-    hard = [result for result in measured.results if result.difficulty == "hard"]
+    hard = [
+        result for result in measured.results if result.difficulty == "hard" and not result.negative
+    ]
     if not hard:
         raise ValueError("evaluation corpus must include hard queries")
-    by_difficulty = _recall_by_difficulty(measured.results)
+    positive_results = _positive_results(measured.results)
+    by_difficulty = _recall_by_difficulty(positive_results)
     return CandidateMetrics(
         hard_recall_at_10=_recall_at_k(hard, 10),
         hard_mrr=_mrr(hard),
         recall_at_10={
-            "overall": _recall_at_k(measured.results, 10),
+            "overall": _recall_at_k(positive_results, 10),
             "easy": by_difficulty.get("easy", 0.0),
             "medium": by_difficulty.get("medium", 0.0),
         },
@@ -1249,6 +1298,10 @@ def _quality_metrics(
         p99_ms=p99_ms,
         complete=measured.summary.complete if complete is None else complete,
     )
+
+
+def _positive_results(results: Sequence[HitResult]) -> list[HitResult]:
+    return [result for result in results if not result.negative]
 
 
 def _recall_by_difficulty(results: Sequence[HitResult]) -> dict[str, float]:
@@ -1288,6 +1341,7 @@ def _hit_result(query: QuerySpec, actual_slugs: Sequence[str], latency_ms: float
         list(actual_slugs),
         found_rank,
         latency_ms,
+        query.negative,
     )
 
 
@@ -1386,7 +1440,14 @@ def _comparison_metadata(
 
 def _query_manifest(queries: Sequence[QuerySpec]) -> tuple[dict[str, JsonValue], ...]:
     return tuple(
-        {"id": index, "difficulty": query.difficulty, "expected_slugs": list(query.expected_slugs)}
+        {
+            "id": index,
+            "corpus": query.corpus,
+            "family": query.family,
+            "difficulty": query.difficulty,
+            "negative": query.negative,
+            "expected_slugs": list(query.expected_slugs),
+        }
         for index, query in enumerate(queries)
     )
 

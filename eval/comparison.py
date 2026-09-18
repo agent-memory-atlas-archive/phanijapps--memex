@@ -71,6 +71,7 @@ class QueryContextObservation:
     difficulty: str
     expected_slugs: Sequence[str]
     hits: Sequence[RecallHit]
+    negative: bool = False
     total_indexed: int = 0
     search_engine: str = "eval"
     search_time_ms: float = 0.0
@@ -203,7 +204,7 @@ def tokens_per_correct_hard_query(
     total_tokens = 0
     correct_hard_queries = 0
     for observation in observations:
-        if observation.difficulty != "hard":
+        if observation.negative or observation.difficulty != "hard":
             continue
         packed_hits = context_injection.pack_to_budget(
             list(observation.hits),
