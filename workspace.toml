@@ -28,10 +28,10 @@ status    = "active"
 milestone = "Evidence-aware retrieval"
 
 ["ini-001".work]
-queue   = [
+queue   = []
+active  = [
   { path = "docs/specs/quality-gated-retrieval/spec.md", kind = "spec", source = { mode = "repo-origin", parent = "docs/product/briefs/memory-retrieval-and-evidence.md" }, summary = "Select and ship one lexical ranker that improves hard-query accuracy and context cost within strict latency gates", needs = [] },
 ]
-active  = []
 shipped = []
 
 ["ini-001".shaping_queue]

@@ -98,11 +98,12 @@ leave the repository working after each task.
 
 | Output | Task | Verification | Retention |
 | --- | --- | --- | --- |
-| User guide | T6 | `uv run mkdocs build --strict` and content pin | Repository-durable at `docs/gitpages/guide.md` |
-| Architecture map | T6 | retrieval trust-boundary content pin and strict docs build | Repository-durable at `docs/architecture/overview.md` |
-| Decision rationale | T4, T6 | paired report plus implementation-note content pin | Repository-durable at `docs/gitpages/implementation-notes.md` |
-| Evaluation evidence | T4 | schema validation, rerun command, and reviewer inspection | PR-only generated JSON; stable post-closeout owner is the committed evaluator plus implementation note |
-| Release history | T6, only if default changes | changelog content pin | Repository-durable at `docs/product/changelog.md` |
+| User guide | T8 | `uv run mkdocs build --strict` and content pin | Repository-durable at `docs/gitpages/guide.md` |
+| Architecture and security controls | T8 | retrieval trust-boundary content pin and strict docs build | Repository-durable at `docs/architecture/overview.md` |
+| Decision rationale | T6, T8 | paired report plus implementation-note content pin | Repository-durable at `docs/gitpages/implementation-notes.md` |
+| Evaluation evidence | T4, T6 | fixture/schema validation, rerun command, and reviewer inspection | Compact source fixtures are repository-durable; generated JSON is PR-only evidence |
+| Release history | T8, only if default changes | changelog content pin | Repository-durable at `docs/product/changelog.md` |
+| Research rationale | T8 | source-link and benchmark-limit content pins | Repository-durable at `docs/memory-optimization-survey.md` |
 | Delivery contract | G-plan gates | spec/plan lint, independent reviews, and human approvals | Repository-durable at this directory; the cohort-approved content hashes are the fingerprints read by implementers, reviewers, CI, and closeout |
 
 ## Design (LLD)
@@ -132,7 +133,7 @@ inputs to reproduce the comparison.
   text.
 - The winning deterministic strategy is folded into
   `BM25Retriever` or one narrowly owned infrastructure collaborator only after
-  T4 selects it. No generic ranker registry is introduced.
+  T6 selects it. No generic ranker registry is introduced.
 
 ### State and control flow
 
@@ -334,90 +335,201 @@ limits. Do not import the optional package from `src/memex`.
 **Done when:** the optional integration and dependency/license audit pass while
 the base environment remains fully functional without the module or CLI.
 
-### T4: Run paired selection at scale
+### T4: Repair benchmark semantics and add source-governed workloads
 
 **Depends on:** T2, T3
 
-**Spec map:** AC-0001, AC-0002, AC-0003, AC-0004, AC-0005, AC-0006, AC-0007,
-AC-0008, AC-0009, AC-0010, AC-0016, AC-0028, AC-0029, AC-0030
+**Spec map:** AC-0031, AC-0032, AC-0033, AC-0036, AC-0037
 
-**Mode:** goal-based integration
+**Mode:** TDD plus goal-based local source import
 
-**Tests:** no stub (goal-based). Run the committed evaluator with seed 42 at
-10K for every candidate and at 100K for the baseline plus candidates still
-eligible after the 10K gate. Validate report schema and rerun the selected 10K
-candidate once for deterministic quality and ordering. The explicit empty and
-non-empty data-directory cases verify AC-0010. Failure-category and prohibited-
-content canaries verify AC-0028 against the retained JSON. A paired-store
-fixture verifies that baseline access-stat mutations cannot change candidate
-starting state or output (AC-0029). Revision fixtures prove that dirty and
-unknown revisions remain diagnostic-only and receive failing promotion
-verdicts with the sanitized `source_unreproducible` category (AC-0030).
+**Tests:** `tests/unit/test_eval_workloads.py` owns
+`test_realistic_queries_are_answerable_and_family_labeled`,
+`test_gutenberg_import_is_bounded_offline_and_deterministic`,
+`test_salesforce_fixture_is_fact_only_and_offline`, and
+`test_positive_queries_require_relevance_and_family`. The tests pin all
+relevant labels for repeated symptoms, session verbs, shared book
+authors/titles, and product aliases; provenance fields; schema rejection;
+bounded local Gutenberg import; zero network calls; and absence of committed
+source bodies or book text. `tests/unit/test_weighted_retriever.py` owns
+`test_eligibility_filters_apply_before_source_limit`.
 
-**Approach:** execute baseline and candidate in one runner environment at one
-known clean source revision, using separate databases rebuilt from the same
-immutable Markdown snapshot. Retain sanitized JSON as PR evidence, select only
-a candidate with an overall passing verdict, and record failed candidates
-without averaging their metrics into the winner. Dirty or unknown-revision runs
-remain available for diagnostics but cannot pass promotion.
+Run the bounded local import from the repository root after placing the
+maintainer-downloaded catalog and its provenance sidecar at the exact temporary
+paths below. The command replaces only the committed fixture target after every
+validation passes:
+
+```bash
+uv run python -m eval.run import-gutenberg --catalog /tmp/pg_catalog.csv.gz --provenance /tmp/pg_catalog.provenance.json --output eval/data/gutenberg-books.jsonl
+```
+
+```python
+# STUB: AC-0033
+import pytest
+
+from eval.corpus import QuerySpec
+from eval.workloads import validate_queries
+
+
+def test_positive_queries_require_relevance_and_family() -> None:
+    with pytest.raises(ValueError, match="query family"):
+        validate_queries([QuerySpec("find book", ["book"], "hard", family="")])
+```
+
+**Approach:** repair the realistic queries so their visible terms determine
+their labels. Add a small committed Gutenberg metadata fixture produced from
+a maintainer-supplied local copy of the official weekly CSV catalog by an
+explicit bounded import command. Add a
+separate, hand-authored Salesforce Financial Services fact-card fixture whose
+official citations are provenance, not copied content. Extend query records and
+metrics for multi-relevance, nDCG@10, family, corpus, and explicit negatives.
+
+**Done when:** both external-domain harnesses run fully offline, query labels
+are answerable, the realistic ambiguity defect is covered, and all source and
+filter canaries pass.
+
+### T5: Implement genuine multi-channel reciprocal-rank fusion
+
+**Depends on:** T2, T4
+
+**Spec map:** AC-0011, AC-0012, AC-0013, AC-0020, AC-0021, AC-0023, AC-0035,
+AC-0036
+
+**Mode:** TDD
+
+**Tests:** `tests/unit/test_weighted_retriever.py` owns
+`test_multichannel_rrf_searches_fields_independently`,
+`test_multichannel_rrf_overfetches_before_k60_fusion`, and
+`test_multichannel_rrf_deduplicates_with_stable_ties`; the existing access and
+`top_k` tests remain the boundary checks. `tests/unit/test_eval_candidate_behavior.py`
+pins the pure `k=60` formula.
+
+```python
+# STUB: AC-0035
+from pathlib import Path
+
+from eval.weighted_retriever import WeightedLexicalRetriever
+
+
+def test_multichannel_rrf_searches_fields_independently(data_dir: Path) -> None:
+    result = WeightedLexicalRetriever(data_dir / "mem.db").retrieve("atlas", top_k=10)
+    assert result.search_engine == "field-channel-rrf-k60"
+```
+
+**Approach:** replace the misleading single weighted FTS search in the
+evaluation candidate with genuinely independent field-qualified searches and a
+stable identifier channel. Fuse rank positions, not BM25 scores. Keep this in
+evaluation scope until it passes every amended gate.
+
+**Done when:** the candidate contract and trust-boundary tests pass on a real
+SQLite index and its metadata precisely describes the algorithm executed.
+
+### T6: Re-evaluate all workloads and select a candidate
+
+**Depends on:** T4, T5
+
+**Spec map:** AC-0001 through AC-0010, AC-0016, AC-0028 through AC-0030,
+AC-0033, AC-0034, AC-0038
+
+**Mode:** TDD plus goal-based integration
+
+**Tests:** run the exact commands below from the repository root. The first
+command evaluates baseline and every candidate against the repaired realistic,
+Gutenberg, and Salesforce workloads at 10K; the second runs the selected
+candidate and baseline through the 100K scale gate. `tests/unit/test_eval_selection.py`
+owns `test_selection_rejects_missing_family_or_failed_workload_floor` and
+`test_selection_report_includes_workload_manifest_and_ndcg`.
+
+```python
+# STUB: AC-0034, AC-0038
+from eval.selection import WorkloadMetrics, validate_workload_metrics
+
+
+def test_selection_rejects_missing_family_or_failed_workload_floor() -> None:
+    metrics = WorkloadMetrics(
+        recall_at_10=0.89,
+        mrr=0.60,
+        ndcg_at_10=0.80,
+        hard_recall_at_10=0.80,
+        by_family={"alias": 0.90},
+    )
+    assert validate_workload_metrics(metrics).passed is False
+```
+
+```bash
+uv run python -m eval.run selection --size 10000 --seed 42 --top-k 10 --workload realistic --workload gutenberg --workload salesforce --evidence-dir /tmp/memex-eval-10k
+uv run python -m eval.run selection --promotion --workload realistic --workload gutenberg --workload salesforce --evidence-dir /tmp/memex-eval-promotion
+```
+
+**Approach:** retain one sanitized report with workload manifests and reject
+the candidate on any failed constituent gate. Record repaired results as a new
+benchmark series and label historical synthetic scores non-comparable.
 
 **Done when:** one report names a same-candidate pass for every gate. If no
-candidate is eligible, the task records the failures and blocks spec completion
-before production promotion.
+candidate is eligible, the report records the failed gates and this task blocks
+spec completion before production promotion.
 
-### T5: Promote the selected strategy through shared recall
+### T7: Promote the selected strategy through shared recall
 
-**Depends on:** T4
+**Depends on:** T6
 
 **Spec map:** AC-0011, AC-0012, AC-0013, AC-0017, AC-0018, AC-0019, AC-0020,
 AC-0021, AC-0022, AC-0023, AC-0024
 
 **Mode:** TDD plus manual QA
 
-**Tests:** no stub (implementation-discovered). The winning strategy determines
-whether the production seam remains inside `BM25Retriever` or needs one narrow
-infrastructure collaborator. The discovery predicate is the T4 winner's input
-requirements; the constraint is the unchanged `Memex.recall` contract. The
-proof obligation is a real-index compatibility matrix for AC-0011, AC-0012,
-AC-0013, AC-0020, AC-0021, and AC-0023; a committed winner-discriminating
-API/CLI fixture for AC-0022; an identity comparison with the paired promotion
-report for AC-0024; and isolated CLI observations for AC-0017, AC-0018, and
-AC-0019.
+**Tests:** `tests/integration/test_recall_winner.py` owns
+`test_selected_ranker_wins_through_memex_and_cli` and the compatibility matrix;
+its plan-owned fixture query is `atlas risk integration`. Record this literal
+manual QA command and its observed first slug in
+`docs/specs/quality-gated-retrieval/notes/verification-ledger.md`:
 
-**Approach:** move only the selected deterministic mechanism into the existing
-infrastructure retrieval owner, deduplicate before limiting and access updates,
-and leave every adapter on `Memex.recall`. If the winner depends on `rgapi`,
-stop for the Ask-first runtime dependency and portability decision. Persist one
-minimal fixture whose baseline and winning orders differ, then verify the
-winning order and candidate identity through the shared API and CLI.
+```bash
+MEMEX_DATA_DIR=/tmp/memex-winner-smoke uv run memex recall "atlas risk integration"
+```
 
-**Done when:** the compatibility, retrieval acceptance, and manual CLI checks
-pass through the shared service.
+**Approach:** move only the passing mechanism into the existing infrastructure
+retrieval owner and leave every adapter on `Memex.recall`. A winner requiring
+`rgapi` still stops for the Ask-first runtime dependency decision.
 
-### T6: Refresh durable documentation and run release gates
+**Done when:** all compatibility and user-path checks pass through the shared
+service.
 
-**Depends on:** T5
+### T8: Refresh durable documentation and run release gates
 
-**Spec map:** Durable Outputs
+**Depends on:** T7
 
-**Mode:** goal-based check
+**Spec map:** Durable Outputs, AC-0039
 
-**Tests:** no stub (goal-based). Run `uv run mkdocs build --strict`, the
-documentation content pins, `uv run ruff check .`, `uv run ruff format --check
-.`, `uv run mypy src tests`, and `uv run pytest`.
+**Mode:** TDD plus goal-based check
+
+**Tests:** `tests/unit/test_docs_retrieval_controls.py` owns
+`test_architecture_pins_retrieval_evaluation_security_controls` (AC-0039).
+Run `uv run mkdocs build --strict`, `uv run ruff check .`,
+`uv run ruff format --check .`, `uv run mypy src tests`, and `uv run pytest`.
+
+```python
+# STUB: AC-0039
+from pathlib import Path
+
+
+def test_architecture_pins_retrieval_evaluation_security_controls() -> None:
+    architecture = Path("docs/architecture/overview.md").read_text(encoding="utf-8")
+    assert "Retrieval evaluation security controls" in architecture
+    assert "no network" in architecture.casefold()
+```
 
 **Approach:** update the guide, architecture overview, implementation notes,
-and changelog when applicable. Describe only the shipped winner and link to the
-evaluator for selection mechanics; do not document failed experiments as
-product features.
+research survey, and changelog when applicable. Describe only the shipped
+winner and the valid benchmark series.
 
-**Done when:** every named gate passes and closeout can account for each durable
+**Done when:** every named gate passes and closeout accounts for each durable
 output row.
 
 ## Rollout
 
 The evaluator and optional candidate land without changing production recall.
-After T4 produces a passing winner, T5 changes the internal default in one
+After T6 produces a passing winner, T7 changes the internal default in one
 reversible commit while preserving the FTS5 baseline implementation for
 rollback. No data migration or irreversible write occurs. A winner requiring
 `rgapi` pauses before promotion for the explicit runtime-dependency and
@@ -439,9 +551,16 @@ beyond shipping code and documentation together.
 - Candidate fusion can improve hard queries while duplicating pages or
   disturbing filters. Deduplication, compatibility, and access-statistic tests
   run before promotion.
+- External documentation changes over time and its access terms differ.
+  Gutenberg imports use a maintainer-supplied copy of its official
+  machine-readable catalog; Salesforce facts are curated and reviewed without
+  automated retrieval. Repository evaluation code performs no network access.
 
 ## Changelog
 
 - 2026-09-17: initial plan from the confirmed quality-gated lexical retrieval
   slice; `rgapi==0.1.22` is an optional in-process experiment, with FTS5 kept as
   the portable default and fallback until all gates pass.
+- 2026-09-18: amended after the first 10K run exposed underidentified synthetic
+  queries. Added answerability checks, independent Gutenberg and Salesforce
+  workloads, absolute readiness floors, and genuine field-channel RRF.

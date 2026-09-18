@@ -4,7 +4,7 @@
 - **Owner:** Memex maintainers
 - **Plan:** [`plan.md`](plan.md)
 - **Constrained by:** [`ADR-0001`](../../adr/0001-use-markdown-pages-as-memory-source-of-truth.md), [`ADR-0002`](../../adr/0002-use-layered-package-and-shared-adapter-contracts.md)
-- **Brief:** `docs/product/briefs/memory-retrieval-and-evidence.md`
+- **Brief:** docs/product/briefs/memory-retrieval-and-evidence.md
 - **Discovery:** none
 - **Contract:** none — the existing `Memex.recall` and `RecallResult` contracts remain compatible
 - **Shape:** service
@@ -21,13 +21,15 @@
 ## Objective
 
 Memex returns a smaller, more accurate set of relevant memories without making
-recall slower. A selected lexical ranker improves hard-query retrieval on the
-seed-42 realistic corpus, reduces the estimated tokens rendered for each
-correct hard-query result, and stays within the latency limits at 10,000 and
-100,000 memories. The public Python, CLI, MCP, and hook recall behavior remains
-compatible. SQLite FTS5 remains the portable default until one candidate passes
-every gate in the same paired evaluation; `rgapi` is an optional in-process
-experiment and never a required command-line tool.
+recall slower. A selected lexical ranker improves hard-query retrieval on
+answerable, multi-relevance-aware workloads: a repaired coding-memory corpus,
+Project Gutenberg book metadata, and independently authored Salesforce
+Financial Services fact cards. It reduces the estimated tokens rendered for
+each correct hard-query result and stays within the latency limits at 10,000
+and 100,000 memories. The public Python, CLI, MCP, and hook recall behavior
+remains compatible. SQLite FTS5 remains the portable default until one
+candidate passes every gate in the same paired evaluation; `rgapi` is an
+optional in-process experiment and never a required command-line tool.
 
 ## Durable Outputs
 
@@ -35,9 +37,11 @@ experiment and never a required command-line tool.
 | --- | --- | --- | --- | --- | --- |
 | User-facing promise | Recall ranking and result compactness change when a candidate ships | `docs/gitpages/guide.md` | Memex maintainers | Updated recall description and verified commands | The guide describes the selected behavior without exposing experimental candidates as supported configuration |
 | Current architecture | Retrieval ownership and the offline evaluation boundary change | `docs/architecture/overview.md` | Memex maintainers | Updated recall flow, `eval/` responsibility, search confinement, safe-query, and report-sanitization controls | The map names the shipped ranker, deterministic ordering, disposable derived state, and retrieval-specific trust boundaries |
+| Living security controls | External corpus ingestion and evaluation reporting cross file and content trust boundaries | `docs/architecture/overview.md` security-controls section | Memex maintainers | Content pins for offline Salesforce policy, local Gutenberg import, fixture confinement, bounded parsing, and report redaction | Future corpus and evaluator changes have one current-state control reference outside the frozen delivery spec |
 | Decision rationale | A dependency and default-ranker decision must remain explainable | `docs/gitpages/implementation-notes.md` | Memex maintainers | Paired-result summary and dependency disposition | The note identifies the winning candidate or records that no candidate shipped |
-| Reproducible evidence | The promotion gate depends on measured comparisons | Evaluation JSON emitted by `eval.run` and retained as PR evidence | Implementing contributor | Baseline and candidate configuration, source revision, environment, metrics, and gate verdict | Reviewers can reproduce the decision from the committed evaluator and the recorded command; generated corpora and reports are not committed |
+| Reproducible evidence | The promotion gate depends on measured comparisons | Evaluation JSON emitted by `eval.run` and retained as PR evidence | Implementing contributor | Baseline and candidate configuration, source revision, environment, metrics, and gate verdict | Reviewers can reproduce the decision from the committed evaluator and the recorded command; compact deterministic source fixtures are committed, while generated scale corpora and reports are not |
 | Release history | Applicable only when the default ranker changes | `docs/product/changelog.md` | Memex maintainers | One user-visible retrieval entry | Closeout verifies an entry exists only if the default changed |
+| Research rationale | The benchmark and ranker choices depend on external evidence | `docs/memory-optimization-survey.md` | Memex maintainers | Source-linked summary of the two memory papers and corpus-source constraints | The survey distinguishes research suggestions from measured Memex results and records the amended benchmark limits |
 
 ## Boundaries
 
@@ -61,6 +65,13 @@ experiment and never a required command-line tool.
   sanitized evaluation diagnostics.
 - Run every evaluation with a fresh `MEMEX_DATA_DIR` outside the developer's
   real `~/.memex` and leave Markdown pages as the source of truth.
+- Run normal tests and evaluations without network access. Import Gutenberg
+  metadata only from a maintainer-supplied local copy of the official catalog
+  feed; represent Salesforce knowledge only with concise, independently
+  authored facts and citations, never copied page bodies or live scraping.
+- Label every positive query with all pages supported by the query's visible
+  terms. Reject underidentified single-answer queries and keep negative queries
+  explicit so a miss cannot be mistaken for a correct empty result.
 
 ### Ask first
 
@@ -90,6 +101,8 @@ experiment and never a required command-line tool.
   configuration before it passes the promotion gate.
 - Never include memory content, credentials, raw non-generated queries,
   absolute or user-specific paths, or stack traces in retained reports.
+- Never crawl Project Gutenberg HTML pages, store full book text in the
+  committed evaluator, or automate access to Salesforce documentation.
 
 ## Testing Strategy
 
@@ -116,6 +129,24 @@ experiment and never a required command-line tool.
   command.** An
   isolated `memex recall` invocation confirms that the selected default returns
   ranked output through the shipped CLI without exposing experimental controls.
+- **Source-governed workloads (AC-0031, AC-0032, AC-0036): TDD plus bounded
+  integration.** Loader fixtures exercise regular-file validation, compressed
+  and expanded byte limits, schema and field limits, output confinement, exact
+  provenance, Salesforce offline-only construction, and filter-before-limit
+  behavior. The Gutenberg refresh test consumes a local miniature catalog and
+  uses a network sentinel proving zero socket or HTTP calls.
+- **Answerability and metric validity (AC-0033, AC-0037): TDD.** Construction
+  fixtures pin the complete relevance set for every repeated symptom, session
+  verb, author, title, and product alias; metric fixtures pin multi-label first
+  hit, reciprocal rank, nDCG@10, and negative-query separation.
+- **Readiness and selection (AC-0034, AC-0035, AC-0038): TDD plus goal-based
+  integration.** Independent field-channel fixtures pin RRF behavior and the
+  retained multi-workload report proves every absolute and paired gate is
+  conjunctive before a winner can be named.
+- **Living security controls (AC-0039): TDD plus documentation build.** A
+  content-pin test owns the required control topics in
+  `docs/architecture/overview.md`; `uv run mkdocs build --strict` proves the
+  current-state reference remains publishable.
 
 The sibling plan owns exact stubs and command lines.
 
@@ -251,6 +282,63 @@ The sibling plan owns exact stubs and command lines.
       the source revision is unknown, and its retained failure category is
       `source_unreproducible`. Selected promotion evidence records a known
       commit and `git_dirty=false`.
+- [ ] **AC-0031.** The committed Project Gutenberg workload is generated from
+      a maintainer-supplied local copy of the official `pg_catalog.csv.gz`
+      catalog, contains metadata only, and records the canonical source URL,
+      retrieval date, upstream `Last-Modified` value when supplied, input byte
+      size, and SHA-256 digest. Repository code performs no network fetch. The
+      importer accepts one non-symlink regular `.csv.gz` file no larger than
+      16 MiB, expands at most 128 MiB, reads at most 100,000 rows, accepts only
+      allowlisted catalog columns, rejects a cell over 64 KiB, and writes strict
+      UTF-8 JSONL only beneath the resolved committed-fixture root. Gzip, CSV,
+      schema, size, row, field, path, and serialization failures stop before
+      replacement and emit only a bounded sanitized category. Tests and
+      ordinary evaluation use the committed deterministic fixture with a
+      network sentinel proving zero socket or HTTP calls.
+- [ ] **AC-0032.** The Salesforce Financial Services workload contains only
+      concise, independently authored factual cards with official source URL,
+      access date, product/release context, aliases, and relevant API or object
+      names. It performs no network request, automated scraping, or storage of
+      Salesforce page bodies at build, test, or evaluation time.
+- [ ] **AC-0033.** Every positive query declares a non-empty set of all relevant
+      slugs supported by its visible terms and a non-empty query-family label;
+      a missing or empty family invalidates the corpus before scoring.
+      Evaluation computes first-hit Recall and reciprocal rank plus nDCG@10
+      against that set. Construction
+      tests prove that repeated debug symptoms, session verbs, book authors or
+      titles, and product aliases are either disambiguated in the query or
+      multi-labeled. Explicit negative queries are reported separately and do
+      not inflate positive-query recall.
+- [ ] **AC-0034.** A candidate is eligible for production only when each of the
+      repaired realistic, Gutenberg, and Salesforce workloads has Recall@10 at
+      least 0.90, MRR at least 0.50, and nDCG@10 at least 0.75, with hard-query
+      Recall@10 at least 0.75 and no declared query family below 0.70. These
+      absolute quality floors are conjunctive with AC-0001 through AC-0006.
+- [ ] **AC-0035.** The field-fusion candidate runs independent title, body,
+      tags/metadata, and stable-identifier ranked searches, each overfetching
+      before fusion, and combines their rank positions with reciprocal-rank
+      fusion using `k=60`. Eligibility filters run before every source limit;
+      duplicate slugs collapse; the final order uses ascending slug as its
+      stable tie-break.
+- [ ] **AC-0036.** A cross-scope canary proves that an ineligible page cannot
+      consume a source's top-k slot or displace an eligible hit. Every paired
+      side uses an isolated database built from the identical immutable corpus
+      snapshot, and corpus identity is included in the report.
+- [ ] **AC-0037.** The repaired realistic generator never keys an expected page
+      on a symptom, date, or other discriminator absent from the query. Its
+      historical seed-42 scores are marked non-comparable after this label and
+      query repair and cannot be cited as evidence for the amended gate.
+- [ ] **AC-0038.** A retained re-evaluation report identifies the corpus
+      fixture/version and source manifest for every workload, reports metrics
+      overall and by workload, difficulty, and query family, and names a winner
+      only if the same candidate passes every applicable accuracy, token, speed,
+      completeness, reproducibility, and source-integrity gate.
+- [ ] **AC-0039.** Before closeout, `docs/architecture/overview.md` has a
+      content-pinned retrieval-evaluation security-controls section covering
+      offline Salesforce facts, maintainer-supplied local Gutenberg import,
+      fixture-output confinement, compressed and expanded parsing limits,
+      no-network tests and evaluation, fail-closed integrity errors, and
+      retained-report redaction.
 
 ## Follow-ons
 
