@@ -201,6 +201,35 @@ def test_diagnostic_run_can_never_select_candidate(monkeypatch: pytest.MonkeyPat
     assert report.metadata["promotion_eligible"] is False
 
 
+def test_promotion_skips_large_scale_when_no_candidate_clears_quality_gate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    setup_sizes: list[int] = []
+
+    def fake_scale_setup(
+        root: Path, size: int, config: EvaluationConfig, *, retain_quality: bool
+    ) -> tuple[CorpusResult, selection._MeasuredRun]:
+        del root, config, retain_quality
+        setup_sizes.append(size)
+        return _fake_corpus(size), _fake_measured(1.0)
+
+    monkeypatch.setattr(selection, "_run_scale_setup", fake_scale_setup)
+    monkeypatch.setattr(selection, "_run_candidate_pair", lambda **kwargs: _fake_measured(1.0))
+    monkeypatch.setattr(selection, "_eligible_for_large_scale", lambda baseline, candidate: False)
+
+    report = run_selection(
+        EvaluationConfig(
+            promotion_mode=True,
+            candidates=("weighted-lexical-rrf",),
+            git_state=GitState(source_revision="abc123", git_dirty=False),
+        )
+    )
+
+    assert setup_sizes == [10_000]
+    assert report.selected_candidate is None
+    assert report.metadata["requested_corpus_sizes"] == [10_000]
+
+
 @pytest.mark.parametrize(("seed", "top_k"), [(7, 10), (42, 5)])
 def test_promotion_rejects_noncanonical_seed_or_top_k(seed: int, top_k: int) -> None:
     with pytest.raises(ValueError, match="requires seed=42 and top_k=10"):

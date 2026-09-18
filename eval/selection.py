@@ -71,6 +71,7 @@ CLOSED_FAILURE_CATEGORIES: set[FailureCategory] = {
 PROMOTION_SIZES = (10_000, 100_000)
 PROMOTION_SEED = 42
 PROMOTION_TOP_K = 10
+RGAPI_CANDIDATE_BUDGET_SECONDS = 15.0
 SELECTION_SCHEMA_VERSION = 1
 TOKEN_BUDGET = context_injection.DEFAULT_MAX_TOKENS
 _MAX_FAILURE_REASON = 120
@@ -232,7 +233,7 @@ def _run_in_root(
         for name, runs in candidate_runs.items()
         if config.promotion_mode and _eligible_for_large_scale(baseline, runs[quality_size])
     }
-    if config.promotion_mode:
+    if config.promotion_mode and eligible:
         large_size = sizes[1]
         large_corpus, large_baseline = _run_scale_setup(
             root, large_size, config, retain_quality=False
@@ -384,6 +385,7 @@ def _run_candidate_pair(
     complete = True
     stop_reason: FailureCategory | None = None
     metadata: dict[str, JsonValue] = {"name": name}
+    candidate_started = time.perf_counter()
     weighted = (
         WeightedLexicalRetriever(data_dir / "mem.db") if name == "weighted-lexical-rrf" else None
     )
@@ -411,6 +413,15 @@ def _run_candidate_pair(
             if not outcome.complete:
                 complete = False
                 stop_reason = outcome.stop_reason or "incomplete_search"
+                break
+            if (
+                name == "rgapi-0.1.22"
+                and time.perf_counter() - candidate_started >= RGAPI_CANDIDATE_BUDGET_SECONDS
+                and len(latencies) < len(corpus.queries)
+            ):
+                complete = False
+                stop_reason = "incomplete_search"
+                metadata = {**metadata, "evaluation_budget_seconds": RGAPI_CANDIDATE_BUDGET_SECONDS}
                 break
     finally:
         if weighted is not None:
