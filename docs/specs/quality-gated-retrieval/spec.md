@@ -1,6 +1,6 @@
 # Spec: Quality-gated retrieval
 
-- **Status:** Draft
+- **Status:** Implementing
 - **Owner:** Memex maintainers
 - **Plan:** [`plan.md`](plan.md)
 - **Constrained by:** [`ADR-0001`](../../adr/0001-use-markdown-pages-as-memory-source-of-truth.md), [`ADR-0002`](../../adr/0002-use-layered-package-and-shared-adapter-contracts.md)
@@ -211,12 +211,16 @@ The sibling plan owns exact stubs and command lines.
 - [ ] **AC-0024.** The production ranker identity observed by the
       winner-discriminating integration test equals the selected candidate
       identity in the paired promotion report.
-- [ ] **AC-0025.** The optional file-search candidate admits only relative
-      results that resolve to regular `.md` files under the resolved
-      `MEMEX_DATA_DIR/docs` root. Absolute results, `..` traversal, symlink or
-      junction escapes, non-regular files, and `Path.resolve()` failures
+- [ ] **AC-0025.** Before opening or scanning page content, the optional
+      file-search candidate roots traversal at the resolved
+      `MEMEX_DATA_DIR/docs` directory, disables following symlinks and
+      junctions, and admits only regular `.md` entries whose resolved path
+      remains under that root. Absolute results, `..` traversal, symlink or
+      junction entries, non-regular files, and `Path.resolve()` failures
       (`OSError` or `RuntimeError`) mark the candidate incomplete and make its
-      promotion verdict fail without exposing the rejected path.
+      promotion verdict fail without exposing the rejected path. A monitored
+      outside-root content canary reachable only through a symlink or junction
+      records zero content-open attempts and cannot appear in search results.
 - [ ] **AC-0026.** The optional candidate derives its pattern only from the
       same lower-case `[a-z0-9]+` tokens accepted by the FTS5 path and
       literal-escapes every token before regex compilation. Compilation is

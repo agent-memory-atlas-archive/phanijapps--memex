@@ -1,7 +1,7 @@
 # Plan: Quality-gated retrieval
 
 - **Spec:** [`spec.md`](spec.md)
-- **Status:** Drafting
+- **Status:** Executing
 - **Repository anchors:** `docs/architecture/overview.md` (facade, retrieval,
   and offline-eval ownership); `src/memex/application/memory.py` (shared recall
   service and composition root); `src/memex/infrastructure/bm25_retriever.py`
@@ -316,6 +316,8 @@ the existing write/rebuild/recall smoke path with `PATH` containing no `rg`.
 That base job verifies AC-0014. The optional job adds escape, traversal,
 symlink, junction, non-regular-file, resolve-error, regex-metacharacter,
 1,024-byte boundary, timeout, and max-result fixtures for AC-0025 and AC-0026.
+The symlink and junction fixtures place unique content outside the docs root
+and use a file-open sentinel to prove the walker neither opens nor returns it.
 The dependency admission check verifies AC-0027 and stops for the Ask-first
 decision when either ecosystem lacks scanner coverage.
 
@@ -323,9 +325,11 @@ decision when either ecosystem lacks scanner coverage.
 search rows to candidate slugs, sort explicitly, and propagate `complete` and
 `stop_reason` into the comparison record. Resolve each returned file before
 reading it, require confinement under the canonical docs root, and reject
-aliases and non-regular files. Build literal patterns from the existing safe
-token language before applying the fixed work limits. Do not import the
-optional package from `src/memex`.
+aliases and non-regular files. Configure traversal not to follow symlinks or
+junctions and apply the root and file-type filter before the matcher can open
+content; post-result validation remains defense in depth. Build literal
+patterns from the existing safe token language before applying the fixed work
+limits. Do not import the optional package from `src/memex`.
 
 **Done when:** the optional integration and dependency/license audit pass while
 the base environment remains fully functional without the module or CLI.
