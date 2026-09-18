@@ -64,8 +64,9 @@ rebuilt from the pages.
 3. Hook injection applies a relevance floor, packs hits to a token budget, and
    emits a bounded context block. Explicit recall can still return weak hits.
 
-Production recall uses the `semantic-and-fallback-fts5` ranker. It first runs a
-strict `AND` FTS5 query over the safe tokens with column weights
+Production recall uses the `semantic-and-fallback-fts5` ranker. It caps the
+safe-token query at 64 tokens and 1,024 UTF-8 bytes, then first runs a strict
+`AND` FTS5 query over the safe tokens with column weights
 `slug=1, title=1, body=2, tags=1`, then broadens to an `OR` query only when the
 strict query returns zero rows. Snippets are capped at 12 tokens. Filters are
 applied before each limit, returned slugs are unique, links and access

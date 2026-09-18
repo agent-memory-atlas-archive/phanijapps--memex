@@ -160,18 +160,21 @@ rule, and the OpenAI SDK is the single LLM client.
   when strict matching returns zero rows. Snippets are capped at 12 tokens;
   filters apply before limiting; returned slugs are unique; links and access
   rows are batched once after ranking; ascending slug is the final tie-break.
-  Final post-review clean promotion evidence at commit `0c8f0213` selected the
+  Definitive clean production-path promotion evidence at commit `ca87b15` selected the
   ranker with overall Recall@10/MRR `0.9819588`, nDCG@10 `0.9323851`, hard
   Recall@10 `0.9809524`, and hard MRR `0.9809524` versus the `0.9738095`
-  truthful legacy baseline. Hard tokens per correct result were `964.64`
-  versus the `1249.79` threshold and `1562.23` baseline, a `38.25%` reduction.
-  10K p99 improved from `46.49 ms` to `15.25 ms`, and 100K p99 improved from
-  `398.63 ms` to `82.34 ms`. All repaired realistic, Gutenberg, and Salesforce
+  truthful legacy baseline. Hard tokens per correct result were `966.49`
+  versus the `1251.81` threshold and `1564.77` baseline, a `38.23%` reduction.
+  10K p99 improved from `45.29 ms` to `10.00 ms`, and 100K p99 improved from
+  `396.93 ms` to `72.52 ms`. All repaired realistic, Gutenberg, and Salesforce
   workload gates passed in the promotion report, which recorded no failures.
+  The evaluator exercised the production `BM25Retriever` no-access path, and
+  the retained candidate metadata records `max_query_bytes=1024` and
+  `max_query_tokens=64`.
   The report also retained negative-control diagnostics for one Salesforce hard
   negative-control query with zero non-empty results while omitting raw query
   text. The retained report has SHA-256
-  `39171b720e0cc305a35ea8d05c5612511a78c3b8e137388d8c0dc94fb4135d0a`.
+  `5b5b0382f5875e0252cd22876ff3ee5e37b324f79e86d518b381db11971baa0c`.
 
 - **Retrieval dependency disposition.** `rgapi==0.1.22` remains an optional
   evaluation candidate only. It is not imported by `src/memex`, is not required

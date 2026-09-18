@@ -88,8 +88,8 @@ The selected winner was `semantic-and-fallback-fts5`. It passed promotion,
 was promotion-eligible, and recorded no failures.
 
 This entry is historical earlier clean evidence. It was superseded as the
-current promotion evidence by the final post-review clean-promotion report
-below, after review hardening and final rerun on source revision `0c8f0213`.
+current promotion evidence by the definitive clean production-path report
+below, after review hardening and final rerun on source revision `ca87b15`.
 
 - Overall Recall@10/MRR/nDCG@10: `0.9819587629`, `0.9819587629`,
   `0.9323851353`.
@@ -104,7 +104,7 @@ below, after review hardening and final rerun on source revision `0c8f0213`.
 - Workload gates: repaired realistic, Gutenberg, and Salesforce each passed
   Recall@10, MRR, nDCG@10, hard Recall@10, hard MRR, and family Recall@10.
 
-## 2026-09-18 — Final post-review clean promotion
+## 2026-09-18 — Definitive clean production-path promotion
 
 Command:
 
@@ -114,30 +114,32 @@ uv run python -m eval.run selection --promotion \
   --workload realistic \
   --workload gutenberg \
   --workload salesforce \
-  --evidence-dir /tmp/memex-final-evidence-0c8f021
+  --evidence-dir /tmp/memex-final-evidence-ca87b15
 ```
 
 The definitive retained PR-only report is
-`/tmp/memex-final-evidence-0c8f021/selection-promotion.json`, with SHA-256
-`39171b720e0cc305a35ea8d05c5612511a78c3b8e137388d8c0dc94fb4135d0a`.
-The run used source revision `0c8f02130d627c7e33a0dd7a40cfe42ce5b222bf` with
+`/tmp/memex-final-evidence-ca87b15/selection-promotion.json`, with SHA-256
+`5b5b0382f5875e0252cd22876ff3ee5e37b324f79e86d518b381db11971baa0c`.
+The run used source revision `ca87b155511499208dcc4ebe7663a0f4eac25d9c` with
 `git_dirty=false`, seed 42, `top_k=10`, 10,005 generated 10K memories,
 100,005 generated 100K memories, and 389 sampled queries.
 
 The selected winner was `semantic-and-fallback-fts5`. It passed promotion,
-was promotion-eligible, and recorded no failures.
+was promotion-eligible, and recorded no failures. The evaluator executed the
+production `BM25Retriever` no-access path and recorded the candidate ranker
+query caps: `max_query_bytes=1024` and `max_query_tokens=64`.
 
 - Overall Recall@10/MRR/nDCG@10: `0.9819587629`, `0.9819587629`,
   `0.9323851353`.
 - Hard-query Recall@10/MRR: baseline `0.9809523810` / `0.9738095238`,
   candidate `0.9809523810` / `0.9809523810`.
-- Rendered tokens per correct hard query: baseline `1562.2330097087`,
-  threshold `1249.7864077670`, candidate `964.6407766990`; reduction
-  `38.25%`.
-- 10K p99: baseline `46.4949019952 ms`, candidate `15.2481570258 ms`;
-  reduction `67.20%`.
-- 100K p99: baseline `398.6301939585 ms`, candidate `82.3440289823 ms`;
-  reduction `79.34%`.
+- Rendered tokens per correct hard query: baseline `1564.7669902913`,
+  threshold `1251.8135922330`, candidate `966.4854368932`; reduction
+  `38.23%`.
+- 10K p99: baseline `45.2941250405 ms`, candidate `10.0048540044 ms`;
+  reduction `77.91%`.
+- 100K p99: baseline `396.9289439847 ms`, candidate `72.5206179777 ms`;
+  reduction `81.73%`.
 - Workload gates: repaired realistic, Gutenberg, and Salesforce each passed
   Recall@10, MRR, nDCG@10, hard Recall@10, hard MRR, and family Recall@10.
 - Negative-control diagnostics: one Salesforce hard negative-control query,

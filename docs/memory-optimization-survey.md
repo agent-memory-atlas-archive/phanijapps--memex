@@ -36,8 +36,8 @@ sections, and paths stronger retrieval signals. The repaired quality-gated
 benchmark confirmed this was a ranking problem, not a filesystem-layout
 problem: the selected `semantic-and-fallback-fts5` ranker reached overall
 Recall@10/MRR `0.9819588`, hard Recall@10 `0.9809524`, hard MRR `0.9809524`,
-and hard tokens per correct result `964.64` in the final post-review clean
-promotion run. [Repository evidence](specs/quality-gated-retrieval/notes/verification-ledger.md).
+and hard tokens per correct result `966.49` in the definitive clean
+production-path promotion run. [Repository evidence](specs/quality-gated-retrieval/notes/verification-ledger.md).
 
 ### Preserve claims when consolidating
 
@@ -79,9 +79,10 @@ without isolating the contribution of every retrieval tunnel.
 [SodaMem](https://arxiv.org/html/2608.08055v1). Memex now has repository-local
 evidence for the first lexical step: the clean promotion report selected
 `semantic-and-fallback-fts5` over the baseline and field-fusion candidate across
-repaired realistic, Gutenberg, and Salesforce workloads. Confidence for Memex's
-current ranker is higher than the paper-only recommendation, but it is still a
-benchmark result rather than a claim about every real user memory store.
+repaired realistic, Gutenberg, and Salesforce workloads while exercising the
+production `BM25Retriever` no-access path. Confidence for Memex's current
+ranker is higher than the paper-only recommendation, but it is still a benchmark
+result rather than a claim about every real user memory store.
 
 Memex should keep the shipped SQLite FTS5 winner as the production default and
 continue evaluating larger representation changes behind the same paired gates:
