@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from memex import mcp_server
-from memex.infrastructure.bm25_retriever import MAX_QUERY_BYTES
+from memex.infrastructure.bm25_retriever import MAX_QUERY_BYTES, MAX_QUERY_TOKENS
 from memex.mcp_server import (
     memex_export,
     memex_forget,
@@ -99,6 +99,20 @@ def test_wire_registry_matches_registered_tools() -> None:
     server = mcp_server.build_server()
     names = {tool.name for tool in asyncio.run(server.list_tools())}
     assert set(OPERATION_DESCRIPTIONS) == names
+
+
+@pytest.mark.parametrize(
+    "expected",
+    (f"{MAX_QUERY_BYTES:,} UTF-8 bytes", f"{MAX_QUERY_TOKENS} searchable tokens"),
+)
+def test_registered_recall_description_pins_query_work_caps(expected: str) -> None:
+    """Clients see the production query boundary in the registered contract."""
+    import asyncio
+
+    server = mcp_server.build_server()
+    recall = next(tool for tool in asyncio.run(server.list_tools()) if tool.name == "memex_recall")
+
+    assert expected in recall.description
 
 
 def test_tool_docstrings_follow_pyguide() -> None:

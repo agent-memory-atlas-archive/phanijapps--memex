@@ -43,18 +43,20 @@ When to use: at the start of a task, or whenever context from earlier
 sessions is relevant; also to find a node's slug before updating or
 forgetting it.
 
-Key constraints: the query needs at least one alphanumeric token;
-top_k within [1, 100] (default 10); optional node_type filter.
-Expired or soft-forgotten nodes are hidden by default.
+Key constraints: the query needs at least one alphanumeric token and is
+limited to 1,024 UTF-8 bytes and 64 searchable tokens; top_k within
+[1, 100] (default 10); optional node_type filter. Expired or
+soft-forgotten nodes are hidden by default.
 
 Returns hits ranked best-first, each with slug, title, snippet,
 node_type, importance, and file_path. Empty hits is a normal result.
 
 Failures arrive on two channels: schema violations are rejected by
 the server with an is_error result naming the field; a query with no
-searchable terms returns {"error": "..."} — check that key before
-using the result. Side effects: bumps access counters for returned
-hits (read telemetry only; memory files are untouched).""",
+searchable terms or above either query-work cap returns
+{"error": "..."} — check that key before using the result. Side
+effects: bumps access counters for returned hits (read telemetry only;
+memory files are untouched).""",
     "memex_consolidate": """Consolidate recent session episodes into durable memory nodes via LLM.
 
 When to use: after ingesting transcripts, to distill episodes into
