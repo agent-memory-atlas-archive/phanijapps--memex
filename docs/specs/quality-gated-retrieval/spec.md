@@ -45,7 +45,7 @@ experiment and never a required command-line tool.
 
 - Compare each candidate with the shipped baseline on fresh, isolated stores
   generated with the same seed, corpus size, query set, `top_k`, token budget,
-  process, and machine environment.
+  process, and isolated runner environment.
 - Apply the accuracy, token-efficiency, and speed gates to one candidate and
   reject the candidate when any gate fails; a blended score cannot compensate
   for a failed gate.
@@ -150,11 +150,14 @@ The sibling plan owns exact stubs and command lines.
       identical ordered slugs and quality/token metrics after volatile timing
       and run metadata are excluded.
 - [ ] **AC-0009.** Every paired report records the source revision and dirty
-      flag, Python and Memex versions, operating-system and machine identity,
+      flag, Python and Memex versions, operating-system family and CPU
+      architecture,
       corpus generator and seed, requested and generated corpus sizes, query
       count, `top_k`, token budget, renderer and token-estimator identities,
       percentile method, ranker identity and parameters, per-gate values, and
-      the overall verdict.
+      the overall verdict. Environment metadata is limited to operating-system
+      family and CPU architecture; the report excludes hostnames, device names,
+      usernames, profile paths, and user-specific filesystem paths.
 - [ ] **AC-0010.** The evaluator refuses a non-empty caller-supplied data
       directory without deleting or changing any entry, while an empty
       directory and the evaluator-created temporary directory both complete.

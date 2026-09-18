@@ -160,8 +160,9 @@ back to a partial comparison.
 
 The selected strategy is deterministic, offline, local-first, and bounded by
 the spec's accuracy, context-cost, and latency gates. Benchmark timing excludes
-setup, uses the same process and machine for paired values, and reports rather
-than hides environmental identity.
+setup, uses the same process and runner for paired values, and reports rather
+than hides non-identifying environment metadata. Reports exclude hostnames,
+device names, usernames, profile paths, and user-specific filesystem paths.
 
 ### Dependencies and integration
 
@@ -321,9 +322,10 @@ eligible after the 10K gate. Validate report schema and rerun the selected 10K
 candidate once for deterministic quality and ordering. The explicit empty and
 non-empty data-directory cases verify AC-0010.
 
-**Approach:** execute on one recorded machine and source revision, retain JSON
-as PR evidence, select only a candidate with an overall passing verdict, and
-record failed candidates without averaging their metrics into the winner.
+**Approach:** execute baseline and candidate in one runner environment at one
+source revision, retain sanitized JSON as PR evidence, select only a candidate
+with an overall passing verdict, and record failed candidates without averaging
+their metrics into the winner.
 
 **Done when:** one report names a same-candidate pass for every gate. If no
 candidate is eligible, the task records the failures and blocks spec completion
