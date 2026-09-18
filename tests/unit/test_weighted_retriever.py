@@ -2,7 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from eval.weighted_retriever import WeightedLexicalRetriever
+from eval.candidates import RankedCandidate
+from eval.weighted_retriever import SinglePassWeightedFts5Retriever, WeightedLexicalRetriever
 from memex.domain.models import WikiNode
 from memex.infrastructure.index_manager import IndexManager
 from memex.infrastructure.wiki_store import WikiStore
@@ -104,6 +105,61 @@ def test_multichannel_rrf_deduplicates_with_stable_ties(data_dir: Path) -> None:
     assert [hit.slug for hit in first.hits] == ["alpha", "beta", "gamma"]
     assert [hit.slug for hit in second.hits] == ["alpha", "beta", "gamma"]
     assert [hit.rank for hit in first.hits] == [1, 2, 3]
+    retriever.close()
+    index.close()
+
+
+def test_single_pass_weighted_fts5_retains_duplicate_title_multi_relevance(
+    data_dir: Path,
+) -> None:
+    index = _build_index(
+        data_dir,
+        [
+            ("Alpha repeated", "alpha beta details"),
+            ("Alpha repeated", "alpha beta details"),
+            ("Alpha repeated", "alpha beta details"),
+        ],
+    )
+    retriever = SinglePassWeightedFts5Retriever(data_dir / "mem.db")
+
+    result = retriever.retrieve("alpha beta", top_k=3)
+
+    assert result.search_engine == "single-pass-weighted-fts5"
+    assert [hit.title for hit in result.hits] == [
+        "Alpha repeated",
+        "Alpha repeated",
+        "Alpha repeated",
+    ]
+    assert [hit.rank for hit in result.hits] == [1, 2, 3]
+    retriever.close()
+    index.close()
+
+
+def test_single_pass_weighted_fts5_uses_one_overfetched_search_call(
+    data_dir: Path,
+) -> None:
+    class SpyRetriever(SinglePassWeightedFts5Retriever):
+        def __init__(self, db_path: Path) -> None:
+            super().__init__(db_path)
+            self.search_calls: list[tuple[tuple[str, ...], int]] = []
+
+        def _search_candidates(
+            self,
+            tokens: list[str],
+            limit: int,
+            now: str,
+        ) -> list[RankedCandidate]:
+            del now
+            self.search_calls.append((tuple(tokens), limit))
+            return [RankedCandidate("alpha", 1, -1.0)]
+
+    index = _index_nodes(data_dir, [_node("Alpha", "alpha beta", slug="alpha")])
+    retriever = SpyRetriever(data_dir / "mem.db")
+
+    result = retriever.retrieve("alpha beta", top_k=3)
+
+    assert [hit.slug for hit in result.hits] == ["alpha"]
+    assert retriever.search_calls == [(("alpha", "beta"), 12)]
     retriever.close()
     index.close()
 
