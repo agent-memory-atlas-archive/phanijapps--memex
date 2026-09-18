@@ -47,8 +47,9 @@ structure remains a disposable derivative.
 - Derive compact evidence units from Markdown headings or source spans and
   return their page and section provenance.
 - Represent occurrence or validity time, active or superseded status, and
-  contradiction or update relationships without creating a second source of
-  truth.
+  contradiction or update relationships in durable Markdown fields. SQLite may
+  derive indexes and adjacency from those fields but cannot become a second
+  source of truth.
 - Make consolidation identity-aware, idempotent, evidence-preserving, and
   scoped to relevant existing memories instead of the entire corpus.
 - Add deterministic fixtures for stale preferences, contradictions, repeated
@@ -72,7 +73,9 @@ structure remains a disposable derivative.
 ## Constraints and delivery appetite
 
 - Preserve ADR-0001: Markdown is authoritative, while FTS5 rows, section
-  evidence, link adjacency, and temporal relationships are rebuildable.
+  evidence, link adjacency, and temporal indexes are rebuildable. Any temporal
+  relationship required for correct behavior after an index rebuild must be
+  recoverable from Markdown.
 - Prefer deterministic SQLite and standard-library mechanisms. A new runtime
   dependency or product-boundary change requires a separate decision.
 - Keep stored memories untrusted. Validate query, metadata, path, source-span,
@@ -145,12 +148,7 @@ No delivery slices have been confirmed.
 
 ## Ready gaps
 
-- Confirm whether the initial 5-point hard Recall@10, 0.05 hard-MRR, 20%
-  context-token, and 10% paired-latency thresholds need tightening after the
-  first candidate comparison; they may not be weakened merely to admit a
-  candidate.
-- Decide whether contradiction and supersession relationships must be durable
-  Markdown fields in the first temporal slice or can begin as rebuildable
-  derivations from status and validity fields.
-- Confirm the first independently shippable slice after shaping review. No spec
-  is authorized by this Draft.
+No canonical Ready gaps remain. The initial success thresholds are binding and
+may be tightened when comparison evidence warrants it; they cannot be weakened
+merely to admit a candidate. Delivery-slice selection remains a separate human
+decision after the Ready transition, so no spec is authorized by this Draft.
