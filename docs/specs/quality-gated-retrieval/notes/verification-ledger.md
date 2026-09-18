@@ -89,7 +89,7 @@ was promotion-eligible, and recorded no failures.
 
 This entry is historical earlier clean evidence. It was superseded as the
 current promotion evidence by the final post-review clean-promotion report
-below, after review hardening and final rerun on source revision `0c87262c`.
+below, after review hardening and final rerun on source revision `0c8f0213`.
 
 - Overall Recall@10/MRR/nDCG@10: `0.9819587629`, `0.9819587629`,
   `0.9323851353`.
@@ -114,15 +114,15 @@ uv run python -m eval.run selection --promotion \
   --workload realistic \
   --workload gutenberg \
   --workload salesforce \
-  --evidence-dir /tmp/memex-final-evidence-0c87262
+  --evidence-dir /tmp/memex-final-evidence-0c8f021
 ```
 
 The definitive retained PR-only report is
-`/tmp/memex-final-evidence-0c87262/selection-promotion.json`, with SHA-256
-`374a1fcaf865f98cd5b6ef298e7779857621fb4876bd23e11d33d0e1b63d157f`.
-The run used source revision `0c87262cf3203d409ee7773cd3cb2669eaa414d7` with
+`/tmp/memex-final-evidence-0c8f021/selection-promotion.json`, with SHA-256
+`39171b720e0cc305a35ea8d05c5612511a78c3b8e137388d8c0dc94fb4135d0a`.
+The run used source revision `0c8f02130d627c7e33a0dd7a40cfe42ce5b222bf` with
 `git_dirty=false`, seed 42, `top_k=10`, 10,005 generated 10K memories,
-100,005 generated 100K memories, and 388 sampled queries.
+100,005 generated 100K memories, and 389 sampled queries.
 
 The selected winner was `semantic-and-fallback-fts5`. It passed promotion,
 was promotion-eligible, and recorded no failures.
@@ -131,15 +131,18 @@ was promotion-eligible, and recorded no failures.
   `0.9323851353`.
 - Hard-query Recall@10/MRR: baseline `0.9809523810` / `0.9738095238`,
   candidate `0.9809523810` / `0.9809523810`.
-- Rendered tokens per correct hard query: baseline `1594.1553398058`,
-  threshold `1275.3242718447`, candidate `989.9611650485`; reduction
-  `37.90%`.
-- 10K p99: baseline `46.4352739509 ms`, candidate `14.7542890045 ms`;
-  reduction `68.23%`.
-- 100K p99: baseline `400.7172280108 ms`, candidate `77.8331119800 ms`;
-  reduction `80.58%`.
+- Rendered tokens per correct hard query: baseline `1562.2330097087`,
+  threshold `1249.7864077670`, candidate `964.6407766990`; reduction
+  `38.25%`.
+- 10K p99: baseline `46.4949019952 ms`, candidate `15.2481570258 ms`;
+  reduction `67.20%`.
+- 100K p99: baseline `398.6301939585 ms`, candidate `82.3440289823 ms`;
+  reduction `79.34%`.
 - Workload gates: repaired realistic, Gutenberg, and Salesforce each passed
   Recall@10, MRR, nDCG@10, hard Recall@10, hard MRR, and family Recall@10.
+- Negative-control diagnostics: one Salesforce hard negative-control query,
+  zero non-empty results, and zero non-empty result rate. The retained report
+  omits raw query text.
 - Difficulty metrics were retained in the report for overall and each named
   workload, without raw query text or user-specific paths.
 
