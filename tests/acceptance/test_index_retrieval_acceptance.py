@@ -145,7 +145,7 @@ def test_bm25_scoring(components: dict[str, object]) -> None:
     assert [hit.slug for hit in result.hits] == ["widget-beta", "widget-alpha"]
     # Lower bm25 score = better; the node with more term occurrences ranks first.
     assert result.hits[0].score < result.hits[1].score
-    assert result.search_engine == "bm25"
+    assert result.search_engine == "semantic-and-fallback-fts5"
     assert result.total_indexed == 5
 
 

@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -47,3 +48,38 @@ def test_search_fts_returns_pairs(indexed: BM25Retriever) -> None:
     pairs = indexed.search_fts("quick brown", 5)
     assert pairs and pairs[0][0] == "alpha-node"
     assert isinstance(pairs[0][1], float)
+
+
+def test_concurrent_retrieve_hydrates_links_consistently(data_dir: Path) -> None:
+    store = WikiStore(data_dir)
+    index = IndexManager(data_dir / "mem.db")
+    index.initialize()
+    retriever = BM25Retriever(data_dir / "mem.db")
+    source = store.write(
+        WikiNode(
+            type="entity",
+            title="Alpha Node",
+            body="the quick brown fox links to [[target-node]]",
+            id="",
+        )
+    )
+    target = store.write(WikiNode(type="entity", title="Target Node", body="linked target", id=""))
+    index.build([source, target])
+    index.connection.execute(
+        "INSERT INTO wiki_links (source_slug, target_slug) VALUES (?, ?)",
+        (source.slug, target.slug),
+    )
+    index.connection.commit()
+
+    try:
+
+        def retrieve_links(_: int) -> list[str]:
+            return retriever.retrieve("quick").hits[0].links
+
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            results = list(executor.map(retrieve_links, range(64)))
+
+        assert results == [[target.slug]] * 64
+    finally:
+        retriever.close()
+        index.close()

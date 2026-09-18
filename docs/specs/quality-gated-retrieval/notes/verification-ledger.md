@@ -58,3 +58,16 @@ Verification on that committed tree:
 - Mypy: pass, 92 source files.
 - Pytest: 494 passed, 1 skipped in 141.14 seconds; coverage 90.17%.
 - MkDocs strict build: pass in 0.54 seconds.
+
+## 2026-09-18 — T7 production promotion smoke
+
+Command:
+
+```bash
+MEMEX_DATA_DIR=/tmp/memex-winner-smoke uv run memex recall "atlas risk integration"
+```
+
+The isolated store contained the winner-discriminating fixture used by
+`tests/integration/test_recall_winner.py`. The command exited zero, reported
+`search_engine="semantic-and-fallback-fts5"`, and returned
+`atlas-risk-integration` as the first slug.

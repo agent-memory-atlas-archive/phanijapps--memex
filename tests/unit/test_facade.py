@@ -37,7 +37,7 @@ def test_write_rejects_oversized_body(data_dir: Path) -> None:
 def test_recall_via_facade(memex: Memex) -> None:
     memex.write(WriteInput(type="entity", title="Zebra entity", body="striped animal"))
     result = memex.recall("zebra")
-    assert result.search_engine == "bm25"
+    assert result.search_engine == "semantic-and-fallback-fts5"
     assert [hit.slug for hit in result.hits] == ["zebra-entity"]
     row = memex.index_manager.get("zebra-entity")
     assert row is not None and row["access_count"] == 1
