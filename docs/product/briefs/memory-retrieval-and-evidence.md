@@ -9,26 +9,32 @@
 ## Outcome
 
 As a Memex store grows and its facts change over time, coding agents retrieve
-the smallest useful set of current, source-backed memories without losing
-important detail during consolidation. Memex remains local-first: Markdown
-pages are authoritative, and every search or relationship structure remains a
-disposable derivative.
+the smallest useful set of current, source-backed memories accurately and
+quickly, without losing important detail during consolidation. Memex remains
+local-first: Markdown pages are authoritative, and every search or relationship
+structure remains a disposable derivative.
 
 ## Success measures
 
-- A selected lexical ranker improves hard-query Recall@10 and MRR against the
-  seed-42 realistic corpus in paired, clean-store runs. The default changes
-  only after the minimum acceptable improvement is confirmed.
-- Retrieval reports context bytes or estimated tokens per correct result, and
-  the selected approach reduces that cost without regressing Recall@10.
+- **Accuracy gate:** on the 10,000-memory seed-42 realistic corpus, a selected
+  ranker improves hard-query Recall@10 by at least 5 percentage points and hard
+  MRR by at least 0.05. Overall, easy, and medium Recall@10 may not regress by
+  more than 0.5 percentage points in the same paired clean-store run.
+- **Token-efficiency gate:** the same candidate reduces rendered context tokens
+  per correct hard-query result by at least 20% without relaxing the accuracy
+  gate or omitting provenance required to verify the hit.
+- **Speed gate:** the same candidate keeps retrieval p99 below 50 ms at 10,000
+  memories and below 100 ms at 100,000 memories, and no measured scale may be
+  more than 10% slower than its paired baseline.
+- A candidate becomes the default only when it passes the accuracy,
+  token-efficiency, and speed gates together. A gain in one dimension cannot
+  compensate for failure in another.
 - Recall identifies the source page and section for every returned evidence
   unit while preserving the existing page-level public contract.
 - Time-sensitive fixtures prefer the active fact and retain access to the
   superseded or contradictory source when explicitly requested.
 - Repeated consolidation of unchanged input produces no duplicate page and no
   unintended content churn; claim-retention fixtures preserve all cited facts.
-- The selected ranker remains within the existing documented latency budgets:
-  p99 below 50 ms at 10,000 memories and below 100 ms at 100,000 memories.
 
 ## Scope
 
@@ -75,6 +81,9 @@ disposable derivative.
   an intentional break.
 - Benchmark candidates behind an experimental path. Do not change the default
   ranker merely because an approach is promising in another system.
+- Treat accuracy and token efficiency as co-primary outcomes, with speed as a
+  hard constraint. Reject candidates that materially trade one away for
+  another, even when a blended score would improve.
 - Deliver in independently testable slices. Stop or revise an approach when it
   fails its paired quality, context-cost, or latency gate rather than absorbing
   speculative infrastructure.
@@ -136,9 +145,10 @@ No delivery slices have been confirmed.
 
 ## Ready gaps
 
-- Confirm the minimum Recall@10 and MRR improvement required to replace the
-  default ranker, including the allowed trade between hard and easy queries.
-- Confirm the acceptable context-cost measure and regression threshold.
+- Confirm whether the initial 5-point hard Recall@10, 0.05 hard-MRR, 20%
+  context-token, and 10% paired-latency thresholds need tightening after the
+  first candidate comparison; they may not be weakened merely to admit a
+  candidate.
 - Decide whether contradiction and supersession relationships must be durable
   Markdown fields in the first temporal slice or can begin as rebuildable
   derivations from status and validity fields.
