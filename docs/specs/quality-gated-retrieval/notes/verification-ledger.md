@@ -181,27 +181,6 @@ Verification:
 - MkDocs strict build: pass in 0.54 seconds after this ledger entry.
 - Ruff check: pass.
 - Ruff format check: pass, 110 files.
-
-## 2026-09-18 — Final confined-harness verification
-
-The final clean promotion evidence at source revision `226bad7` includes the
-fixture-slug and page-write confinement fix. The lifecycle-only closeout was
-then verified against the complete repository state:
-
-- Pytest: 554 passed, 3 skipped in 140.77 seconds; coverage 90.35%.
-- Ruff check: pass.
-- Ruff format check: pass, 110 files.
-- Mypy: pass, 95 source files.
-- MkDocs strict build: pass in 0.52 seconds.
-- Spec-status lint: pass.
-- Traceability lint: pass with two pre-existing informational structural
-  orphans (`memex-viz` and `v1-guardrails`).
-
-Every AC-0001 through AC-0039 condition is covered by the retained promotion
-report, the committed evaluator and production-path tests, the isolated CLI
-smoke, or the durable documentation checks named above. The spec is shipped
-and the plan is done; no delivery-only fact is the sole owner of a lasting
-product, architecture, security, or research promise.
 - Mypy: pass, 95 source files.
 - Pytest: 533 passed, 1 skipped in 137.70 seconds; coverage 90.28%.
 
@@ -215,3 +194,30 @@ and narrowing the changelog claim:
 - MkDocs strict build: pass in 0.54 seconds.
 - Ruff check: pass.
 - Ruff format check: pass, 110 files.
+
+## 2026-09-18 — Final confined-harness verification
+
+The final clean promotion evidence at source revision `226bad7` includes the
+fixture-slug and page-write confinement fix. The lifecycle-only closeout was
+then verified against the complete repository state:
+
+- Base-environment Pytest: 554 passed, 3 optional tests skipped in 138.47
+  seconds; coverage 90.35%.
+- Pinned optional integration:
+  `uv run --locked --extra eval-rgapi pytest --no-cov -q tests/integration/test_rgapi_candidate.py`
+  — 14 passed in 0.91 seconds with `rgapi==0.1.22` installed. The real
+  structured-row test observed zero `subprocess.Popen` calls, and the real
+  symlink canary returned no outside-root result.
+- Ruff check: pass.
+- Ruff format check: pass, 110 files.
+- Mypy: pass, 95 source files.
+- MkDocs strict build: pass in 0.52 seconds.
+- Spec-status lint: pass.
+- Traceability lint: pass with two pre-existing informational structural
+  orphans (`memex-viz` and `v1-guardrails`).
+
+Every AC-0001 through AC-0039 condition is covered by the retained promotion
+report, the committed evaluator and production-path tests, the isolated CLI
+smoke, or the durable documentation checks named above. The spec is shipped
+and the plan is done; no delivery-only fact is the sole owner of a lasting
+product, architecture, security, or research promise.
