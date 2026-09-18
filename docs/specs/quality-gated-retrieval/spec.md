@@ -236,7 +236,7 @@ The sibling plan owns exact stubs and command lines.
   (`docs/product/briefs/memory-retrieval-and-evidence.md`).
 - Product: `rgapi==0.1.22` is an optional experimental candidate, FTS5 remains
   the default and fallback, and promotion additionally requires a portable
-  packaging decision (user confirmation 2026-09-17).
+  packaging decision (user confirmation 2026-09-18).
 - Process: spec scope and implementation strategy receive separate human
   approvals after independent review (`docs/CONVENTIONS.md`, `new-spec` and
   `work-loop` procedures).
