@@ -43,9 +43,11 @@ experiment and never a required command-line tool.
 
 ### Always do
 
-- Compare each candidate with the shipped baseline on fresh, isolated stores
-  generated with the same seed, corpus size, query set, `top_k`, token budget,
-  process, and isolated runner environment.
+- Compare each candidate with the shipped baseline in distinct disposable data
+  stores rebuilt from the same immutable Markdown corpus snapshot, using the
+  same seed, corpus size, query set, `top_k`, token budget, process, and isolated
+  runner environment. Neither derived SQLite database may observe the other
+  run's access-statistic mutations.
 - Apply the accuracy, token-efficiency, and speed gates to one candidate and
   reject the candidate when any gate fails; a blended score cannot compensate
   for a failed gate.
@@ -96,7 +98,7 @@ experiment and never a required command-line tool.
   fixed baseline/candidate records at the exact threshold and immediately on
   each failing side, so every comparison can independently turn red.
 - **Reproducible corpus evaluation (AC-0007, AC-0008, AC-0009, AC-0010,
-  AC-0028): goal-based integration.**
+  AC-0028, AC-0029, AC-0030): goal-based integration.**
   The offline evaluator runs baseline and candidate against fresh seed-42
   stores because accuracy, rendered-token cost, latency, and completeness are
   observable only across corpus generation, indexing, retrieval, and report
@@ -229,11 +231,22 @@ The sibling plan owns exact stubs and command lines.
       the owner explicitly approves the degraded coverage under `Ask first`.
 - [ ] **AC-0028.** Every retained evaluator failure uses one category from
       `{dependency_unavailable, invalid_query, path_rejected,
-      incomplete_search, measurement_failed, report_invalid}` and a bounded
-      non-identifying stop reason. A canary fixture proves the report contains
-      no memory content, credentials, raw non-generated query, absolute or
-      user-specific path, hostname, device name, username, profile path, or
-      stack trace.
+      incomplete_search, measurement_failed, report_invalid,
+      source_unreproducible}` and a bounded non-identifying stop reason. A
+      canary fixture proves the report contains no memory content, credentials,
+      raw non-generated query, absolute or user-specific path, hostname, device
+      name, username, profile path, or stack trace.
+- [ ] **AC-0029.** A paired evaluation copies one immutable generated Markdown
+      corpus snapshot into two fresh data directories and rebuilds a separate
+      SQLite database in each before query execution. An integration fixture
+      proves that running the baseline first changes only its access rows: the
+      candidate store retains its pre-run access state and produces the same
+      ordered slugs and quality metrics as a clean candidate-only control.
+- [ ] **AC-0030.** A diagnostic evaluation may run from a dirty worktree, but
+      the overall promotion verdict is false whenever `git_dirty` is true or
+      the source revision is unknown, and its retained failure category is
+      `source_unreproducible`. Selected promotion evidence records a known
+      commit and `git_dirty=false`.
 
 ## Follow-ons
 

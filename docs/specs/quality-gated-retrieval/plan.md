@@ -81,7 +81,8 @@ leave the repository working after each task.
   raw-latency percentile selection, rendered token-accounting, and
   incomplete-result logic.
 - `tests/unit/test_eval_entry.py` owns isolated-directory and reproducibility
-  report behavior.
+  report behavior, clean-revision promotion enforcement, and paired-store
+  independence.
 - `tests/unit/test_bm25_retriever.py` and
   `tests/acceptance/test_index_retrieval_acceptance.py` own production ranking,
   compatibility, deduplication, rank numbering, production-path determinism,
@@ -135,10 +136,12 @@ inputs to reproduce the comparison.
 
 ### State and control flow
 
-For each corpus size, the evaluator creates one fresh corpus, constructs the
-baseline and candidate over equivalent derived state, runs the same ordered
-queries, and serializes both records with the gate verdict. Quality and token
-metrics use the 10K run. Latency gates use 10K and 100K runs. Production recall
+For each corpus size, the evaluator creates one immutable Markdown corpus
+snapshot, copies it into distinct fresh baseline and candidate data
+directories, and rebuilds a separate SQLite database in each. It runs the same
+ordered queries and serializes both records with the gate verdict; neither run
+can observe the other's access-statistic mutations. Quality and token metrics
+use the 10K run. Latency gates use 10K and 100K runs. Production recall
 continues to record access once after final deduplication.
 
 ### Behavior and rules
@@ -332,7 +335,7 @@ the base environment remains fully functional without the module or CLI.
 **Depends on:** T2, T3
 
 **Spec map:** AC-0001, AC-0002, AC-0003, AC-0004, AC-0005, AC-0006, AC-0007,
-AC-0008, AC-0009, AC-0010, AC-0016, AC-0028
+AC-0008, AC-0009, AC-0010, AC-0016, AC-0028, AC-0029, AC-0030
 
 **Mode:** goal-based integration
 
@@ -341,12 +344,18 @@ AC-0008, AC-0009, AC-0010, AC-0016, AC-0028
 eligible after the 10K gate. Validate report schema and rerun the selected 10K
 candidate once for deterministic quality and ordering. The explicit empty and
 non-empty data-directory cases verify AC-0010. Failure-category and prohibited-
-content canaries verify AC-0028 against the retained JSON.
+content canaries verify AC-0028 against the retained JSON. A paired-store
+fixture verifies that baseline access-stat mutations cannot change candidate
+starting state or output (AC-0029). Revision fixtures prove that dirty and
+unknown revisions remain diagnostic-only and receive failing promotion
+verdicts with the sanitized `source_unreproducible` category (AC-0030).
 
 **Approach:** execute baseline and candidate in one runner environment at one
-source revision, retain sanitized JSON as PR evidence, select only a candidate
-with an overall passing verdict, and record failed candidates without averaging
-their metrics into the winner.
+known clean source revision, using separate databases rebuilt from the same
+immutable Markdown snapshot. Retain sanitized JSON as PR evidence, select only
+a candidate with an overall passing verdict, and record failed candidates
+without averaging their metrics into the winner. Dirty or unknown-revision runs
+remain available for diagnostics but cannot pass promotion.
 
 **Done when:** one report names a same-candidate pass for every gate. If no
 candidate is eligible, the task records the failures and blocks spec completion
