@@ -9,7 +9,7 @@ from typing import cast
 import pytest
 
 import eval.selection as selection
-from eval.comparison import QueryContextObservation
+from eval.comparison import CandidateMetrics, QueryContextObservation
 from eval.corpus import CorpusResult, QuerySpec
 from eval.runner import HitResult
 from eval.selection import (
@@ -311,6 +311,62 @@ def test_promotion_skips_large_scale_when_no_candidate_clears_quality_gate(
     assert report.metadata["requested_corpus_sizes"] == [10_000]
 
 
+def test_large_scale_eligibility_accepts_high_baseline_non_regression(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    baseline = _fake_measured(20.0)
+    candidate = _fake_measured(21.0)
+    _patch_quality_metrics(
+        monkeypatch,
+        baseline=CandidateMetrics(
+            hard_recall_at_10=0.98,
+            hard_mrr=0.97,
+            recall_at_10={"overall": 0.96, "easy": 0.95, "medium": 0.95},
+            tokens_per_correct_hard_query=100.0,
+            p99_ms={},
+            complete=True,
+        ),
+        candidate=CandidateMetrics(
+            hard_recall_at_10=0.98,
+            hard_mrr=0.97,
+            recall_at_10={"overall": 0.96, "easy": 0.95, "medium": 0.95},
+            tokens_per_correct_hard_query=80.0,
+            p99_ms={},
+            complete=True,
+        ),
+    )
+
+    assert selection._eligible_for_large_scale(baseline, candidate) is True
+
+
+def test_large_scale_eligibility_requires_delta_when_baseline_below_floor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    baseline = _fake_measured(20.0)
+    candidate = _fake_measured(21.0)
+    _patch_quality_metrics(
+        monkeypatch,
+        baseline=CandidateMetrics(
+            hard_recall_at_10=0.70,
+            hard_mrr=0.70,
+            recall_at_10={"overall": 0.8666666666666667, "easy": 0.95, "medium": 0.95},
+            tokens_per_correct_hard_query=100.0,
+            p99_ms={},
+            complete=True,
+        ),
+        candidate=CandidateMetrics(
+            hard_recall_at_10=0.749,
+            hard_mrr=0.749,
+            recall_at_10={"overall": 0.883, "easy": 0.95, "medium": 0.95},
+            tokens_per_correct_hard_query=80.0,
+            p99_ms={},
+            complete=True,
+        ),
+    )
+
+    assert selection._eligible_for_large_scale(baseline, candidate) is False
+
+
 def test_incomplete_large_scale_retains_closed_failure_and_scale_status() -> None:
     large_candidate = selection._replace_completion(
         _fake_measured(2.0), complete=False, stop_reason="incomplete_search"
@@ -521,10 +577,43 @@ def _fake_corpus(size: int) -> CorpusResult:
 
 
 def _fake_measured(p99_ms: float) -> selection._MeasuredRun:
-    hit = RecallHit(
-        slug="target",
-        file_path="docs/target.md",
-        title="Target",
+    hit = _recall_hit("target", snippet="hard query")
+    result = HitResult("hard query", "hard", ["target"], ["target"], 1, p99_ms)
+    observation = QueryContextObservation(
+        query="hard query",
+        difficulty="hard",
+        expected_slugs=["target"],
+        hits=[hit],
+    )
+    summary = selection.RunSummary(1, (0,), (("target",),), p99_ms, 1, 0, True)
+    return selection._MeasuredRun([result], [observation], summary, {"name": "fake"})
+
+
+def _patch_quality_metrics(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    baseline: CandidateMetrics,
+    candidate: CandidateMetrics,
+) -> None:
+    calls = iter((baseline, candidate))
+
+    def fake_quality_metrics(
+        measured: selection._MeasuredRun,
+        p99_ms: dict[int, float],
+        *,
+        complete: bool | None = None,
+    ) -> CandidateMetrics:
+        del measured, p99_ms, complete
+        return next(calls)
+
+    monkeypatch.setattr(selection, "_quality_metrics", fake_quality_metrics)
+
+
+def _recall_hit(slug: str, *, snippet: str = "hard query") -> RecallHit:
+    return RecallHit(
+        slug=slug,
+        file_path=f"docs/{slug}.md",
+        title=slug.title(),
         node_type="entity",
         importance=0.5,
         score=0.0,
@@ -539,12 +628,3 @@ def _fake_measured(p99_ms: float) -> selection._MeasuredRun:
         links=[],
         status="active",
     )
-    result = HitResult("hard query", "hard", ["target"], ["target"], 1, p99_ms)
-    observation = QueryContextObservation(
-        query="hard query",
-        difficulty="hard",
-        expected_slugs=["target"],
-        hits=[hit],
-    )
-    summary = selection.RunSummary(1, (0,), (("target",),), p99_ms, 1, 0, True)
-    return selection._MeasuredRun([result], [observation], summary, {"name": "fake"})

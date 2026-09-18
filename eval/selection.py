@@ -25,15 +25,12 @@ from eval.comparison import (
     ABSOLUTE_P99_LIMITS_MS,
     COMPARISON_SCHEMA_VERSION,
     FLOAT_TOLERANCE,
-    HARD_QUERY_MIN_IMPROVEMENT,
-    MAX_RECALL_REGRESSION,
-    PAIRED_P99_RATIO,
-    TOKEN_COST_RATIO,
     CandidateMetrics,
     ComparisonMetadata,
     QueryContextObservation,
     VolatileRunMetadata,
     build_comparison_report,
+    evaluate_candidate,
     nearest_rank_p99_ms,
     p99_latency_from_hits,
     tokens_per_correct_hard_query,
@@ -863,20 +860,31 @@ def _eligible_for_large_scale(baseline: _MeasuredRun, candidate: _MeasuredRun) -
         cand = _quality_metrics(candidate, {})
     except ValueError:
         return False
-    regressions = [
-        base.recall_at_10[bucket] - cand.recall_at_10[bucket]
-        for bucket in ("overall", "easy", "medium")
-    ]
+    verdict = evaluate_candidate(
+        baseline=_with_p99(base, baseline.summary.p99_ms),
+        candidate=_with_p99(cand, candidate.summary.p99_ms),
+    )
+    required_gates = (
+        "hard_recall_at_10",
+        "hard_mrr",
+        "recall_regression",
+        "tokens_per_correct_hard_query",
+        "paired_p99",
+    )
     return (
-        cand.hard_recall_at_10 - base.hard_recall_at_10 + FLOAT_TOLERANCE
-        >= HARD_QUERY_MIN_IMPROVEMENT
-        and cand.hard_mrr - base.hard_mrr + FLOAT_TOLERANCE >= HARD_QUERY_MIN_IMPROVEMENT
-        and all(value <= MAX_RECALL_REGRESSION + FLOAT_TOLERANCE for value in regressions)
-        and cand.tokens_per_correct_hard_query
-        <= base.tokens_per_correct_hard_query * TOKEN_COST_RATIO
+        all(verdict.gates[name].passed for name in required_gates)
         and candidate.summary.p99_ms < ABSOLUTE_P99_LIMITS_MS[10_000]
-        and baseline.summary.p99_ms > 0
-        and candidate.summary.p99_ms / baseline.summary.p99_ms <= PAIRED_P99_RATIO + FLOAT_TOLERANCE
+    )
+
+
+def _with_p99(metrics: CandidateMetrics, p99_ms: float) -> CandidateMetrics:
+    return CandidateMetrics(
+        hard_recall_at_10=metrics.hard_recall_at_10,
+        hard_mrr=metrics.hard_mrr,
+        recall_at_10=metrics.recall_at_10,
+        tokens_per_correct_hard_query=metrics.tokens_per_correct_hard_query,
+        p99_ms={10_000: p99_ms},
+        complete=metrics.complete,
     )
 
 
