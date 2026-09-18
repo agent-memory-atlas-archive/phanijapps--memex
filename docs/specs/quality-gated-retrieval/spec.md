@@ -109,7 +109,9 @@ optional in-process experiment and never a required command-line tool.
 - **Paired metric and gate logic (AC-0001, AC-0002, AC-0003, AC-0004,
   AC-0005, AC-0006): TDD.** Unit tests use
   fixed baseline/candidate records at the exact threshold and immediately on
-  each failing side, so every comparison can independently turn red.
+  each failing side, so every comparison can independently turn red. The T6
+  selection suite adds the ceiling-aware branches introduced after the repaired
+  benchmark raised baseline hard accuracy above the absolute readiness floors.
 - **Reproducible corpus evaluation (AC-0007, AC-0008, AC-0009, AC-0010,
   AC-0028, AC-0029, AC-0030): goal-based integration.**
   The offline evaluator runs baseline and candidate against fresh seed-42
@@ -152,15 +154,16 @@ The sibling plan owns exact stubs and command lines.
 
 ## Acceptance Criteria
 
-- [ ] **AC-0001.** On the 10,000-memory seed-42 realistic corpus, the selected
-      candidate's hard-query Recall@10 is at least 0.05 higher than its paired
-      baseline; for example, a baseline of 0.320 requires at least 0.370. The
-      candidate-selection gate enforces the absolute difference and rejects
-      0.369.
-- [ ] **AC-0002.** On that same paired run, the selected candidate's hard-query
-      MRR is at least 0.05 higher than baseline; for example, a baseline of
-      0.400 requires at least 0.450. The candidate-selection gate enforces the
-      absolute difference and rejects 0.449.
+- [ ] **AC-0001.** On the 10,000-memory seed-42 realistic corpus, when baseline
+      hard-query Recall@10 is below 0.90, the selected candidate improves it by
+      at least 0.05. When baseline is already at least 0.90, the selected
+      candidate has hard-query Recall@10 at least 0.90 and regresses by no more
+      than 0.005. The gate tests both branches at their exact boundaries.
+- [ ] **AC-0002.** On that same paired run, when baseline hard-query MRR is
+      below 0.80, the selected candidate improves it by at least 0.05. When
+      baseline is already at least 0.80, the selected candidate has hard-query
+      MRR at least 0.80 and regresses by no more than 0.005. The gate tests both
+      branches at their exact boundaries.
 - [ ] **AC-0003.** On that same paired run, the candidate's Recall@10 regression
       from baseline is no greater than 0.005 for every member of the closed set
       `{overall, easy, medium}`; a 0.005 regression passes and 0.0051 fails.
@@ -312,8 +315,9 @@ The sibling plan owns exact stubs and command lines.
 - [ ] **AC-0034.** A candidate is eligible for production only when each of the
       repaired realistic, Gutenberg, and Salesforce workloads has Recall@10 at
       least 0.90, MRR at least 0.50, and nDCG@10 at least 0.75, with hard-query
-      Recall@10 at least 0.75 and no declared query family below 0.70. These
-      absolute quality floors are conjunctive with AC-0001 through AC-0006.
+      Recall@10 at least 0.90, hard-query MRR at least 0.80, and no declared
+      query family below 0.70. These absolute quality floors are conjunctive
+      with AC-0001 through AC-0006.
 - [ ] **AC-0035.** The field-fusion candidate runs independent title, body,
       tags/metadata, and stable-identifier ranked searches, each overfetching
       before fusion, and combines their rank positions with reciprocal-rank

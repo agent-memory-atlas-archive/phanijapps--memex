@@ -439,6 +439,38 @@ Gutenberg, and Salesforce workloads at 10K; the second runs the selected
 candidate and baseline through the 100K scale gate. `tests/unit/test_eval_selection.py`
 owns `test_selection_rejects_missing_family_or_failed_workload_floor` and
 `test_selection_report_includes_workload_manifest_and_ndcg`.
+`tests/unit/test_retrieval_comparison.py` owns
+`test_high_baseline_uses_absolute_hard_floors_and_non_regression` for the
+ceiling-aware AC-0001 and AC-0002 branches.
+
+```python
+# STUB: AC-0001, AC-0002 high-baseline branch
+from eval.comparison import CandidateMetrics, evaluate_candidate
+
+
+def test_high_baseline_uses_absolute_hard_floors_and_non_regression() -> None:
+    baseline = CandidateMetrics(
+        0.940,
+        0.820,
+        {"overall": 0.940, "easy": 0.950, "medium": 0.930},
+        100.0,
+        {10_000: 40.0, 100_000: 80.0},
+        True,
+    )
+    candidate = CandidateMetrics(
+        0.935,
+        0.815,
+        {"overall": 0.935, "easy": 0.945, "medium": 0.925},
+        80.0,
+        {10_000: 40.0, 100_000: 80.0},
+        True,
+    )
+
+    verdict = evaluate_candidate(baseline=baseline, candidate=candidate)
+
+    assert verdict.gates["hard_recall_at_10"].passed is True
+    assert verdict.gates["hard_mrr"].passed is True
+```
 
 ```python
 # STUB: AC-0034, AC-0038
