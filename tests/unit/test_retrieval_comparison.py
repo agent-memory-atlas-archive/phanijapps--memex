@@ -55,6 +55,31 @@ def test_candidate_gate_requires_one_candidate_to_pass_every_threshold() -> None
     assert all(gate.passed for gate in verdict.gates.values())
 
 
+def test_hard_quality_gates_use_absolute_floor_when_baseline_is_already_high() -> None:
+    baseline = CandidateMetrics(
+        hard_recall_at_10=0.920,
+        hard_mrr=0.820,
+        recall_at_10={"overall": 0.920, "easy": 0.950, "medium": 0.930},
+        tokens_per_correct_hard_query=100.0,
+        p99_ms={10_000: 40.0, 100_000: 80.0},
+        complete=True,
+    )
+    candidate = CandidateMetrics(
+        hard_recall_at_10=0.915,
+        hard_mrr=0.815,
+        recall_at_10={"overall": 0.915, "easy": 0.945, "medium": 0.925},
+        tokens_per_correct_hard_query=80.0,
+        p99_ms={10_000: 44.0, 100_000: 88.0},
+        complete=True,
+    )
+
+    verdict = evaluate_candidate(baseline=baseline, candidate=candidate)
+
+    assert verdict.gates["hard_recall_at_10"].passed is True
+    assert verdict.gates["hard_mrr"].passed is True
+    assert verdict.passed is True
+
+
 def _passing_baseline() -> CandidateMetrics:
     return CandidateMetrics(
         hard_recall_at_10=0.320,

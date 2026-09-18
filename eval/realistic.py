@@ -361,7 +361,7 @@ class RealisticCorpusGenerator:
         tags = ["architecture", service.split("-")[0], concern.split()[0]]
         self._write("entity", title, body, tags, topic=topic)
         self._add_query(f"how does {service} handle {concern}", topic, "medium")
-        self._add_query(f"{service} architecture", topic, "easy")
+        self._add_query(f"{service} {concern} architecture", topic, "easy")
         self._add_query(
             f"why {pattern} instead of {alternative} for {service} {concern}",
             topic,
@@ -475,7 +475,7 @@ class RealisticCorpusGenerator:
         title = f"Convention: {convention[:50]}"
         tags = ["convention", "coding-standards"]
         self._write("procedure", title, body, tags, topic=topic)
-        self._add_query(f"why {convention.split()[0]}", topic, "medium")
+        self._add_query(f"why {convention}", topic, "medium")
 
     def _gen_infrastructure(self) -> None:
         rng = self._rng
@@ -520,7 +520,7 @@ class RealisticCorpusGenerator:
         tags = ["infrastructure", env]
         self._write("entity", title, body, tags, topic=topic)
         self._add_query(f"{env} {resource}", topic, "easy")
-        self._add_query(f"how many nodes in {env}", topic, "medium")
+        self._add_query(f"how many nodes in {env} {resource}", topic, "medium")
 
     def _gen_domain_knowledge(self) -> None:
         rng = self._rng
@@ -570,7 +570,7 @@ class RealisticCorpusGenerator:
         title = f"{project}: migrated from {from_tech} to {to_tech}"
         tags = ["migration", project]
         self._write("summary", title, body, tags, topic=topic)
-        self._add_query(f"why did we switch from {from_tech}", topic, "medium")
+        self._add_query(f"why did {project} switch from {from_tech}", topic, "medium")
         self._add_query(f"{project} {to_tech}", topic, "easy")
 
     def _gen_session(self) -> None:

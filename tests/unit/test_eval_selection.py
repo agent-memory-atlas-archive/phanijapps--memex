@@ -202,6 +202,23 @@ def test_candidate_run_is_independent_of_baseline_access_state(tmp_path: Path) -
     ]
 
 
+def test_single_pass_weighted_candidate_is_selectable(tmp_path: Path) -> None:
+    snapshot_dir = tmp_path / "snapshot"
+    corpus = selection._generate_snapshot(snapshot_dir, size=12, seed=42)
+
+    candidate = selection._run_candidate_pair(
+        name="single-pass-weighted-fts5",
+        snapshot_dir=snapshot_dir,
+        data_dir=tmp_path / "candidate-single-pass",
+        corpus=corpus,
+        top_k=10,
+    )
+
+    assert "single-pass-weighted-fts5" in selection.CANDIDATE_NAMES
+    assert candidate.ranker_metadata["name"] == "single-pass-weighted-fts5"
+    assert candidate.summary.query_count == len(corpus.queries)
+
+
 def test_promotion_uses_one_baseline_per_actual_scale_and_never_duplicates_p99(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -352,9 +369,26 @@ def test_selection_rejects_missing_family_or_failed_workload_floor() -> None:
         mrr=0.60,
         ndcg_at_10=0.80,
         hard_recall_at_10=0.80,
+        hard_mrr=0.80,
         by_family={"alias": 0.90},
     )
     assert validate_workload_metrics(metrics).passed is False
+
+
+def test_selection_rejects_failed_hard_mrr_workload_floor() -> None:
+    metrics = WorkloadMetrics(
+        recall_at_10=0.90,
+        mrr=0.80,
+        ndcg_at_10=0.75,
+        hard_recall_at_10=0.90,
+        hard_mrr=0.79,
+        by_family={"alias": 0.90},
+    )
+
+    verdict = validate_workload_metrics(metrics)
+
+    assert verdict.passed is False
+    assert verdict.gates["hard_mrr"] is False
 
 
 def test_selection_treats_hard_floor_as_inapplicable_without_hard_queries() -> None:
@@ -363,6 +397,7 @@ def test_selection_treats_hard_floor_as_inapplicable_without_hard_queries() -> N
         mrr=0.50,
         ndcg_at_10=0.75,
         hard_recall_at_10=0.0,
+        hard_mrr=0.0,
         by_family={"book-title": 0.90},
         hard_query_count=0,
     )
@@ -371,6 +406,7 @@ def test_selection_treats_hard_floor_as_inapplicable_without_hard_queries() -> N
 
     assert verdict.passed is True
     assert verdict.gates["hard_recall_at_10"] is True
+    assert verdict.gates["hard_mrr"] is True
 
 
 def test_selection_report_includes_workload_manifest_and_ndcg() -> None:

@@ -60,6 +60,46 @@ def test_realistic_architecture_hard_queries_expose_expected_discriminators(
             assert slug_tokens <= query_tokens
 
 
+def test_realistic_positive_queries_expose_topic_discriminators(tmp_path: Path) -> None:
+    corpus = RealisticCorpusGenerator(tmp_path, seed=42).generate(160)
+
+    _assert_queries_cover_expected_title_terms(
+        tmp_path,
+        [
+            query
+            for query in corpus.queries
+            if query.family == "arch" and query.difficulty == "easy"
+        ],
+        stop_words={"design"},
+    )
+    _assert_queries_cover_expected_title_terms(
+        tmp_path,
+        [
+            query
+            for query in corpus.queries
+            if query.family == "infra" and query.difficulty == "medium"
+        ],
+    )
+    temporal_queries = [
+        query
+        for query in corpus.queries
+        if query.family == "temporal" and query.difficulty == "medium"
+    ]
+    assert temporal_queries
+    for query in temporal_queries:
+        title_tokens = re.findall(r"[a-z0-9]+", _page_title(tmp_path, query.expected_slugs[0]))
+        query_tokens = set(re.findall(r"[a-z0-9]+", query.query.casefold()))
+        assert {title_tokens[0], title_tokens[3]} <= query_tokens
+    convention_queries = [
+        query for query in corpus.queries if query.family == "conv" and query.difficulty == "medium"
+    ]
+    assert convention_queries
+    for query in convention_queries:
+        expected_body = _page_body(tmp_path, query.expected_slugs[0]).casefold()
+        convention = expected_body.split("always ", 1)[1].split(". never", 1)[0]
+        assert convention in query.query.casefold()
+
+
 def test_gutenberg_import_is_bounded_offline_and_deterministic(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -173,3 +213,34 @@ def test_multi_label_metrics_ignore_negative_queries() -> None:
 def _fail_network(*args: object, **kwargs: object) -> None:
     del args, kwargs
     raise AssertionError("network access is forbidden")
+
+
+def _assert_queries_cover_expected_title_terms(
+    data_dir: Path,
+    queries: list[QuerySpec],
+    *,
+    stop_words: set[str] | None = None,
+) -> None:
+    assert queries
+    ignored = stop_words or set()
+    for query in queries:
+        title_tokens = set(re.findall(r"[a-z0-9]+", _page_title(data_dir, query.expected_slugs[0])))
+        query_tokens = set(re.findall(r"[a-z0-9]+", query.query.casefold()))
+        assert title_tokens - ignored <= query_tokens
+
+
+def _page_title(data_dir: Path, slug: str) -> str:
+    text = _page_text(data_dir, slug)
+    match = re.search(r"^title: (.+)$", text, flags=re.MULTILINE)
+    assert match is not None
+    return match.group(1).casefold()
+
+
+def _page_text(data_dir: Path, slug: str) -> str:
+    matches = list((data_dir / "docs").rglob(f"{slug}.md"))
+    assert len(matches) == 1
+    return matches[0].read_text(encoding="utf-8")
+
+
+def _page_body(data_dir: Path, slug: str) -> str:
+    return _page_text(data_dir, slug).split("---", 2)[2]

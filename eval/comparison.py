@@ -11,6 +11,8 @@ from memex.application import context_injection
 from memex.domain.models import RecallHit, RecallResult
 
 HARD_QUERY_MIN_IMPROVEMENT = 0.05
+HARD_RECALL_FLOOR = 0.90
+HARD_MRR_FLOOR = 0.80
 MAX_RECALL_REGRESSION = 0.005
 TOKEN_COST_RATIO = 0.80
 PAIRED_P99_RATIO = 1.10
@@ -162,15 +164,15 @@ def evaluate_candidate(
     candidate: CandidateMetrics,
 ) -> CandidateVerdict:
     gates = {
-        "hard_recall_at_10": _minimum_delta_gate(
+        "hard_recall_at_10": _hard_quality_gate(
             candidate.hard_recall_at_10,
             baseline.hard_recall_at_10,
-            HARD_QUERY_MIN_IMPROVEMENT,
+            HARD_RECALL_FLOOR,
         ),
-        "hard_mrr": _minimum_delta_gate(
+        "hard_mrr": _hard_quality_gate(
             candidate.hard_mrr,
             baseline.hard_mrr,
-            HARD_QUERY_MIN_IMPROVEMENT,
+            HARD_MRR_FLOOR,
         ),
         "recall_regression": _recall_regression_gate(baseline, candidate),
         "tokens_per_correct_hard_query": _token_gate(baseline, candidate),
@@ -248,6 +250,31 @@ def _minimum_delta_gate(candidate_value: float, baseline_value: float, delta: fl
         observed=observed_delta,
         threshold=delta,
         reason="" if passed else "candidate improvement is below the threshold",
+    )
+
+
+def _hard_quality_gate(candidate_value: float, baseline_value: float, floor: float) -> GateVerdict:
+    regression = baseline_value - candidate_value
+    if baseline_value + FLOAT_TOLERANCE < floor:
+        return _minimum_delta_gate(candidate_value, baseline_value, HARD_QUERY_MIN_IMPROVEMENT)
+    passed = (
+        candidate_value + FLOAT_TOLERANCE >= floor
+        and regression <= MAX_RECALL_REGRESSION + FLOAT_TOLERANCE
+    )
+    observed: dict[str, JsonValue] = {
+        "candidate": candidate_value,
+        "baseline": baseline_value,
+        "regression": regression,
+    }
+    threshold: dict[str, JsonValue] = {
+        "floor": floor,
+        "max_regression": MAX_RECALL_REGRESSION,
+    }
+    return GateVerdict(
+        passed=passed,
+        observed=observed,
+        threshold=threshold,
+        reason="" if passed else "candidate misses hard quality floor or regression bound",
     )
 
 

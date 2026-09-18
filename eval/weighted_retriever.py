@@ -60,8 +60,10 @@ ORDER BY score, w.slug
 LIMIT :limit
 """
 
+_SINGLE_PASS_BODY_WEIGHT = 2.0
+
 _WEIGHTED_FTS5_SOURCE_SQL = """
-SELECT w.slug, bm25(wiki_fts, 1.0, 1.0, 3.0, 1.0) AS score
+SELECT w.slug, bm25(wiki_fts, 1.0, 1.0, :body_weight, 1.0) AS score
 FROM wiki_fts
 JOIN wiki_index w ON w.rowid = wiki_fts.rowid
 WHERE wiki_fts MATCH :match
@@ -311,7 +313,7 @@ class SinglePassWeightedFts5Retriever(WeightedLexicalRetriever):
             "column_weights": {
                 "slug": 1.0,
                 "title": 1.0,
-                "body": 3.0,
+                "body": _SINGLE_PASS_BODY_WEIGHT,
                 "tags": 1.0,
             },
             "source_limit_multiplier": _SOURCE_LIMIT_MULTIPLIER,
@@ -333,6 +335,7 @@ class SinglePassWeightedFts5Retriever(WeightedLexicalRetriever):
                 "match": match,
                 "limit": limit,
                 "now": now,
+                "body_weight": _SINGLE_PASS_BODY_WEIGHT,
             },
         ).fetchall()
         return [

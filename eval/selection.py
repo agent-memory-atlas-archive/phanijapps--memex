@@ -42,7 +42,7 @@ from eval.corpus import CorpusResult, QuerySpec
 from eval.realistic import RealisticCorpusGenerator
 from eval.rgapi_candidate import rank_rgapi_candidate
 from eval.runner import HitResult
-from eval.weighted_retriever import WeightedLexicalRetriever
+from eval.weighted_retriever import SinglePassWeightedFts5Retriever, WeightedLexicalRetriever
 from eval.workloads import (
     GUTENBERG_FIXTURE,
     SALESFORCE_FIXTURE,
@@ -61,7 +61,7 @@ from memex.domain.slugs import unique_slug
 from memex.infrastructure.config import MemexConfig
 from memex.infrastructure.wiki_store import TYPE_DIRS, hash_body
 
-type CandidateName = Literal["field-channel-rrf-k60", "rgapi-0.1.22"]
+type CandidateName = Literal["field-channel-rrf-k60", "single-pass-weighted-fts5", "rgapi-0.1.22"]
 type WorkloadName = Literal["realistic", "gutenberg", "salesforce"]
 type FailureCategory = Literal[
     "dependency_unavailable",
@@ -74,7 +74,11 @@ type FailureCategory = Literal[
 ]
 type JsonValue = str | int | float | bool | list[JsonValue] | dict[str, JsonValue] | None
 
-CANDIDATE_NAMES: tuple[CandidateName, ...] = ("field-channel-rrf-k60", "rgapi-0.1.22")
+CANDIDATE_NAMES: tuple[CandidateName, ...] = (
+    "field-channel-rrf-k60",
+    "single-pass-weighted-fts5",
+    "rgapi-0.1.22",
+)
 WORKLOAD_NAMES: tuple[WorkloadName, ...] = ("realistic", "gutenberg", "salesforce")
 CLOSED_FAILURE_CATEGORIES: set[FailureCategory] = {
     "dependency_unavailable",
@@ -96,7 +100,8 @@ TOKEN_BUDGET = context_injection.DEFAULT_MAX_TOKENS
 WORKLOAD_RECALL_FLOOR = 0.90
 WORKLOAD_MRR_FLOOR = 0.50
 WORKLOAD_NDCG_FLOOR = 0.75
-WORKLOAD_HARD_RECALL_FLOOR = 0.75
+WORKLOAD_HARD_RECALL_FLOOR = 0.90
+WORKLOAD_HARD_MRR_FLOOR = 0.80
 WORKLOAD_FAMILY_RECALL_FLOOR = 0.70
 _MAX_FAILURE_REASON = 120
 _QUERY_TOKENS = re.compile(r"[a-z0-9]+")
@@ -140,6 +145,7 @@ class WorkloadMetrics:
     mrr: float
     ndcg_at_10: float
     hard_recall_at_10: float
+    hard_mrr: float
     by_family: Mapping[str, float]
     hard_query_count: int = 1
 
@@ -149,6 +155,7 @@ class WorkloadMetrics:
             "mrr": self.mrr,
             "ndcg_at_10": self.ndcg_at_10,
             "hard_recall_at_10": self.hard_recall_at_10,
+            "hard_mrr": self.hard_mrr,
             "hard_query_count": self.hard_query_count,
             "by_family": dict(self.by_family),
         }
@@ -588,9 +595,7 @@ def _run_candidate_pair(
     stop_reason: FailureCategory | None = None
     metadata: dict[str, JsonValue] = {"name": name}
     candidate_started = time.perf_counter()
-    weighted = (
-        WeightedLexicalRetriever(data_dir / "mem.db") if name == "field-channel-rrf-k60" else None
-    )
+    weighted = _weighted_retriever_for_candidate(name, data_dir / "mem.db")
     rgapi_conn = sqlite3.connect(data_dir / "mem.db") if name == "rgapi-0.1.22" else None
     if rgapi_conn is not None:
         rgapi_conn.row_factory = sqlite3.Row
@@ -661,6 +666,17 @@ def _run_weighted_query(
     return _CandidateOutcome(
         recalled.hits, latency_ms, True, None, _json_mapping(retriever.metadata())
     )
+
+
+def _weighted_retriever_for_candidate(
+    name: CandidateName,
+    db_path: Path,
+) -> WeightedLexicalRetriever | None:
+    if name == "field-channel-rrf-k60":
+        return WeightedLexicalRetriever(db_path)
+    if name == "single-pass-weighted-fts5":
+        return SinglePassWeightedFts5Retriever(db_path)
+    return None
 
 
 def _run_rgapi_query(
@@ -952,6 +968,8 @@ def validate_workload_metrics(metrics: WorkloadMetrics) -> WorkloadVerdict:
         "ndcg_at_10": metrics.ndcg_at_10 + FLOAT_TOLERANCE >= WORKLOAD_NDCG_FLOOR,
         "hard_recall_at_10": metrics.hard_query_count == 0
         or metrics.hard_recall_at_10 + FLOAT_TOLERANCE >= WORKLOAD_HARD_RECALL_FLOOR,
+        "hard_mrr": metrics.hard_query_count == 0
+        or metrics.hard_mrr + FLOAT_TOLERANCE >= WORKLOAD_HARD_MRR_FLOOR,
         "family_recall_at_10": bool(metrics.by_family)
         and all(
             value + FLOAT_TOLERANCE >= WORKLOAD_FAMILY_RECALL_FLOOR
@@ -997,7 +1015,7 @@ def _metrics_for_queries(
         if not query.negative
     ]
     if not paired:
-        return WorkloadMetrics(0.0, 0.0, 0.0, 0.0, {})
+        return WorkloadMetrics(0.0, 0.0, 0.0, 0.0, 0.0, {})
     hard = [(query, result) for query, result in paired if query.difficulty == "hard"]
     by_family = {
         family: _paired_recall_at_10(
@@ -1013,6 +1031,7 @@ def _metrics_for_queries(
         )
         / len(paired),
         hard_recall_at_10=_paired_recall_at_10(hard) if hard else 0.0,
+        hard_mrr=_paired_mrr(hard) if hard else 0.0,
         by_family=by_family,
         hard_query_count=len(hard),
     )
@@ -1033,16 +1052,23 @@ def _reciprocal_rank(query: QuerySpec, result: HitResult) -> float:
     return 0.0 if rank is None else 1.0 / rank
 
 
+def _paired_mrr(paired: Sequence[tuple[QuerySpec, HitResult]]) -> float:
+    if not paired:
+        return 0.0
+    return sum(_reciprocal_rank(query, result) for query, result in paired) / len(paired)
+
+
 def _overall_workload_metrics(report: Mapping[str, JsonValue]) -> WorkloadMetrics:
     raw = report["overall"]
     if not isinstance(raw, dict):
-        return WorkloadMetrics(0.0, 0.0, 0.0, 0.0, {})
+        return WorkloadMetrics(0.0, 0.0, 0.0, 0.0, 0.0, {})
     by_family = raw.get("by_family")
     return WorkloadMetrics(
         recall_at_10=_json_float(raw.get("recall_at_10")),
         mrr=_json_float(raw.get("mrr")),
         ndcg_at_10=_json_float(raw.get("ndcg_at_10")),
         hard_recall_at_10=_json_float(raw.get("hard_recall_at_10")),
+        hard_mrr=_json_float(raw.get("hard_mrr")),
         by_family=_json_float_mapping(by_family),
         hard_query_count=int(_json_float(raw.get("hard_query_count"))),
     )

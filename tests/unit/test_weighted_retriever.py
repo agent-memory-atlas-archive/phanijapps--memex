@@ -164,6 +164,22 @@ def test_single_pass_weighted_fts5_uses_one_overfetched_search_call(
     index.close()
 
 
+def test_single_pass_weighted_fts5_metadata_reports_body_weight(data_dir: Path) -> None:
+    index = _index_nodes(data_dir, [_node("Alpha", "alpha beta", slug="alpha")])
+    retriever = SinglePassWeightedFts5Retriever(data_dir / "mem.db")
+
+    metadata = retriever.metadata()
+
+    assert metadata["column_weights"] == {
+        "slug": 1.0,
+        "title": 1.0,
+        "body": 2.0,
+        "tags": 1.0,
+    }
+    retriever.close()
+    index.close()
+
+
 def test_weighted_candidate_diversifies_duplicate_titles_and_records_access_once(
     data_dir: Path,
 ) -> None:
