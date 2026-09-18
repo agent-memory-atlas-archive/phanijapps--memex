@@ -10,7 +10,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
+import tempfile
+from dataclasses import asdict
+from datetime import UTC, datetime
 from pathlib import Path
 
 from eval.corpus import CorpusResult
@@ -38,10 +42,18 @@ def _build_parser() -> argparse.ArgumentParser:
     retrieval_cmd.add_argument("--size", type=int, default=100)
     retrieval_cmd.add_argument("--seed", type=int, default=42)
     retrieval_cmd.add_argument(
-        "--data-dir", default=None, help="Eval store location (default ~/.memex-eval)"
+        "--data-dir",
+        default=None,
+        help="Empty eval store location (default: a fresh temporary directory)",
     )
     retrieval_cmd.add_argument(
         "--realistic", action="store_true", help="Evaluate against the real-world-shaped corpus"
+    )
+    retrieval_cmd.add_argument(
+        "--json-output",
+        type=Path,
+        default=None,
+        help="Write reproducibility metadata and metrics as JSON",
     )
     return parser
 
@@ -64,11 +76,82 @@ def _generate_corpus(eval_dir: Path, *, size: int, seed: int, realistic: bool) -
     return result
 
 
+def _git_state() -> tuple[str, bool | None]:
+    """Return the source revision and whether tracked or untracked files differ."""
+    repo_root = Path(__file__).resolve().parents[1]
+    try:
+        revision = subprocess.run(
+            ["git", "rev-parse", "HEAD"],  # noqa: S607
+            cwd=repo_root,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        status = subprocess.run(
+            ["git", "status", "--porcelain"],  # noqa: S607
+            cwd=repo_root,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return "unknown", None
+    return revision.stdout.strip() or "unknown", bool(status.stdout.strip())
+
+
+def _assert_fresh_eval_dir(eval_dir: Path) -> None:
+    """Reject contaminated stores without deleting caller-owned files."""
+    if eval_dir.exists() and any(eval_dir.iterdir()):
+        raise ValueError(f"retrieval eval data directory must be empty: {eval_dir}")
+
+
+def _run_retrieval(args: argparse.Namespace, eval_dir: Path, *, ephemeral: bool) -> int:
+    _assert_fresh_eval_dir(eval_dir)
+    corpus = _generate_corpus(
+        eval_dir,
+        size=args.size,
+        seed=args.seed,
+        realistic=args.realistic,
+    )
+    memex = Memex(MemexConfig(data_dir=eval_dir))
+    try:
+        report = run_retrieval_eval(memex, corpus, top_k=args.top_k)
+    finally:
+        memex.close()
+
+    print(format_report(report))
+    if args.json_output is not None:
+        git_commit, git_dirty = _git_state()
+        payload = {
+            "schema_version": 1,
+            "run": {
+                "created_at": datetime.now(UTC).isoformat(),
+                "git_commit": git_commit,
+                "git_dirty": git_dirty,
+                "seed": args.seed,
+                "requested_corpus_size": args.size,
+                "top_k": args.top_k,
+                "realistic": args.realistic,
+                "data_dir": str(eval_dir),
+                "ephemeral_data_dir": ephemeral,
+                "ranker": {
+                    "name": "sqlite-fts5-bm25",
+                    "query_strategy": "or",
+                    "fields": ["slug", "title", "body", "tags"],
+                },
+            },
+            "metrics": asdict(report),
+        }
+        args.json_output.parent.mkdir(parents=True, exist_ok=True)
+        args.json_output.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
-    eval_dir = Path(getattr(args, "data_dir", None) or "~/.memex-eval").expanduser()
 
     if args.command == "corpus":
+        eval_dir = Path(args.data_dir or "~/.memex-eval").expanduser()
         result = _generate_corpus(
             eval_dir, size=args.size, seed=args.seed, realistic=args.realistic
         )
@@ -85,14 +168,10 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
 
-    corpus = _generate_corpus(eval_dir, size=args.size, seed=args.seed, realistic=args.realistic)
-    memex = Memex(MemexConfig(data_dir=eval_dir))
-    try:
-        report = run_retrieval_eval(memex, corpus, top_k=args.top_k)
-    finally:
-        memex.close()
-    print(format_report(report))
-    return 0
+    if args.data_dir is not None:
+        return _run_retrieval(args, Path(args.data_dir).expanduser(), ephemeral=False)
+    with tempfile.TemporaryDirectory(prefix="memex-eval-") as temp_dir:
+        return _run_retrieval(args, Path(temp_dir), ephemeral=True)
 
 
 if __name__ == "__main__":

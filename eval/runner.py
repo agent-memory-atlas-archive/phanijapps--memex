@@ -45,11 +45,8 @@ def run_retrieval_eval(
     results: list[HitResult] = []
     for q in corpus.queries:
         started = time.perf_counter()
-        try:
-            recall_result = memex.recall(q.query, top_k=top_k)
-            actual = [hit.slug for hit in recall_result.hits]
-        except Exception:
-            actual = []
+        recall_result = memex.recall(q.query, top_k=top_k)
+        actual = [hit.slug for hit in recall_result.hits]
         elapsed = (time.perf_counter() - started) * 1000
 
         found_rank = None
@@ -82,7 +79,7 @@ def _compute_metrics(results: list[HitResult], corpus_size: int) -> EvalReport:
     def _precision_at_5() -> float:
         """Fraction of top-5 results that are in the expected set."""
         scores = []
-        for r in results[:100]:  # sample to keep it fast
+        for r in results:
             top5 = r.actual_slugs[:5]
             relevant = sum(1 for s in top5 if s in r.expected_slugs)
             scores.append(relevant / 5 if top5 else 0.0)
