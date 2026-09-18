@@ -56,12 +56,45 @@ rebuilt from the pages.
 
 ### Recall and injection
 
-1. `BM25Retriever` tokenizes untrusted query text before constructing an FTS5
-   query and searches active, non-expired pages by default.
+1. `BM25Retriever` reduces untrusted query text to safe alphanumeric tokens,
+   removes only known semantic scaffolding phrases, and searches active,
+   non-expired pages by default.
 2. Returned hits update access statistics in SQLite; reads do not rewrite
    Markdown pages.
 3. Hook injection applies a relevance floor, packs hits to a token budget, and
    emits a bounded context block. Explicit recall can still return weak hits.
+
+Production recall uses the `semantic-and-fallback-fts5` ranker. It first runs a
+strict `AND` FTS5 query over the safe tokens with column weights
+`slug=1, title=1, body=2, tags=1`, then broadens to an `OR` query only when the
+strict query returns zero rows. Snippets are capped at 12 tokens. Filters are
+applied before each limit, returned slugs are unique, links and access
+statistics are loaded once after ranking, and ascending slug is the final
+tie-break. The ranker is local SQLite FTS5 only: no embeddings, network service,
+runtime `rgapi`, subprocess search, or new required dependency is on the recall
+path.
+
+### Retrieval evaluation security controls
+
+Retrieval evaluation uses independent offline workloads and treats every source
+as untrusted. Salesforce coverage is represented by concise, independently
+authored offline Salesforce facts with official URLs as provenance; tests and
+evaluations never scrape or fetch Salesforce pages. Gutenberg coverage comes
+from a maintainer-supplied local Project Gutenberg catalog import, not from
+HTML crawling or book text.
+
+Fixture output is confined to the resolved repository fixture directory before
+replacement. The Gutenberg importer accepts only a regular `.csv.gz` catalog,
+enforces compressed and expanded parser limits, validates the allowlisted schema
+and UTF-8 JSONL output, and stops before replacement on gzip, CSV, schema,
+size, row, field, path, or serialization errors. Ordinary tests and evaluation
+run with no network access; socket and HTTP sentinels prove that path.
+Integrity failures fail closed rather than producing promotion evidence.
+Retained reports are redacted: they keep categories, metrics, workload
+manifests, ranker metadata, and non-identifying environment fields, but exclude
+memory contents, credentials, raw non-generated queries, absolute or
+user-specific paths, hostnames, usernames, device names, profile paths, stack
+traces, and exception strings.
 
 ### Transcript capture
 

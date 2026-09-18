@@ -59,6 +59,41 @@ Verification on that committed tree:
 - Pytest: 494 passed, 1 skipped in 141.14 seconds; coverage 90.17%.
 - MkDocs strict build: pass in 0.54 seconds.
 
+## 2026-09-18 — T6 clean promotion
+
+Command:
+
+```bash
+uv run python -m eval.run selection --promotion \
+  --candidate semantic-and-fallback-fts5 \
+  --workload realistic \
+  --workload gutenberg \
+  --workload salesforce \
+  --evidence-dir /tmp/memex-promotion-clean.H9F8Xy/evidence
+```
+
+The run used source revision
+`7af1bb14a857e05f8e5322840c7e6dcb335a7e5f` with `git_dirty=false`, seed 42,
+`top_k=10`, 10,005 generated 10K memories, 100,005 generated 100K memories,
+and 388 sampled queries. The retained PR-only report was
+`/tmp/memex-promotion-clean.H9F8Xy/evidence/selection-promotion.json`.
+
+The selected winner was `semantic-and-fallback-fts5`. It passed promotion,
+was promotion-eligible, and recorded no failures.
+
+- Overall Recall@10/MRR/nDCG@10: `0.9819587629`, `0.9819587629`,
+  `0.9323851353`.
+- Hard-query Recall@10/MRR: baseline `0.9809523810` / `0.9738095238`,
+  candidate `0.9809523810` / `0.9809523810`.
+- Rendered tokens per correct hard query: baseline `1525.6407766990`,
+  threshold `1220.5126213592`, candidate `935.1844660194`.
+- 10K p99: baseline `42.6426850026 ms`, candidate `12.3535629828 ms`,
+  paired ratio `0.2896994639`.
+- 100K p99: baseline `363.3644640213 ms`, candidate `73.0164520210 ms`,
+  paired ratio `0.2009454948`.
+- Workload gates: repaired realistic, Gutenberg, and Salesforce each passed
+  Recall@10, MRR, nDCG@10, hard Recall@10, hard MRR, and family Recall@10.
+
 ## 2026-09-18 — T7 production promotion smoke
 
 Command:
@@ -71,3 +106,37 @@ The isolated store contained the winner-discriminating fixture used by
 `tests/integration/test_recall_winner.py`. The command exited zero, reported
 `search_engine="semantic-and-fallback-fts5"`, and returned
 `atlas-risk-integration` as the first slug.
+
+## 2026-09-18 — T8 durable documentation closeout
+
+Durable documentation now describes the shipped `semantic-and-fallback-fts5`
+ranker, the retained promotion evidence, the runtime dependency disposition,
+and the retrieval-evaluation security controls required by AC-0039. The
+content-pin test covers offline Salesforce facts, maintainer-supplied local
+Project Gutenberg import, fixture-output confinement, compressed and expanded
+parser limits, no-network execution, fail-closed integrity errors, and retained
+report redaction.
+
+Verification:
+
+- Focused docs content test with normal coverage disabled:
+  `uv run pytest --no-cov tests/unit/test_docs_retrieval_controls.py` — pass,
+  1 test in 0.03 seconds. The same focused test also passed under the normal
+  coverage configuration, but that one-test invocation failed the repository
+  coverage threshold because no package module was imported.
+- MkDocs strict build: pass in 0.54 seconds after this ledger entry.
+- Ruff check: pass.
+- Ruff format check: pass, 110 files.
+- Mypy: pass, 95 source files.
+- Pytest: 533 passed, 1 skipped in 137.70 seconds; coverage 90.28%.
+
+Acceptance-correction verification after adding the T6 clean-promotion entry,
+correcting the GitPages SQL join, removing false duplicate-before-limit prose,
+and narrowing the changelog claim:
+
+- Focused docs content test:
+  `uv run pytest --no-cov tests/unit/test_docs_retrieval_controls.py` — pass,
+  1 test in 0.02 seconds.
+- MkDocs strict build: pass in 0.54 seconds.
+- Ruff check: pass.
+- Ruff format check: pass, 110 files.

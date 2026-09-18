@@ -24,6 +24,9 @@ unreleased because the repository has no release tag or newer package version.
 - Stale SQLite schema versions rebuild automatically from Markdown pages.
 - Episode and capture metadata retain richer session, model, reasoning-effort,
   Git, and token-usage context when the harness provides it.
+- Recall now uses the `semantic-and-fallback-fts5` SQLite FTS5 ranker, which
+  passed repaired realistic, Gutenberg, and Salesforce quality gates while
+  reducing hard-query context tokens and latency and keeping recall offline.
 
 ### Fixed
 

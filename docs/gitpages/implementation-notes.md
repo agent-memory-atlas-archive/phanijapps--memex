@@ -151,3 +151,24 @@ rule, and the OpenAI SDK is the single LLM client.
   `logs/runs.jsonl` run log (F2/F4); three-line memory constitution on
   every injected block (G2). Schema v2: stale `mem.db` auto-rebuilds from
   the wiki on open — no DDL migration path exists.
+
+- **Quality-gated retrieval winner.** Production recall now reports
+  `search_engine="semantic-and-fallback-fts5"`. The ranker keeps SQLite FTS5 as
+  the only runtime search dependency, reduces queries to safe tokens, removes
+  known semantic scaffolding phrases, runs strict weighted `AND` matching first
+  (`slug=1, title=1, body=2, tags=1`), and falls back to weighted `OR` only
+  when strict matching returns zero rows. Snippets are capped at 12 tokens;
+  filters apply before limiting; returned slugs are unique; links and access
+  rows are batched once after ranking; ascending slug is the final tie-break.
+  Clean promotion evidence at commit `438d182` selected the ranker
+  with overall Recall@10 `0.9819588`, MRR `0.9819588`, nDCG@10 `0.9323851`,
+  hard Recall/MRR `0.9809524`, hard tokens per correct result `935.18` versus
+  the `1220.51` threshold, 10K p99 `12.35 ms` versus baseline `42.64 ms`, and
+  100K p99 `73.02 ms` versus baseline `363.36 ms`. All repaired realistic,
+  Gutenberg, and Salesforce workload gates passed in the promotion report.
+
+- **Retrieval dependency disposition.** `rgapi==0.1.22` remains an optional
+  evaluation candidate only. It is not imported by `src/memex`, is not required
+  for base installs, and is not a user-facing recall selector. No embeddings,
+  cross-encoder, hosted search service, graph database, network call, or `rg`
+  executable was added to the production recall path.
