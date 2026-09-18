@@ -118,16 +118,25 @@ minimum independently shippable slices before any spec enters the Spec map.
 
 ## Governance references
 
-- [`ADR-0001`](../../adr/0001-use-markdown-pages-as-memory-source-of-truth.md)
-  fixes Markdown as the source of truth and SQLite as disposable derived state.
-- [`ADR-0002`](../../adr/0002-use-layered-package-and-shared-adapter-contracts.md)
-  requires shared domain and application behavior across adapters.
-- [`ADR-0003`](../../adr/0003-use-one-llm-port-with-api-and-harness-providers.md)
-  constrains consolidation to the existing application-level LLM port.
-- [`ADR-0004`](../../adr/0004-require-user-scope-enablement.md) prevents
+- [`ADR-0001: Use Markdown pages as the memory source of
+  truth`](../../adr/0001-use-markdown-pages-as-memory-source-of-truth.md) fixes
+  Markdown as authoritative and SQLite as disposable derived state.
+- [`ADR-0002: Use a layered package and shared adapter
+  contracts`](../../adr/0002-use-layered-package-and-shared-adapter-contracts.md)
+  requires shared domain and application behavior across the Python API, CLI,
+  MCP, and hooks.
+- [`ADR-0003: Use one LLM port with API and harness
+  providers`](../../adr/0003-use-one-llm-port-with-api-and-harness-providers.md)
+  constrains consolidation to the existing application-level LLM port and
+  keeps ordinary memory operations model-independent.
+- [`ADR-0004: Require user-scope
+  enablement`](../../adr/0004-require-user-scope-enablement.md) prevents
   repository content from enabling capture, injection, or consolidation.
 
 ## Source provenance
+
+Repository sources in this section were reviewed at Git commit
+`c73c5a7fbbf1ab45e20549d2686b12ee8f79357d`.
 
 - [`memory-optimization-survey.md`](../../memory-optimization-survey.md) at Git
   commit `e8ba2701dfaac6159ad0971753a3d7b1bed53f1b` applies the two research
@@ -137,10 +146,13 @@ minimum independently shippable slices before any spec enters the Spec map.
   on hard queries.
 - [`v1_enhance.md`](../../v1_enhance.md) defines the existing A1/A2 and B1-B3/B7
   enhancement signals that overlap this outcome.
-- [Filesystem-Based Memory for LLM Agents](https://arxiv.org/html/2607.26637v1)
-  is the source for retrieval-economy and preservation observations.
-- [SodaMem](https://arxiv.org/html/2608.08055v1) is the source for provenance,
-  temporal fact, supersession, contradiction, and multi-signal retrieval ideas.
+- [Filesystem-Based Memory for LLM Agents: Organization, Evolution, and
+  Sustainability, arXiv:2607.26637v1](https://arxiv.org/html/2607.26637v1) is
+  the source for retrieval-economy and fact-preservation observations.
+- [SodaMem: Evidence-Grounded Temporal Graph Memory for LLM Agents,
+  arXiv:2608.08055v1](https://arxiv.org/html/2608.08055v1) is the source for
+  provenance spans, temporal facts, supersession, contradiction, and
+  multi-signal retrieval ideas. Its graph database is not adopted.
 
 ## Spec map
 
