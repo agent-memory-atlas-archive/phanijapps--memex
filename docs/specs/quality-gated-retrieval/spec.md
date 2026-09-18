@@ -94,8 +94,8 @@ experiment and never a required command-line tool.
   stores because accuracy, rendered-token cost, latency, and completeness are
   observable only across corpus generation, indexing, retrieval, and report
   serialization.
-- **Ranking and compatibility (AC-0011, AC-0012, AC-0013): TDD plus
-  integration.** Pure
+- **Ranking and compatibility (AC-0011, AC-0012, AC-0013, AC-0020, AC-0021,
+  AC-0022): TDD plus integration.** Pure
   fusion and tie-breaking fixtures pin deterministic order; the existing
   retriever and facade suites exercise the filter matrix, side effects, and
   output datatypes through the real SQLite index.
@@ -126,15 +126,20 @@ The sibling plan owns exact stubs and command lines.
       `{overall, easy, medium}`; a 0.005 regression passes and 0.0051 fails.
 - [ ] **AC-0004.** On that same paired run, the candidate's rendered-context
       token cost per correct hard query is at most 80% of baseline. The metric
-      is the sum of the existing deterministic estimator over all rendered
-      hard-query contexts divided by the count of hard queries whose expected
-      page appears in the returned context; the gate rejects a run with zero
-      correct hard queries before division.
+      packs each query's ordered `top_k=10` hits with
+      `context_injection.pack_to_budget(..., max_tokens=4096)`, renders the
+      packed `RecallResult` with `context_injection.format_context_block`, sums
+      `context_injection.estimate_tokens` over those rendered strings, and
+      divides by the count of hard queries whose expected page remains in the
+      packed context. The gate rejects a run with zero correct hard queries
+      before division.
 - [ ] **AC-0005.** Candidate recall p99 is below 50 ms at 10,000 memories and
       below 100 ms at 100,000 memories, measured from immediately before the
       shared recall service call to immediately after its result returns,
-      excluding corpus generation and index construction. The latency gate
-      rejects equality with either bound.
+      excluding corpus generation and index construction. The sample is every
+      query in the generated manifest; p99 is the nearest-rank value
+      `sorted(raw_latency_ms)[ceil(0.99 * n) - 1]`, computed before display
+      rounding. The latency gate rejects equality with either bound.
 - [ ] **AC-0006.** At each measured corpus size in `{10_000, 100_000}`, the
       candidate p99 is no more than 110% of its paired baseline p99. The paired
       latency gate rejects the first size whose ratio exceeds 1.10.
@@ -147,19 +152,20 @@ The sibling plan owns exact stubs and command lines.
 - [ ] **AC-0009.** Every paired report records the source revision and dirty
       flag, Python and Memex versions, operating-system and machine identity,
       corpus generator and seed, requested and generated corpus sizes, query
-      count, `top_k`, token estimator, ranker identity and parameters, per-gate
-      values, and the overall verdict.
+      count, `top_k`, token budget, renderer and token-estimator identities,
+      percentile method, ranker identity and parameters, per-gate values, and
+      the overall verdict.
 - [ ] **AC-0010.** The evaluator refuses a non-empty caller-supplied data
       directory without deleting or changing any entry, while an empty
       directory and the evaluator-created temporary directory both complete.
 - [ ] **AC-0011.** For identical indexed pages and recall arguments, the shipped
-      candidate preserves the existing behavior for `node_type`, `time_range`,
-      all-tags matching, `include_expired`, `include_inactive`, and `top_k`
-      bounds; the compatibility matrix compares returned membership and
-      exclusion decisions with the baseline.
-- [ ] **AC-0012.** Every returned hit has a unique slug, consecutive one-based
-      ranks, and a deterministic order whose final tie-break is ascending slug;
-      100 repeated calls over a tie fixture produce one identical slug order.
+      candidate makes the same per-page eligible/ineligible decision as the
+      baseline for every member of `{node_type, time_range, all-tags matching,
+      include_expired, include_inactive}` and preserves the existing `top_k`
+      validation bounds. Ranked membership and order may differ after this
+      eligibility step.
+- [ ] **AC-0012.** Every returned hit has a unique slug after multiple candidate
+      sources contribute the same page.
 - [ ] **AC-0013.** One explicit recall increments `access_count` exactly once
       for every returned page and never for an unreturned page, including when
       multiple candidate sources contribute the same page.
@@ -180,6 +186,15 @@ The sibling plan owns exact stubs and command lines.
       experimental-backend selector or diagnostic.
 - [ ] **AC-0019.** A successful isolated `memex recall <query>` invocation exits
       zero.
+- [ ] **AC-0020.** Every returned result uses consecutive one-based ranks after
+      candidate fusion, deduplication, and `top_k` limiting.
+- [ ] **AC-0021.** One hundred repeated production-path calls over a tie fixture
+      produce one identical slug order whose final tie-break is ascending slug.
+- [ ] **AC-0022.** A committed winner-discriminating fixture for which the
+      paired report's selected candidate and baseline produce different first
+      slugs returns the selected candidate's first slug through both
+      `Memex.recall` and `memex recall`; the production ranker identity recorded
+      by the test equals the selected candidate identity in that report.
 
 ## Follow-ons
 

@@ -75,12 +75,14 @@ leave the repository working after each task.
 ## Construction tests
 
 - `tests/unit/test_retrieval_comparison.py` owns threshold, same-candidate,
-  determinism, token-accounting, and incomplete-result logic.
+  raw-latency percentile selection, rendered token-accounting, and
+  incomplete-result logic.
 - `tests/unit/test_eval_entry.py` owns isolated-directory and reproducibility
   report behavior.
 - `tests/unit/test_bm25_retriever.py` and
   `tests/acceptance/test_index_retrieval_acceptance.py` own production ranking,
-  compatibility, deduplication, and access-statistic behavior.
+  compatibility, deduplication, rank numbering, production-path determinism,
+  winner identity, and access-statistic behavior.
 - `tests/integration/test_rgapi_candidate.py` owns the optional native binding
   and subprocess prohibition and skips only when the optional extra is absent.
 - Paired seed-42 reports at 10K and 100K are goal-based PR evidence, not
@@ -141,6 +143,10 @@ scores. Query backoff broadens only after a stricter query has insufficient
 candidates. Boosts are deterministic and bounded in rank space. Duplicate
 candidate slugs collapse before `top_k`; ascending slug is the final tie-break.
 The exact candidate parameter grid is report metadata, not a public contract.
+The latency calculation uses every raw per-query observation and nearest-rank
+p99 before any display rounding. Context cost uses the existing injection
+packer, renderer, and estimator with a fixed 4096-token packing budget; report
+metadata pins those identities and the budget.
 
 ### Failure, edge cases, and resilience
 
@@ -183,6 +189,8 @@ AC-0008, AC-0009
   `stub: true`.
 - `test_comparison_report_separates_stable_and_volatile_fields` (AC-0008,
   AC-0009), completed during green.
+- Raw `HitResult` latency and rendered-hit fixtures exercise the percentile and
+  context-cost construction before verdict evaluation (AC-0004, AC-0005).
 
 ```python
 # STUB: AC-0007
@@ -236,14 +244,16 @@ threshold and green at the exact passing boundaries.
 
 **Depends on:** T1
 
-**Spec map:** AC-0012
+**Spec map:** AC-0012, AC-0020, AC-0021
 
 **Mode:** TDD
 
 **Tests:**
 
-- `test_fusion_deduplicates_and_uses_slug_as_final_tie_break` (AC-0012),
-  `stub: true`.
+- `test_fusion_deduplicates_and_uses_slug_as_final_tie_break` (AC-0012,
+  AC-0021), `stub: true`.
+- `test_fusion_assigns_consecutive_one_based_ranks` (AC-0020), completed
+  during green.
 - Candidate fixtures cover title/body/tag weighting, reciprocal-rank fusion,
   query backoff, and bounded boosts without duplicating threshold assertions
   owned by T1.
@@ -271,8 +281,9 @@ def test_fusion_deduplicates_and_uses_slug_as_final_tie_break() -> None:
 search results and rank positions. Keep parameter sets explicit in report
 metadata and stable-sort every output.
 
-**Done when:** the candidate suite proves deterministic, duplicate-free output
-and the evaluator can compare every candidate with baseline.
+**Done when:** the candidate suite proves deterministic, duplicate-free,
+consecutively ranked output and the evaluator can compare every candidate with
+baseline.
 
 ### T3: Optional in-process `rgapi` candidate
 
@@ -322,7 +333,8 @@ before production promotion.
 
 **Depends on:** T4
 
-**Spec map:** AC-0011, AC-0012, AC-0013, AC-0017, AC-0018, AC-0019
+**Spec map:** AC-0011, AC-0012, AC-0013, AC-0017, AC-0018, AC-0019, AC-0020,
+AC-0021, AC-0022
 
 **Mode:** TDD plus manual QA
 
@@ -331,12 +343,16 @@ whether the production seam remains inside `BM25Retriever` or needs one narrow
 infrastructure collaborator. The discovery predicate is the T4 winner's input
 requirements; the constraint is the unchanged `Memex.recall` contract. The
 proof obligation is a real-index compatibility matrix for AC-0011, AC-0012,
-and AC-0013 plus isolated CLI observations for AC-0017, AC-0018, and AC-0019.
+AC-0013, AC-0020, and AC-0021; a committed winner-discriminating API/CLI
+fixture for AC-0022; and isolated CLI observations for AC-0017, AC-0018, and
+AC-0019.
 
 **Approach:** move only the selected deterministic mechanism into the existing
 infrastructure retrieval owner, deduplicate before limiting and access updates,
 and leave every adapter on `Memex.recall`. If the winner depends on `rgapi`,
-stop for the Ask-first runtime dependency and portability decision.
+stop for the Ask-first runtime dependency and portability decision. Persist one
+minimal fixture whose baseline and winning orders differ, then verify the
+winning order and candidate identity through the shared API and CLI.
 
 **Done when:** the compatibility, retrieval acceptance, and manual CLI checks
 pass through the shared service.
