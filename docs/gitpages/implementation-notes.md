@@ -160,7 +160,7 @@ rule, and the OpenAI SDK is the single LLM client.
   when strict matching returns zero rows. Snippets are capped at 12 tokens;
   filters apply before limiting; returned slugs are unique; links and access
   rows are batched once after ranking; ascending slug is the final tie-break.
-  Clean promotion evidence at commit `438d182` selected the ranker
+  Clean promotion evidence at commit `7af1bb1` selected the ranker
   with overall Recall@10 `0.9819588`, MRR `0.9819588`, nDCG@10 `0.9323851`,
   hard Recall/MRR `0.9809524`, hard tokens per correct result `935.18` versus
   the `1220.51` threshold, 10K p99 `12.35 ms` versus baseline `42.64 ms`, and

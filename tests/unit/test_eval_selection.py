@@ -21,7 +21,9 @@ from eval.selection import (
     stable_selection_payload,
     validate_workload_metrics,
 )
-from memex.domain.models import RecallHit
+from memex.application.memory import Memex
+from memex.domain.models import RecallHit, WriteInput
+from memex.infrastructure.config import MemexConfig
 
 
 def test_selection_refuses_nonempty_output_directory(tmp_path: Path) -> None:
@@ -217,6 +219,59 @@ def test_semantic_fallback_weighted_candidate_is_selectable(tmp_path: Path) -> N
     assert "semantic-and-fallback-fts5" in selection.CANDIDATE_NAMES
     assert candidate.ranker_metadata["name"] == "semantic-and-fallback-fts5"
     assert candidate.summary.query_count == len(corpus.queries)
+
+
+def test_baseline_pair_executes_legacy_or_ranker_not_promoted_recall(tmp_path: Path) -> None:
+    snapshot_dir = tmp_path / "snapshot"
+    memex = Memex(MemexConfig(data_dir=snapshot_dir))
+    try:
+        _write_memory(
+            memex,
+            title="Atlas risk integration",
+            body=" ".join(["noise"] * 30) + " atlas risk integration atlas risk integration",
+        )
+        _write_memory(memex, title="Atlas risk integration decoy", body="short title-only match")
+        _write_memory(memex, title="Atlas risk", body=" ".join(["atlas", "risk"] * 20))
+        _write_memory(
+            memex,
+            title="Integration unrelated",
+            body="integration release notes without atlas or risk context",
+        )
+        promoted_first = memex.recall("atlas risk integration").hits[0].slug
+        legacy_first = memex.retriever.search_fts("atlas risk integration", 1)[0][0]
+    finally:
+        memex.close()
+    corpus = CorpusResult(
+        memories_written=4,
+        queries=[
+            QuerySpec(
+                "atlas risk integration",
+                ["atlas-risk-integration"],
+                "hard",
+                family="unit",
+                corpus="realistic",
+            )
+        ],
+    )
+
+    baseline = selection._run_baseline_pair(
+        snapshot_dir=snapshot_dir,
+        data_dir=tmp_path / "baseline",
+        corpus=corpus,
+        top_k=10,
+    )
+
+    assert promoted_first == "atlas-risk-integration"
+    assert legacy_first != promoted_first
+    assert baseline.ranker_metadata == {
+        "name": "sqlite-fts5-bm25",
+        "bm25_parameters": "sqlite-fts5-defaults",
+        "query_strategy": "safe-token-or",
+        "snippet_tokens": 32,
+        "tie_break": "score-then-slug",
+        "top_k": 10,
+    }
+    assert baseline.results[0].actual_slugs[0] == legacy_first
 
 
 def test_promotion_uses_one_baseline_per_actual_scale_and_never_duplicates_p99(
@@ -447,7 +502,7 @@ def test_selection_rejects_failed_hard_mrr_workload_floor() -> None:
     assert verdict.gates["hard_mrr"] is False
 
 
-def test_selection_treats_hard_floor_as_inapplicable_without_hard_queries() -> None:
+def test_selection_rejects_workload_without_hard_queries() -> None:
     metrics = WorkloadMetrics(
         recall_at_10=0.90,
         mrr=0.50,
@@ -460,9 +515,9 @@ def test_selection_treats_hard_floor_as_inapplicable_without_hard_queries() -> N
 
     verdict = validate_workload_metrics(metrics)
 
-    assert verdict.passed is True
-    assert verdict.gates["hard_recall_at_10"] is True
-    assert verdict.gates["hard_mrr"] is True
+    assert verdict.passed is False
+    assert verdict.gates["hard_recall_at_10"] is False
+    assert verdict.gates["hard_mrr"] is False
 
 
 def test_selection_report_includes_workload_manifest_and_ndcg() -> None:
@@ -587,6 +642,10 @@ def _fake_measured(p99_ms: float) -> selection._MeasuredRun:
     )
     summary = selection.RunSummary(1, (0,), (("target",),), p99_ms, 1, 0, True)
     return selection._MeasuredRun([result], [observation], summary, {"name": "fake"})
+
+
+def _write_memory(memex: Memex, *, title: str, body: str) -> str:
+    return memex.write(WriteInput(type="entity", title=title, body=body)).slug
 
 
 def _patch_quality_metrics(

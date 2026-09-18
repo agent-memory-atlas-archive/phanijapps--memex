@@ -550,7 +550,7 @@ def _run_baseline_pair(
         latencies: list[float] = []
         for query in corpus.queries:
             started = time.perf_counter()
-            recalled = memex.recall(query.query, top_k=top_k)
+            recalled = memex.retriever.retrieve_legacy_or(query.query, top_k=top_k)
             latency_ms = (time.perf_counter() - started) * 1000
             latencies.append(latency_ms)
             if retain_quality:
@@ -561,7 +561,14 @@ def _run_baseline_pair(
         access_mutations = _total_access_count(data_dir) - pre_access
     finally:
         memex.close()
-    metadata: dict[str, JsonValue] = {"name": "sqlite-fts5-bm25", "query_strategy": "or"}
+    metadata: dict[str, JsonValue] = {
+        "name": "sqlite-fts5-bm25",
+        "bm25_parameters": "sqlite-fts5-defaults",
+        "query_strategy": "safe-token-or",
+        "snippet_tokens": 32,
+        "tie_break": "score-then-slug",
+        "top_k": top_k,
+    }
     if not retain_quality:
         return _latency_only_run(
             latencies, len(corpus.queries), access_mutations, pre_access, metadata
@@ -974,10 +981,10 @@ def validate_workload_metrics(metrics: WorkloadMetrics) -> WorkloadVerdict:
         "recall_at_10": metrics.recall_at_10 + FLOAT_TOLERANCE >= WORKLOAD_RECALL_FLOOR,
         "mrr": metrics.mrr + FLOAT_TOLERANCE >= WORKLOAD_MRR_FLOOR,
         "ndcg_at_10": metrics.ndcg_at_10 + FLOAT_TOLERANCE >= WORKLOAD_NDCG_FLOOR,
-        "hard_recall_at_10": metrics.hard_query_count == 0
-        or metrics.hard_recall_at_10 + FLOAT_TOLERANCE >= WORKLOAD_HARD_RECALL_FLOOR,
-        "hard_mrr": metrics.hard_query_count == 0
-        or metrics.hard_mrr + FLOAT_TOLERANCE >= WORKLOAD_HARD_MRR_FLOOR,
+        "hard_recall_at_10": metrics.hard_query_count > 0
+        and metrics.hard_recall_at_10 + FLOAT_TOLERANCE >= WORKLOAD_HARD_RECALL_FLOOR,
+        "hard_mrr": metrics.hard_query_count > 0
+        and metrics.hard_mrr + FLOAT_TOLERANCE >= WORKLOAD_HARD_MRR_FLOOR,
         "family_recall_at_10": bool(metrics.by_family)
         and all(
             value + FLOAT_TOLERANCE >= WORKLOAD_FAMILY_RECALL_FLOOR

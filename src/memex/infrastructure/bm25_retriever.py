@@ -7,6 +7,7 @@ import re
 import sqlite3
 import threading
 import time
+from collections.abc import Sequence
 from pathlib import Path
 
 from memex.domain.models import RecallHit, RecallResult, utc_now_iso
@@ -169,10 +170,45 @@ class BM25Retriever:
         match = self._match_query(query)
         with self._lock:
             rows = self._conn.execute(
-                _LEGACY_BASE_SQL + " ORDER BY score LIMIT :top_k",
+                _LEGACY_BASE_SQL + " ORDER BY score, w.slug LIMIT :top_k",
                 {"match": match, "top_k": top_k},
             ).fetchall()
         return [(str(row["slug"]), float(row["score"])) for row in rows]
+
+    def retrieve_legacy_or(
+        self,
+        query: str,
+        top_k: int | None = None,
+        node_type: str | None = None,
+        time_range: tuple[str, str] | None = None,
+        tags: list[str] | None = None,
+        include_expired: bool = False,
+        include_inactive: bool = False,
+    ) -> RecallResult:
+        """Run the pre-promotion SQLite FTS5 OR baseline."""
+        limit = self._validated_limit(top_k)
+        started = time.perf_counter()
+        match = self._match_query(query)
+        rows, total = self._execute_ranked_query(
+            _LEGACY_BASE_SQL,
+            match,
+            limit=limit,
+            node_type=node_type,
+            time_range=time_range,
+            tags=tags,
+            include_expired=include_expired,
+            include_inactive=include_inactive,
+        )
+        hits = self._hits_from_rows(rows, limit)
+        self.record_access(hits)
+        elapsed_ms = (time.perf_counter() - started) * 1000
+        return RecallResult(
+            query=query,
+            hits=hits,
+            total_indexed=total,
+            search_engine="sqlite-fts5-bm25",
+            search_time_ms=round(elapsed_ms, 3),
+        )
 
     def retrieve(
         self,
@@ -186,11 +222,12 @@ class BM25Retriever:
     ) -> RecallResult:
         """Search the index and return ranked hits with metadata.
 
-        The query is reduced to alphanumeric tokens joined by OR, so
-        untrusted input never reaches the FTS5 MATCH parser. Hits are
-        ordered by ascending BM25 score — lower is better, per SQLite FTS5.
-        Nodes past ``expires_at`` or ``valid_to`` are invisible unless the
-        caller opts in; this is how soft-forgetting hides memories.
+        The query is reduced to safe alphanumeric semantic tokens, searched
+        with strict AND matching, and retried with OR only when strict matching
+        returns no rows. Untrusted input never reaches the FTS5 MATCH parser.
+        Hits are ordered by ascending BM25 score — lower is better, per SQLite
+        FTS5. Nodes past ``expires_at`` or ``valid_to`` are invisible unless
+        the caller opts in; this is how soft-forgetting hides memories.
 
         Side effects: every returned hit gets ``access_count += 1`` and a
         refreshed ``last_access``. Files are never touched.
@@ -212,12 +249,86 @@ class BM25Retriever:
             ValueError: Query has no searchable terms, or ``top_k`` outside
                 [1, 100].
         """
-        limit = top_k if top_k is not None else self.default_top_k
-        if not 1 <= limit <= 100:
-            raise ValueError("top_k must be between 1 and 100")
+        result = self.retrieve_without_access(
+            query,
+            top_k=top_k,
+            node_type=node_type,
+            time_range=time_range,
+            tags=tags,
+            include_expired=include_expired,
+            include_inactive=include_inactive,
+        )
+        self.record_access(result.hits)
+        return result
+
+    def retrieve_without_access(
+        self,
+        query: str,
+        top_k: int | None = None,
+        node_type: str | None = None,
+        time_range: tuple[str, str] | None = None,
+        tags: list[str] | None = None,
+        include_expired: bool = False,
+        include_inactive: bool = False,
+    ) -> RecallResult:
+        """Search the promoted ranker without mutating access statistics."""
+        limit = self._validated_limit(top_k)
         started = time.perf_counter()
 
         tokens = self._semantic_tokens(query)
+        rows, total = self._execute_ranked_query(
+            _WINNER_SELECT_SQL,
+            " AND ".join(tokens),
+            limit=limit,
+            node_type=node_type,
+            time_range=time_range,
+            tags=tags,
+            include_expired=include_expired,
+            include_inactive=include_inactive,
+            extra_params={"body_weight": _WINNER_BODY_WEIGHT},
+        )
+        if not rows:
+            rows, total = self._execute_ranked_query(
+                _WINNER_SELECT_SQL,
+                " OR ".join(tokens),
+                limit=limit,
+                node_type=node_type,
+                time_range=time_range,
+                tags=tags,
+                include_expired=include_expired,
+                include_inactive=include_inactive,
+                extra_params={"body_weight": _WINNER_BODY_WEIGHT},
+            )
+
+        hits = self._hits_from_rows(rows, limit)
+        elapsed_ms = (time.perf_counter() - started) * 1000
+        return RecallResult(
+            query=query,
+            hits=hits,
+            total_indexed=total,
+            search_engine=_WINNER_SEARCH_ENGINE,
+            search_time_ms=round(elapsed_ms, 3),
+        )
+
+    def _validated_limit(self, top_k: int | None) -> int:
+        limit = top_k if top_k is not None else self.default_top_k
+        if not 1 <= limit <= 100:
+            raise ValueError("top_k must be between 1 and 100")
+        return limit
+
+    def _execute_ranked_query(
+        self,
+        base_sql: str,
+        match: str,
+        *,
+        limit: int,
+        node_type: str | None,
+        time_range: tuple[str, str] | None,
+        tags: list[str] | None,
+        include_expired: bool,
+        include_inactive: bool,
+        extra_params: dict[str, object] | None = None,
+    ) -> tuple[list[sqlite3.Row], int]:
         clauses, params = self._eligibility_filters(
             node_type=node_type,
             time_range=time_range,
@@ -225,36 +336,24 @@ class BM25Retriever:
             include_expired=include_expired,
             include_inactive=include_inactive,
         )
-        params.update({"body_weight": _WINNER_BODY_WEIGHT, "top_k": limit})
-        strict_params = {**params, "match": " AND ".join(tokens)}
-        fallback_params = {**params, "match": " OR ".join(tokens)}
-
-        sql = _WINNER_SELECT_SQL
+        params.update(extra_params or {})
+        params.update({"match": match, "top_k": limit})
+        sql = base_sql
         if clauses:
             sql += " AND " + " AND ".join(clauses)
         sql += " ORDER BY score, w.slug LIMIT :top_k"
 
         with self._lock:
-            rows = self._conn.execute(sql, strict_params).fetchall()
-            if not rows:
-                rows = self._conn.execute(sql, fallback_params).fetchall()
+            rows = self._conn.execute(sql, params).fetchall()
             total = self._conn.execute("SELECT COUNT(*) AS n FROM wiki_index").fetchone()
+        return self._dedupe_rows(rows), int(total["n"])
 
-        rows = self._dedupe_rows(rows)
+    def _hits_from_rows(self, rows: list[sqlite3.Row], limit: int) -> list[RecallHit]:
         links = self._links([str(row["slug"]) for row in rows])
-        hits = [
+        return [
             self._to_hit(row, rank, links.get(str(row["slug"]), []))
             for rank, row in enumerate(rows[:limit], start=1)
         ]
-        self._record_access(hits)
-        elapsed_ms = (time.perf_counter() - started) * 1000
-        return RecallResult(
-            query=query,
-            hits=hits,
-            total_indexed=int(total["n"]),
-            search_engine=_WINNER_SEARCH_ENGINE,
-            search_time_ms=round(elapsed_ms, 3),
-        )
 
     def _eligibility_filters(
         self,
@@ -301,7 +400,7 @@ class BM25Retriever:
     def close(self) -> None:
         self._conn.close()
 
-    def _record_access(self, hits: list[RecallHit]) -> None:
+    def record_access(self, hits: Sequence[RecallHit]) -> None:
         """Recall side effect: bump access_count/last_access per hit (§9.2)."""
         now = utc_now_iso()
         with self._lock, self._conn:

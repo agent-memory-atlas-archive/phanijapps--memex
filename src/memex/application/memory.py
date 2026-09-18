@@ -145,11 +145,12 @@ class Memex:
     ) -> RecallResult:
         """BM25 search over the index; each hit records access statistics.
 
-        The query is reduced to alphanumeric tokens joined by OR, so
-        untrusted input never reaches the FTS5 MATCH parser. Hits are ordered
-        by ascending BM25 score (lower is better, per SQLite FTS5). Nodes
-        past ``expires_at`` or ``valid_to`` are invisible unless the caller
-        opts in; this is how soft-forgetting and decay hide memories.
+        The query is reduced to safe alphanumeric semantic tokens, searched
+        with strict AND matching, and retried with OR only when strict matching
+        returns no rows. Untrusted input never reaches the FTS5 MATCH parser.
+        Hits are ordered by ascending BM25 score (lower is better, per SQLite
+        FTS5). Nodes past ``expires_at`` or ``valid_to`` are invisible unless
+        the caller opts in; this is how soft-forgetting and decay hide memories.
 
         Side effects: every returned hit gets ``access_count += 1`` and a
         refreshed ``last_access`` in the index. Reads never touch the files.
@@ -171,19 +172,30 @@ class Memex:
             ValueError: Query has no searchable terms, or ``top_k`` outside
                 [1, 100].
         """
-        result = self.retriever.retrieve(
-            query,
-            top_k=top_k,
-            node_type=node_type,
-            time_range=time_range,
-            tags=tags,
-            include_expired=include_expired,
-            include_inactive=include_inactive,
-        )
         if max_tokens is not None:
             from memex.application.context_injection import pack_to_budget
 
+            result = self.retriever.retrieve_without_access(
+                query,
+                top_k=top_k,
+                node_type=node_type,
+                time_range=time_range,
+                tags=tags,
+                include_expired=include_expired,
+                include_inactive=include_inactive,
+            )
             result.hits = pack_to_budget(result.hits, max_tokens)
+            self.retriever.record_access(result.hits)
+        else:
+            result = self.retriever.retrieve(
+                query,
+                top_k=top_k,
+                node_type=node_type,
+                time_range=time_range,
+                tags=tags,
+                include_expired=include_expired,
+                include_inactive=include_inactive,
+            )
         self.logger.info(
             "operation=recall hits=%d total_indexed=%d", len(result.hits), result.total_indexed
         )
