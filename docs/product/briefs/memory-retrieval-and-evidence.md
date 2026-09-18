@@ -156,6 +156,6 @@ Repository sources in this section were reviewed at Git commit
 
 ## Spec map
 
-- [`quality-gated-retrieval`](../../specs/quality-gated-retrieval/spec.md) —
-  compare deterministic lexical rankers, context cost, and latency, then
-  promote only a candidate that passes every gate.
+| Spec | Status |
+| --- | --- |
+| `quality-gated-retrieval` | |
