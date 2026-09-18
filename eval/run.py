@@ -101,6 +101,12 @@ def _build_parser() -> argparse.ArgumentParser:
     import_cmd.add_argument("--catalog", type=Path, required=True)
     import_cmd.add_argument("--provenance", type=Path, required=True)
     import_cmd.add_argument("--output", type=Path, required=True)
+    import_cmd.add_argument(
+        "--book-id",
+        action="append",
+        default=None,
+        help="Project Gutenberg Text# to include; repeat for a compact deterministic subset",
+    )
     return parser
 
 
@@ -251,6 +257,7 @@ def main(argv: list[str] | None = None) -> int:
                 catalog=args.catalog,
                 provenance=args.provenance,
                 output=args.output,
+                book_ids=tuple(args.book_id) if args.book_id else None,
             )
         except GutenbergImportError as exc:
             print(json.dumps({"category": exc.category, "reason": str(exc)}), file=sys.stderr)

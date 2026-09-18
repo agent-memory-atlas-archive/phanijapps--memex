@@ -9,6 +9,7 @@ import json
 import shutil
 import tempfile
 from collections.abc import Mapping, Sequence
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -121,6 +122,7 @@ def import_gutenberg_catalog(
     provenance: Path,
     output: Path,
     fixture_root: Path | None = None,
+    book_ids: Sequence[str] | None = None,
 ) -> GutenbergProvenance:
     """Import a maintainer-supplied local Project Gutenberg catalog fixture."""
     root = (fixture_root or Path(__file__).resolve().parent / "data").resolve()
@@ -131,15 +133,16 @@ def import_gutenberg_catalog(
         raise GutenbergImportError("source_too_large", "compressed catalog exceeds limit")
     provenance_data = _load_provenance(provenance)
     digest = _sha256(catalog_path)
-    if provenance_data.get("sha256") not in (None, digest):
+    if provenance_data["sha256"] != digest:
         raise GutenbergImportError("source_unreproducible", "provenance digest mismatch")
 
     rows = [row for row in _read_catalog_rows(catalog_path) if row.get("Type", "Text") == "Text"]
+    rows = _select_book_rows(rows, book_ids)
     author_index = _author_index(rows)
     imported = [_book_record(row, author_index) for row in rows]
     source = GutenbergProvenance(
-        canonical_source_url=str(provenance_data.get("canonical_source_url", GUTENBERG_SOURCE_URL)),
-        retrieved_at=str(provenance_data.get("retrieved_at", datetime.now(UTC).date().isoformat())),
+        canonical_source_url=str(provenance_data["canonical_source_url"]),
+        retrieved_at=str(provenance_data["retrieved_at"]),
         upstream_last_modified=cast(str | None, provenance_data.get("upstream_last_modified")),
         input_byte_size=compressed_size,
         sha256=digest,
@@ -239,6 +242,21 @@ def _load_provenance(path: Path) -> dict[str, object]:
         raise GutenbergImportError("source_unreproducible", "invalid provenance JSON") from exc
     if not isinstance(data, dict):
         raise GutenbergImportError("source_unreproducible", "provenance must be an object")
+    if data.get("canonical_source_url") != GUTENBERG_SOURCE_URL:
+        raise GutenbergImportError("source_unreproducible", "provenance source URL mismatch")
+    retrieved_at = data.get("retrieved_at")
+    if not isinstance(retrieved_at, str) or not retrieved_at.strip():
+        raise GutenbergImportError("source_unreproducible", "provenance retrieval date is required")
+    try:
+        datetime.strptime(retrieved_at, "%Y-%m-%d").replace(tzinfo=UTC)
+    except ValueError as exc:
+        raise GutenbergImportError("source_unreproducible", "invalid retrieval date") from exc
+    digest = data.get("sha256")
+    if not isinstance(digest, str) or len(digest) != 64:
+        raise GutenbergImportError("source_unreproducible", "provenance SHA-256 is required")
+    last_modified = data.get("upstream_last_modified")
+    if last_modified is not None and not isinstance(last_modified, str):
+        raise GutenbergImportError("source_unreproducible", "invalid upstream Last-Modified value")
     return data
 
 
@@ -286,12 +304,39 @@ def _author_index(rows: Sequence[Mapping[str, str]]) -> dict[str, list[str]]:
         book_id = _required_str(row, "Text#")
         slug = f"gutenberg-{book_id}"
         for author in _authors(row):
-            index.setdefault(author, []).append(slug)
+            index.setdefault(_author_query_name(author), []).append(slug)
     return {author: sorted(slugs) for author, slugs in index.items()}
 
 
 def _authors(row: Mapping[str, str]) -> list[str]:
     return [part.strip() for part in row.get("Authors", "").split(";") if part.strip()]
+
+
+def _author_query_name(author: str) -> str:
+    parts = [
+        part.strip()
+        for part in author.split(",")
+        if part.strip() and not part.strip().replace("-", "").isdigit()
+    ]
+    if len(parts) >= 2:
+        return " ".join([*parts[1:], parts[0]])
+    return parts[0] if parts else author.strip()
+
+
+def _select_book_rows(
+    rows: Sequence[dict[str, str]],
+    book_ids: Sequence[str] | None,
+) -> list[dict[str, str]]:
+    if book_ids is None:
+        return list(rows)
+    requested = [book_id.strip() for book_id in book_ids if book_id.strip()]
+    if not requested:
+        raise GutenbergImportError("schema_invalid", "at least one selected book id is required")
+    by_id = {_required_str(row, "Text#"): row for row in rows}
+    missing = sorted(set(requested) - set(by_id))
+    if missing:
+        raise GutenbergImportError("schema_invalid", "selected book id is missing")
+    return [by_id[book_id] for book_id in requested]
 
 
 def _book_record(
@@ -301,8 +346,10 @@ def _book_record(
     book_id = _required_str(row, "Text#")
     title = _required_str(row, "Title")
     authors = _authors(row)
+    author_query = _author_query_name(authors[0]) if authors else ""
     slug = f"gutenberg-{book_id}"
     relevant = [slug]
+    author_slugs = list(author_index.get(author_query, relevant)) if author_query else relevant
     return {
         "slug": slug,
         "book_id": book_id,
@@ -320,15 +367,31 @@ def _book_record(
             },
             *[
                 {
-                    "query": author,
-                    "relevant_slugs": list(author_index.get(author, relevant)),
+                    "query": author_query,
+                    "relevant_slugs": author_slugs,
                     "difficulty": "medium",
                     "family": "book-author",
                 }
-                for author in authors[:1]
+                for _author in authors[:1]
             ],
+            {
+                "query": _hard_metadata_query(title, author_query),
+                "relevant_slugs": relevant,
+                "difficulty": "hard",
+                "family": "book-metadata",
+            },
         ],
     }
+
+
+def _hard_metadata_query(title: str, author_query: str) -> str:
+    title_terms = [
+        term.strip(" ,;:").casefold()
+        for term in title.replace("-", " ").split()
+        if term.strip(" ,;:").casefold() not in {"a", "an", "and", "or", "of", "the"}
+    ]
+    selected_terms = " ".join(dict.fromkeys(title_terms[:4]))
+    return " ".join(part for part in [author_query, selected_terms] if part).strip()
 
 
 def _write_jsonl(
@@ -337,16 +400,26 @@ def _write_jsonl(
     provenance: GutenbergProvenance,
 ) -> None:
     payloads = [{**dict(row), "provenance": provenance.to_dict()} for row in rows]
-    with tempfile.NamedTemporaryFile(
-        "w", encoding="utf-8", dir=output_path.parent, delete=False, newline="\n"
-    ) as handle:
-        temp_path = Path(handle.name)
-        try:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w", encoding="utf-8", dir=output_path.parent, delete=False, newline="\n"
+        ) as handle:
+            temp_path = Path(handle.name)
             for payload in payloads:
-                handle.write(json.dumps(payload, sort_keys=True, ensure_ascii=True) + "\n")
-        except (TypeError, OSError) as exc:
-            raise GutenbergImportError("serialization_failed", "failed to write JSONL") from exc
-    shutil.move(str(temp_path), output_path)
+                handle.write(
+                    json.dumps(payload, sort_keys=True, ensure_ascii=True, separators=(",", ":"))
+                    + "\n"
+                )
+        shutil.move(str(temp_path), output_path)
+        temp_path = None
+    except (TypeError, OSError) as exc:
+        raise GutenbergImportError("serialization_failed", "failed to write JSONL") from exc
+    finally:
+        if temp_path is not None:
+            with suppress(OSError):
+                temp_path.unlink(missing_ok=True)
 
 
 def _read_jsonl(path: Path) -> list[dict[str, object]]:

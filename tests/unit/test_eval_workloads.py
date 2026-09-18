@@ -135,6 +135,7 @@ def test_gutenberg_import_is_bounded_offline_and_deterministic(
         provenance=provenance,
         output=output,
         fixture_root=fixture_root,
+        book_ids=("1342", "158"),
     )
     first_bytes = output.read_bytes()
     second = import_gutenberg_catalog(
@@ -142,6 +143,7 @@ def test_gutenberg_import_is_bounded_offline_and_deterministic(
         provenance=provenance,
         output=output,
         fixture_root=fixture_root,
+        book_ids=("1342", "158"),
     )
 
     assert first == second
@@ -153,14 +155,26 @@ def test_gutenberg_import_is_bounded_offline_and_deterministic(
     )
     assert b"Pride and Prejudice" in first_bytes
     assert b"It is a truth universally acknowledged" not in first_bytes
+    assert b'"input_byte_size":' in first_bytes
+    assert digest.encode() in first_bytes
 
 
 def test_gutenberg_import_rejects_schema_and_output_escape(tmp_path: Path) -> None:
     catalog = tmp_path / "pg_catalog.csv.gz"
     with gzip.open(catalog, "wt", encoding="utf-8", newline="") as handle:
         handle.write("Text#,Title,Unexpected\n1,Example,nope\n")
+    digest = hashlib.sha256(catalog.read_bytes()).hexdigest()
     provenance = tmp_path / "pg_catalog.provenance.json"
-    provenance.write_text("{}", encoding="utf-8")
+    provenance.write_text(
+        json.dumps(
+            {
+                "canonical_source_url": GUTENBERG_SOURCE_URL,
+                "retrieved_at": "2026-09-18",
+                "sha256": digest,
+            }
+        ),
+        encoding="utf-8",
+    )
 
     with pytest.raises(GutenbergImportError, match="schema_invalid"):
         import_gutenberg_catalog(
@@ -175,6 +189,55 @@ def test_gutenberg_import_rejects_schema_and_output_escape(tmp_path: Path) -> No
             provenance=provenance,
             output=tmp_path / "outside.jsonl",
             fixture_root=tmp_path / "fixtures",
+        )
+
+
+def test_gutenberg_import_requires_exact_provenance_and_selected_ids(tmp_path: Path) -> None:
+    catalog = tmp_path / "pg_catalog.csv.gz"
+    with gzip.open(catalog, "wt", encoding="utf-8", newline="") as handle:
+        handle.write(
+            "Text#,Type,Issued,Title,Language,Authors,Subjects,LoCC,Bookshelves\n"
+            '1342,Text,1998-06-01,Pride and Prejudice,en,"Austen, Jane",Fiction,PR,\n'
+        )
+    digest = hashlib.sha256(catalog.read_bytes()).hexdigest()
+    provenance = tmp_path / "pg_catalog.provenance.json"
+    provenance.write_text(
+        json.dumps(
+            {
+                "canonical_source_url": "https://example.invalid/catalog.csv.gz",
+                "retrieved_at": "2026-09-18",
+                "sha256": digest,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(GutenbergImportError, match="source_unreproducible"):
+        import_gutenberg_catalog(
+            catalog=catalog,
+            provenance=provenance,
+            output=tmp_path / "fixtures" / "books.jsonl",
+            fixture_root=tmp_path / "fixtures",
+            book_ids=("1342",),
+        )
+
+    provenance.write_text(
+        json.dumps(
+            {
+                "canonical_source_url": GUTENBERG_SOURCE_URL,
+                "retrieved_at": "2026-09-18",
+                "sha256": digest,
+            }
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(GutenbergImportError, match="schema_invalid"):
+        import_gutenberg_catalog(
+            catalog=catalog,
+            provenance=provenance,
+            output=tmp_path / "fixtures" / "books.jsonl",
+            fixture_root=tmp_path / "fixtures",
+            book_ids=("84",),
         )
 
 
