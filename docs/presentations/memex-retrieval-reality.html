@@ -577,7 +577,7 @@
         <h2>The shipped winner clears accuracy, token, and speed gates together</h2>
       </header>
       <div class="grid-4">
-        <article class="card"><span class="label">Overall + hard Recall@10</span><span class="number">98.20%</span><p>The selected ranker keeps the right page in the first ten results on both overall and hard-query slices.</p></article>
+        <article class="card"><span class="label">Overall Recall@10</span><span class="number">98.20%</span><p>The hard-query slice is 98.10%; both keep the right page in the first ten results.</p></article>
         <article class="card"><span class="label">Hard MRR</span><span class="number">0.9810</span><p>MRR measures how early the first correct result appears; the winner improves the legacy 0.9738 baseline.</p></article>
         <article class="card"><span class="label">Context cost</span><span class="number">965</span><p>Rendered tokens per correct hard-query result, down from 1,562 on the truthful legacy baseline.</p></article>
         <article class="card"><span class="label">100K p99</span><span class="number">82.3<span style="font-size:.45em"> ms</span></span><p>The winner stays under the 100 ms large-store gate while the legacy baseline measured 398.6 ms.</p></article>
@@ -610,7 +610,7 @@
         <h2>semantic-and-fallback-fts5 improves the metrics that matter</h2>
       </header>
       <div class="metric-grid">
-        <div class="metric"><div><span class="label">Overall + hard Recall@10</span><br><strong>98.20%</strong></div><div class="track"><span class="bar" style="--value: 98%"></span></div><div class="delta">Gate met<br><span class="status pass">Pass</span></div></div>
+        <div class="metric"><div><span class="label">Overall / hard Recall@10</span><br><strong>98.20% / 98.10%</strong></div><div class="track"><span class="bar" style="--value: 98%"></span></div><div class="delta">Gates met<br><span class="status pass">Pass</span></div></div>
         <div class="metric"><div><span class="label">Hard MRR</span><br><strong>0.9738 → 0.9810</strong></div><div class="track"><span class="bar" style="--value: 98%"></span></div><div class="delta">+0.0071<br><span class="status pass">Pass</span></div></div>
         <div class="metric"><div><span class="label">Tokens / correct hard query</span><br><strong>1,562 → 965</strong></div><div class="track"><span class="bar" style="--value: 62%"></span></div><div class="delta">−38.3%<br><span class="status pass">Pass</span></div></div>
         <div class="metric"><div><span class="label">10K p99 latency</span><br><strong>46.5 → 15.2 ms</strong></div><div class="track"><span class="bar" style="--value: 33%"></span></div><div class="delta">−67.2%<br><span class="status pass">Pass</span></div></div>
@@ -664,7 +664,7 @@
       </header>
       <div class="roadmap">
         <article class="card"><span class="step">01 · Shipped</span><h3 style="margin-top:.8rem">Evaluation foundation</h3><p>Repeatable selection, lower-risk experiments, and source-clean promotion evidence across three workloads.</p><span class="status pass confidence">High confidence</span></article>
-        <article class="card"><span class="step">02 · Shipped</span><h3 style="margin-top:.8rem">A production ranker</h3><p>Users get 98.20% overall and hard Recall@10, improved hard MRR, 38.25% fewer rendered tokens, and bounded p99.</p><span class="status pass confidence">Gate-backed</span></article>
+        <article class="card"><span class="step">02 · Shipped</span><h3 style="margin-top:.8rem">A production ranker</h3><p>Users get 98.20% overall Recall@10, 98.10% hard Recall@10, improved hard MRR, 38.25% fewer rendered tokens, and bounded p99.</p><span class="status pass confidence">Gate-backed</span></article>
         <article class="card"><span class="step">03 · Separate slices</span><h3 style="margin-top:.8rem">Evidence-aware memory</h3><p>Section provenance, temporal supersession, contradiction handling, and identity-aware consolidation remain promising but unimplemented.</p><span class="status fail confidence" style="color:var(--amber);background:rgba(251,191,36,.1)">Not yet measured</span></article>
       </div>
       <p class="footer-note">The shipped token result is 1,562 → 965 rendered tokens per correct hard-query result on the final clean paired evidence.</p>

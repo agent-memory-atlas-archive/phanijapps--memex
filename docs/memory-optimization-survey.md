@@ -36,7 +36,7 @@ sections, and paths stronger retrieval signals. The repaired quality-gated
 benchmark confirmed this was a ranking problem, not a filesystem-layout
 problem: the selected `semantic-and-fallback-fts5` ranker reached overall
 Recall@10/MRR `0.9819588`, hard Recall@10 `0.9809524`, hard MRR `0.9809524`,
-and hard tokens per correct result `989.96` in the final post-review clean
+and hard tokens per correct result `964.64` in the final post-review clean
 promotion run. [Repository evidence](specs/quality-gated-retrieval/notes/verification-ledger.md).
 
 ### Preserve claims when consolidating
