@@ -201,8 +201,8 @@ The final clean promotion evidence at source revision `226bad7` includes the
 fixture-slug and page-write confinement fix. The lifecycle-only closeout was
 then verified against the complete repository state:
 
-- Full Pytest with the optional extra installed: 554 passed, 1 unrelated test
-  skipped in 138.67 seconds; coverage 90.35%.
+- Full Pytest with the optional extra installed: 562 passed, 1 unrelated test
+  skipped in 138.56 seconds; coverage 90.38%.
 - Pinned optional integration:
   `uv run --locked --extra eval-rgapi pytest --no-cov -q tests/integration/test_rgapi_candidate.py`
   — 14 passed in 0.91 seconds with `rgapi==0.1.22` installed. The real
