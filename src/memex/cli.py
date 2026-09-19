@@ -402,8 +402,8 @@ def _run_hook(args: argparse.Namespace) -> int:
     memex = _make_memex(args)
     try:
         if args.hook_command == "session-start":
-            query = args.query or session_query(Path.cwd())
-            block = build_injection(memex, query, top_k=args.top_k)
+            query = args.query if args.query is not None else session_query(Path.cwd())
+            block = _build_hook_injection(memex, query, top_k=args.top_k)
             if block:
                 print(block)
             return 0
@@ -411,13 +411,21 @@ def _run_hook(args: argparse.Namespace) -> int:
             prompt = args.prompt if args.prompt is not None else _prompt_from_stdin()
             if not prompt:
                 return 0
-            block = build_injection(memex, prompt, top_k=args.top_k)
+            block = _build_hook_injection(memex, prompt, top_k=args.top_k)
             if block:
                 print(block)
             return 0
         raise ValueError(f"unknown hook command: {args.hook_command}")
     finally:
         memex.close()
+
+
+def _build_hook_injection(memex: Memex, query: str, *, top_k: int) -> str:
+    """Build best-effort hook context; invalid recall queries inject nothing."""
+    try:
+        return build_injection(memex, query, top_k=top_k)
+    except ValueError:
+        return ""
 
 
 def _hook_transcript(args: argparse.Namespace) -> int:
