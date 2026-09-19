@@ -57,10 +57,25 @@ memex install claude        # or codex, pi, copilot, custom
 
 ## Quickstart
 
-```bash
-# install (Python 3.12+)
-uv tool install --path . memex
+Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/getting-started/installation/).
 
+Install directly from GitHub without cloning the repository:
+
+```bash
+uv tool install git+https://github.com/phanijapps/memex.git
+```
+
+Or install from a source checkout:
+
+```bash
+git clone https://github.com/phanijapps/memex.git
+cd memex
+uv tool install .
+```
+
+Then try it:
+
+```bash
 # store a memory — it's a plain Markdown page
 memex write --type preference --title "Deploy on Fridays" \
     --body "The team deploys to production on Fridays only." --tags deploy
