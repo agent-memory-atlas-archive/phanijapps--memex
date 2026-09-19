@@ -9,6 +9,16 @@ page under `~/.memex/docs/`, git-able and editable by hand. SQLite FTS5 is
 a disposable BM25 index — delete it and it rebuilds from the pages. No
 server, no cloud, no embeddings.
 
+## Install
+
+Install Memex directly from GitHub with `uv`:
+
+```bash
+uv tool install git+https://github.com/phanijapps/memex.git
+```
+
+## Try it
+
 ```bash
 memex write --type preference --title "Deploy on Fridays" \
     --body "The team deploys to production on Fridays only."
