@@ -320,7 +320,14 @@ The eval tooling lives outside the shipped package, in the repo-root
 `eval/run.py`). It is developer benchmarking, not product surface:
 
     uv run python -m eval.run corpus --realistic --size 10000 --seed 42
-    uv run python -m eval.run retrieval --realistic --size 10000
+    uv run python -m eval.run retrieval --realistic --size 10000 \
+      --json-output /tmp/memex-retrieval-baseline.json
+
+Retrieval runs use a fresh temporary store by default. An explicit
+`--data-dir` must be empty, so stale pages cannot silently contaminate the
+result. The optional JSON report records the Git revision and dirty-worktree
+state, seed, corpus and ranker configuration, full metrics, and misses for
+paired comparisons.
 
 The `memex` CLI no longer exposes an `eval` subcommand; `src/memex/`
 contains only product code.

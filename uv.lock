@@ -544,6 +544,15 @@ wheels = [
 ]
 
 [[package]]
+name = "fastcore"
+version = "2.2.28"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/f6/64/17865f2b8e8002264c98bc1e74380b02821d1ebd1de7bf6016eb87c2b914/fastcore-2.2.28.tar.gz", hash = "sha256:67b321879e36de60abc3d04eb27d46c5f4e2eb0b89a10bda3331375004b82b26", size = 146528, upload-time = "2026-09-15T16:17:56.369Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/cc/f4/932146a41f78b835c9c95d64ac4cab93fd1df9c5327dc0c530394e86dec9/fastcore-2.2.28-py3-none-any.whl", hash = "sha256:c9fa3364ee32628f0ed77be165573ca0e276ea61e44a20c18da49e6252e082c0", size = 153156, upload-time = "2026-09-15T16:17:54.682Z" },
+]
+
+[[package]]
 name = "filelock"
 version = "3.32.6"
 source = { registry = "https://pypi.org/simple" }
@@ -1021,6 +1030,11 @@ dependencies = [
     { name = "openai" },
 ]
 
+[package.optional-dependencies]
+eval-rgapi = [
+    { name = "rgapi" },
+]
+
 [package.dev-dependencies]
 dev = [
     { name = "mypy" },
@@ -1038,7 +1052,9 @@ docs = [
 requires-dist = [
     { name = "mcp", specifier = ">=2,<3" },
     { name = "openai", specifier = ">=1.60,<3" },
+    { name = "rgapi", marker = "extra == 'eval-rgapi'", specifier = "==0.1.22" },
 ]
+provides-extras = ["eval-rgapi"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -1597,6 +1613,23 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/ac/c3/e2a2b89f2d3e2179abd6d00ebd70bff6273f37fb3e0cc209f48b39d00cbf/requests-2.34.2.tar.gz", hash = "sha256:f288924cae4e29463698d6d60bc6a4da69c89185ad1e0bcc4104f584e960b9ed", size = 142856, upload-time = "2026-05-14T19:25:27.735Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a0/f4/c67b0b3f1b9245e8d266f0f112c500d50e5b4e83cb6f3b71b6528104182a/requests-2.34.2-py3-none-any.whl", hash = "sha256:2a0d60c172f83ac6ab31e4554906c0f3b3588d37b5cb939b1c061f4907e278e0", size = 73075, upload-time = "2026-05-14T19:25:26.443Z" },
+]
+
+[[package]]
+name = "rgapi"
+version = "0.1.22"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "fastcore" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/3e/2d/3a11f2a50cab8ad2a35ae454b6b8c4dacd258d423ee32c13580bab1c71b3/rgapi-0.1.22.tar.gz", hash = "sha256:c50e23f7a81a09a1dd32b0d7ae0d309c7f1c17d6cb116d76921b5ea3a5c90e58", size = 54839, upload-time = "2026-08-21T16:20:33.924Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d4/6b/b9e5cece553067d4641add1973547603aafa4ef3bd471eb8e3d8b70ec8a6/rgapi-0.1.22-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:42168d39da117cbc39a05404c5b494283308fab7716b3efa3c69126ad1d9f336", size = 1580345, upload-time = "2026-08-21T16:20:22.454Z" },
+    { url = "https://files.pythonhosted.org/packages/3b/e6/07ddc45ca0db62fb860196dfddfdc4002ea6eda8757b81c80f9c35401b43/rgapi-0.1.22-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:45cdf796f3137d9efbd2eceb9b44dde7c05deefaef13f8f9991f40de6d8fbcbd", size = 1770207, upload-time = "2026-08-21T16:20:24.057Z" },
+    { url = "https://files.pythonhosted.org/packages/e8/e4/80af302cb3448bb695fe09cb09251fd7ea2a20702028d53055c4ac292065/rgapi-0.1.22-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:207b35c57f19948ae49291f947f4eec69ace85882d888acfc380f8c9a292c02c", size = 1762728, upload-time = "2026-08-21T16:20:25.858Z" },
+    { url = "https://files.pythonhosted.org/packages/be/e7/5c55712d99b64ebfaca523a7fd21860a07bb7eb5fc1fb4789d253d863748/rgapi-0.1.22-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:97c9968b4a9800e5a9ccfb9243da0a63139729802b44ac0a927505d7fee3628b", size = 1579049, upload-time = "2026-08-21T16:20:28.268Z" },
+    { url = "https://files.pythonhosted.org/packages/b6/fa/77ac81d155ae9fac0a1bca830408c72cd98ae66cc01354c9f2b7f66aa025/rgapi-0.1.22-cp313-cp313-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:53b9252ef58bb8e7e3d5b5b3812ef6578c9ee9bfddf9b20ce5e740e2a7fde0f3", size = 1771015, upload-time = "2026-08-21T16:20:30.101Z" },
+    { url = "https://files.pythonhosted.org/packages/eb/2e/88144c0ee80b44a390ea3d4b62199ea9ad2c0a1c24f8fc0bc42bddbd826f/rgapi-0.1.22-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:3fd60bac55fdc0587d1215996d5e29a162202214153f97d311514efb7a075599", size = 1762465, upload-time = "2026-08-21T16:20:31.81Z" },
 ]
 
 [[package]]

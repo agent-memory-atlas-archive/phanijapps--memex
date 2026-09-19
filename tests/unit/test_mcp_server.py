@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from memex import mcp_server
+from memex.infrastructure.bm25_retriever import MAX_QUERY_BYTES, MAX_QUERY_TOKENS
 from memex.mcp_server import (
     memex_export,
     memex_forget,
@@ -100,6 +101,20 @@ def test_wire_registry_matches_registered_tools() -> None:
     assert set(OPERATION_DESCRIPTIONS) == names
 
 
+@pytest.mark.parametrize(
+    "expected",
+    (f"{MAX_QUERY_BYTES:,} UTF-8 bytes", f"{MAX_QUERY_TOKENS} searchable tokens"),
+)
+def test_registered_recall_description_pins_query_work_caps(expected: str) -> None:
+    """Clients see the production query boundary in the registered contract."""
+    import asyncio
+
+    server = mcp_server.build_server()
+    recall = next(tool for tool in asyncio.run(server.list_tools()) if tool.name == "memex_recall")
+
+    assert expected in recall.description
+
+
 def test_tool_docstrings_follow_pyguide() -> None:
     """Source docstrings are maintainer docs (pyguide), not wire text."""
     functions = [
@@ -140,6 +155,15 @@ def test_errors_are_sanitized() -> None:
         "error": "invalid arguments for this operation"
     }
     assert memex_recall("???") == {"error": "invalid arguments for this operation"}
+
+
+def test_recall_oversized_query_uses_sanitized_error() -> None:
+    query = "leaksecret " + ("é" * MAX_QUERY_BYTES)
+
+    result = memex_recall(query)
+
+    assert result == {"error": "invalid arguments for this operation"}
+    assert "leaksecret" not in json.dumps(result)
 
 
 def test_transcript_and_provenance_tools() -> None:

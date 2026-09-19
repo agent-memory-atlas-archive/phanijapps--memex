@@ -76,3 +76,4 @@ docs/knowledge/**/*.lock
 docs/knowledge/*.lock
 docs/knowledge/**/*.lock.stale-*
 docs/knowledge/*.lock.stale-*
+.loop-run/

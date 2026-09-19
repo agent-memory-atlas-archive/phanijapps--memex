@@ -1,63 +1,63 @@
 # Roadmap
 
-> **Template.** Scaffolded by the bundle — replace the `<theme>` placeholders
-> and the `YYYY-MM-DD` dates with your project's real roadmap and review dates
-> before relying on it.
+This roadmap expresses direction, not release commitments. Shipped behavior is
+recorded in [`changelog.md`](changelog.md); detailed enhancement evidence and
+sequencing live in [`../v1_enhance.md`](../v1_enhance.md).
 
-> Direction for the next 2-4 quarters. **Not** commitments. The whole point
-> of writing this down is that it can change.
+**Last updated:** 2026-09-17
 
-**Last updated:** YYYY-MM-DD
-**Reviewed:** quarterly. Next review: YYYY-MM-DD.
+**Review cadence:** quarterly
 
-If the current date is more than 90 days past "Last updated", treat this
-file as stale and ask before relying on it.
+**Next review:** 2026-12-16
 
-## Now (current quarter)
+## Now
 
-What we're actively working on. Each item should link to a spec in
-`docs/specs/` once one exists.
+- **Stabilize the 0.2 line across real harness sessions.** Keep transcript
+  capture, compaction handling, session headers, token accounting, and
+  repository attribution correct for pi, Claude Code, and Codex. The latest
+  work is exercised by harness-specific parser and lifecycle tests.
+- **Measure lexical retrieval before changing it.** Use the offline realistic
+  corpus and scale runner under `eval/` to establish Recall@K, MRR, precision,
+  latency, and difficult-query failure modes. The current analysis is in
+  [`../specs/memory-eval/`](../specs/memory-eval/).
+- **Keep shipped guardrails coherent.** Maintain token-budget injection,
+  approval, provenance, secret scrubbing, status lifecycle, and health
+  reporting as one supported contract. The shipped contract is
+  [`../specs/v1-guardrails/spec.md`](../specs/v1-guardrails/spec.md).
 
-- **<theme>.** <one-sentence description.> [spec: link]
-- **<theme>.** ...
+## Next
 
-## Next (following 1-2 quarters)
-
-What we expect to pick up after Now. These are intentions, not promises.
-Items here should have at least an RFC or a one-paragraph problem
-statement somewhere — if there's nothing written down, it's not yet
-ready to be on the roadmap.
-
-- **<theme>.** <description.> [RFC: link, or "intent only"]
-- **<theme>.** ...
+- **Improve BM25 ranking only where the evaluation justifies it.** Trial
+  per-field reciprocal-rank fusion and deterministic rank-space boosts against
+  the labelled corpus before changing defaults. These are A1 and A2 in the
+  enhancement signals.
+- **Make consolidation more evidence-preserving.** Explore evidence-backed
+  pages, delta updates, scoped staleness, and repository-aware consolidation
+  without introducing a background daemon. These are B1–B3 and B7.
+- **Complete the release record.** Tag releases, keep this changelog current,
+  and align shipped spec lifecycle fields with the code already in the package.
 
 ## Later
 
-Things we believe matter but aren't actively planning. Items here serve
-two purposes: signal to contributors that we'd accept a PR, and let us
-say "not now" without saying "never."
-
-- <theme>
-- <theme>
+- Provenance-driven quarantine and guarded bulk expiry.
+- Memory-use effectiveness metrics beyond access counts.
+- Git-history seeding when it can be made idempotent and repository-scoped.
+- A documented harness-quirk matrix backed by executable compatibility tests.
+- A small, budgeted always-on memory block if evaluation shows it improves
+  agent outcomes without adding distracting context.
 
 ## Not in scope
 
-Things that have come up and that we've explicitly decided are *not*
-in scope. This is the most valuable section for AI agents and new
-contributors — it prevents wasted exploration of dead ends.
+- Vector embeddings, cross-encoder reranking, or a graph database.
+- A hosted service, multi-tenant synchronization, or a mandatory daemon.
+- Repository-controlled enablement of capture, injection, or consolidation.
+- Automatic deletion based on a content classifier; suspicious memories must
+  remain inspectable and recoverable.
+- Replacing coding harnesses with a general agent runtime.
 
-- **<thing we won't do>.** <why, briefly. link to ADR or RFC if there
-  was one.>
-- **<thing>.** ...
+## Maintenance
 
-## How this file is maintained
-
-- **Owners:** the maintainers (or the steering committee, if one exists).
-- **Updates:** roadmap items move between sections via small PRs. Substantive
-  additions or deletions go through an RFC.
-- **Review cadence:** quarterly. The review updates the "Last updated" date
-  even if no items change — fresh eyes, fresh dates.
-- **Drift signal:** if items in "Now" haven't moved in two consecutive
-  reviews, either they're not actually being worked on (move them out)
-  or the roadmap doesn't reflect what the team is doing (rewrite it to
-  match).
+Maintainers review this file at least every 90 days. A priority moves to a
+feature spec before implementation when it changes a public contract or durable
+representation. Completed work leaves the roadmap and enters the changelog;
+decision rationale goes to an ADR when the trade-off will matter later.

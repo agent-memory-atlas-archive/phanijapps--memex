@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from memex import cli
+from memex.infrastructure.bm25_retriever import MAX_QUERY_BYTES
 
 
 @pytest.fixture
@@ -35,6 +36,20 @@ def test_write_and_recall_roundtrip(data_dir: Path, capture: dict[str, str]) -> 
     assert code == 0
     result = json.loads(capture["out"])
     assert [hit["slug"] for hit in result["hits"]] == ["cli-entity"]
+
+
+def test_recall_rejects_oversized_query_without_echoing_input(
+    data_dir: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    query = "leaksecret " + ("é" * MAX_QUERY_BYTES)
+
+    code = cli.main(["--data-dir", str(data_dir), "recall", query])
+
+    assert code == 1
+    stderr = capsys.readouterr().err
+    assert f"exceeds {MAX_QUERY_BYTES} UTF-8 bytes" in stderr
+    assert "leaksecret" not in stderr
 
 
 def test_forget_missing_slug_errors(data_dir: Path, capsys: pytest.CaptureFixture[str]) -> None:

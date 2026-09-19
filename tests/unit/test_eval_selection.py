@@ -1,0 +1,1011 @@
+from __future__ import annotations
+
+import getpass
+import json
+import platform
+from pathlib import Path
+from typing import cast
+
+import pytest
+
+import eval.selection as selection
+from eval.comparison import CandidateMetrics, QueryContextObservation
+from eval.corpus import CorpusResult, QuerySpec
+from eval.runner import HitResult
+from eval.selection import (
+    CLOSED_FAILURE_CATEGORIES,
+    PROMOTION_WORKLOADS,
+    EvaluationConfig,
+    GitState,
+    WorkloadMetrics,
+    run_selection,
+    stable_selection_payload,
+    validate_workload_metrics,
+)
+from memex.application.memory import Memex
+from memex.domain.models import RecallHit, RecallResult, WriteInput
+from memex.infrastructure.bm25_retriever import BM25Retriever
+from memex.infrastructure.config import MemexConfig
+
+
+def test_selection_refuses_nonempty_output_directory(tmp_path: Path) -> None:
+    output_dir = tmp_path / "evidence"
+    output_dir.mkdir()
+    (output_dir / "keep.txt").write_text("leave me alone", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="must be empty"):
+        run_selection(
+            EvaluationConfig(
+                size=12, evidence_dir=output_dir, candidates=("field-channel-rrf-k60",)
+            )
+        )
+
+    assert (output_dir / "keep.txt").read_text(encoding="utf-8") == "leave me alone"
+
+
+def test_selection_refuses_nonempty_paired_data_root_without_mutation(tmp_path: Path) -> None:
+    data_root = tmp_path / "paired"
+    data_root.mkdir()
+    marker = data_root / "keep.txt"
+    marker.write_text("leave me alone", encoding="utf-8")
+    evidence_dir = tmp_path / "evidence"
+
+    with pytest.raises(ValueError, match="must be empty"):
+        run_selection(
+            EvaluationConfig(
+                size=12,
+                data_root=data_root,
+                evidence_dir=evidence_dir,
+                candidates=("field-channel-rrf-k60",),
+            )
+        )
+
+    assert marker.read_text(encoding="utf-8") == "leave me alone"
+    assert not evidence_dir.exists()
+
+
+def test_selection_refuses_configured_memex_store_and_descendants(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    live_store = tmp_path / "live-memex"
+    monkeypatch.setenv("MEMEX_DATA_DIR", str(live_store))
+
+    for requested in (live_store, live_store / "evaluation"):
+        with pytest.raises(ValueError, match="outside protected Memex stores"):
+            run_selection(
+                EvaluationConfig(
+                    size=12,
+                    data_root=requested,
+                    candidates=("field-channel-rrf-k60",),
+                )
+            )
+        assert not requested.exists()
+
+
+def test_selection_preflight_ignores_unrelated_invalid_live_configuration(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    live_store = tmp_path / "live-memex"
+    live_store.mkdir()
+    (live_store / "memex.toml").write_text('[llm]\nprovider = "not-a-provider"\n', encoding="utf-8")
+    monkeypatch.setenv("MEMEX_DATA_DIR", str(live_store))
+    evaluation_root = tmp_path / "isolated-evaluation"
+
+    report = run_selection(
+        EvaluationConfig(
+            size=12,
+            data_root=evaluation_root,
+            candidates=("field-channel-rrf-k60",),
+            git_state=GitState(source_revision="abc123", git_dirty=False),
+        )
+    )
+
+    assert report.metadata["requested_corpus_size"] == 12
+    assert evaluation_root.exists()
+
+
+def test_selection_protects_default_store_when_environment_uses_isolated_store(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("MEMEX_DATA_DIR", str(tmp_path / "isolated-live-store"))
+    default_store = Path.home() / ".memex"
+
+    for requested in (default_store, default_store / "evaluation"):
+        with pytest.raises(ValueError, match="outside protected Memex stores"):
+            run_selection(
+                EvaluationConfig(
+                    size=12,
+                    data_root=requested,
+                    candidates=("field-channel-rrf-k60",),
+                )
+            )
+        assert not requested.exists()
+
+
+def test_selection_writes_sanitized_schema_and_blocks_dirty_promotion(tmp_path: Path) -> None:
+    output_dir = tmp_path / "evidence"
+
+    report = run_selection(
+        EvaluationConfig(
+            size=12,
+            evidence_dir=output_dir,
+            candidates=("field-channel-rrf-k60",),
+            git_state=GitState(source_revision="abc123", git_dirty=True),
+        )
+    )
+
+    payload = json.loads((output_dir / "selection-12.json").read_text(encoding="utf-8"))
+    assert payload["schema_version"] == 1
+    assert payload["metadata"]["source_revision"] == "abc123"
+    assert payload["metadata"]["git_dirty"] is True
+    assert payload["metadata"]["promotion_eligible"] is False
+    assert payload["selected_candidate"] is None
+    assert report.failures[0].category == "source_unreproducible"
+    assert set(payload["failures"][0]) == {"category", "reason"}
+    assert str(tmp_path) not in json.dumps(payload)
+
+
+def test_selection_stable_payload_excludes_volatile_metadata(tmp_path: Path) -> None:
+    config = EvaluationConfig(
+        size=12,
+        candidates=("field-channel-rrf-k60",),
+        git_state=GitState(source_revision="abc123", git_dirty=False),
+    )
+
+    first = run_selection(config)
+    second = run_selection(config)
+
+    assert stable_selection_payload(first) == stable_selection_payload(second)
+
+
+def test_selection_uses_independent_paired_stores(tmp_path: Path) -> None:
+    report = run_selection(
+        EvaluationConfig(
+            size=12,
+            candidates=("field-channel-rrf-k60",),
+            git_state=GitState(source_revision="abc123", git_dirty=False),
+        )
+    )
+    weighted = report.candidates["field-channel-rrf-k60"]
+
+    assert weighted.baseline.access_mutations > 0
+    assert weighted.candidate.pre_run_access_count == 0
+    assert weighted.candidate.query_count == weighted.baseline.query_count
+    assert weighted.candidate.ordered_query_ids == weighted.baseline.ordered_query_ids
+
+
+def test_candidate_run_is_independent_of_baseline_access_state(tmp_path: Path) -> None:
+    snapshot_dir = tmp_path / "snapshot"
+    corpus = selection._generate_snapshot(snapshot_dir, size=12, seed=42)
+    baseline = selection._run_baseline_pair(
+        snapshot_dir=snapshot_dir,
+        data_dir=tmp_path / "baseline",
+        corpus=corpus,
+        top_k=10,
+    )
+    paired = selection._run_candidate_pair(
+        name="field-channel-rrf-k60",
+        snapshot_dir=snapshot_dir,
+        data_dir=tmp_path / "candidate-paired",
+        corpus=corpus,
+        top_k=10,
+    )
+    clean = selection._run_candidate_pair(
+        name="field-channel-rrf-k60",
+        snapshot_dir=snapshot_dir,
+        data_dir=tmp_path / "candidate-clean",
+        corpus=corpus,
+        top_k=10,
+    )
+
+    assert baseline.summary.access_mutations > 0
+    assert paired.summary.pre_run_access_count == clean.summary.pre_run_access_count == 0
+    assert paired.summary.ordered_slugs == clean.summary.ordered_slugs
+    assert [result.found_rank for result in paired.results] == [
+        result.found_rank for result in clean.results
+    ]
+
+
+def test_semantic_fallback_weighted_candidate_is_selectable(tmp_path: Path) -> None:
+    snapshot_dir = tmp_path / "snapshot"
+    corpus = selection._generate_snapshot(snapshot_dir, size=12, seed=42)
+
+    candidate = selection._run_candidate_pair(
+        name="semantic-and-fallback-fts5",
+        snapshot_dir=snapshot_dir,
+        data_dir=tmp_path / "candidate-semantic-fallback",
+        corpus=corpus,
+        top_k=10,
+    )
+
+    assert "semantic-and-fallback-fts5" in selection.CANDIDATE_NAMES
+    assert candidate.ranker_metadata["name"] == "semantic-and-fallback-fts5"
+    assert candidate.summary.query_count == len(corpus.queries)
+
+
+def test_semantic_fallback_candidate_executes_production_no_access_ranker(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    snapshot_dir = tmp_path / "snapshot"
+    memex = Memex(MemexConfig(data_dir=snapshot_dir))
+    try:
+        target_slug = _write_memory(
+            memex,
+            title="Atlas risk integration",
+            body=" ".join(["noise"] * 30) + " atlas risk integration atlas risk integration",
+        )
+        _write_memory(memex, title="Atlas risk integration decoy", body="short title-only match")
+    finally:
+        memex.close()
+    corpus = CorpusResult(
+        memories_written=2,
+        queries=[
+            QuerySpec(
+                "atlas risk integration",
+                [target_slug],
+                "hard",
+                family="unit",
+                corpus="realistic",
+            )
+        ],
+    )
+    calls: list[tuple[str, int | None]] = []
+    original = BM25Retriever.retrieve_without_access
+
+    def spy_retrieve_without_access(
+        self: BM25Retriever,
+        query: str,
+        top_k: int | None = None,
+        node_type: str | None = None,
+        time_range: tuple[str, str] | None = None,
+        tags: list[str] | None = None,
+        include_expired: bool = False,
+        include_inactive: bool = False,
+    ) -> RecallResult:
+        calls.append((query, top_k))
+        return original(
+            self,
+            query,
+            top_k=top_k,
+            node_type=node_type,
+            time_range=time_range,
+            tags=tags,
+            include_expired=include_expired,
+            include_inactive=include_inactive,
+        )
+
+    def forbidden_retrieve(self: BM25Retriever, *args: object, **kwargs: object) -> None:
+        del self, args, kwargs
+        raise AssertionError("candidate harness must call retrieve_without_access directly")
+
+    monkeypatch.setattr(
+        BM25Retriever,
+        "retrieve_without_access",
+        spy_retrieve_without_access,
+    )
+    monkeypatch.setattr(BM25Retriever, "retrieve", forbidden_retrieve)
+
+    candidate = selection._run_candidate_pair(
+        name="semantic-and-fallback-fts5",
+        snapshot_dir=snapshot_dir,
+        data_dir=tmp_path / "candidate-semantic-fallback",
+        corpus=corpus,
+        top_k=10,
+    )
+
+    assert calls == [("atlas risk integration", 10)]
+    assert candidate.results[0].actual_slugs[0] == target_slug
+    assert candidate.summary.access_mutations == len(candidate.results[0].actual_slugs)
+    assert candidate.ranker_metadata["name"] == "semantic-and-fallback-fts5"
+
+
+def test_baseline_pair_executes_legacy_or_ranker_not_promoted_recall(tmp_path: Path) -> None:
+    snapshot_dir = tmp_path / "snapshot"
+    memex = Memex(MemexConfig(data_dir=snapshot_dir))
+    try:
+        _write_memory(
+            memex,
+            title="Atlas risk integration",
+            body=" ".join(["noise"] * 30) + " atlas risk integration atlas risk integration",
+        )
+        _write_memory(memex, title="Atlas risk integration decoy", body="short title-only match")
+        _write_memory(memex, title="Atlas risk", body=" ".join(["atlas", "risk"] * 20))
+        _write_memory(
+            memex,
+            title="Integration unrelated",
+            body="integration release notes without atlas or risk context",
+        )
+        promoted_first = memex.recall("atlas risk integration").hits[0].slug
+        legacy_first = memex.retriever.search_fts("atlas risk integration", 1)[0][0]
+    finally:
+        memex.close()
+    corpus = CorpusResult(
+        memories_written=4,
+        queries=[
+            QuerySpec(
+                "atlas risk integration",
+                ["atlas-risk-integration"],
+                "hard",
+                family="unit",
+                corpus="realistic",
+            )
+        ],
+    )
+
+    baseline = selection._run_baseline_pair(
+        snapshot_dir=snapshot_dir,
+        data_dir=tmp_path / "baseline",
+        corpus=corpus,
+        top_k=10,
+    )
+
+    assert promoted_first == "atlas-risk-integration"
+    assert legacy_first != promoted_first
+    assert baseline.ranker_metadata == {
+        "name": "sqlite-fts5-bm25",
+        "bm25_parameters": "sqlite-fts5-defaults",
+        "query_strategy": "safe-token-or",
+        "snippet_tokens": 32,
+        "tie_break": "score-then-slug",
+        "top_k": 10,
+    }
+    assert baseline.results[0].actual_slugs[0] == legacy_first
+
+
+def test_promotion_uses_one_baseline_per_actual_scale_and_never_duplicates_p99(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    setup_sizes: list[int] = []
+    candidate_sizes: list[int] = []
+
+    def fake_scale_setup(
+        root: Path, size: int, config: EvaluationConfig, *, retain_quality: bool
+    ) -> tuple[CorpusResult, selection._MeasuredRun]:
+        del root, config, retain_quality
+        setup_sizes.append(size)
+        return _fake_corpus(size), _fake_measured(float(size // 10_000))
+
+    def fake_candidate_pair(
+        *,
+        name: selection.CandidateName,
+        snapshot_dir: Path,
+        data_dir: Path,
+        corpus: CorpusResult,
+        top_k: int,
+        retain_quality: bool,
+    ) -> selection._MeasuredRun:
+        del name, snapshot_dir, data_dir, top_k, retain_quality
+        candidate_sizes.append(corpus.memories_written)
+        return _fake_measured(float(corpus.memories_written // 10_000) + 0.25)
+
+    monkeypatch.setattr(selection, "_run_scale_setup", fake_scale_setup)
+    monkeypatch.setattr(selection, "_run_candidate_pair", fake_candidate_pair)
+    monkeypatch.setattr(selection, "_eligible_for_large_scale", lambda baseline, candidate: True)
+
+    report = run_selection(
+        EvaluationConfig(
+            promotion_mode=True,
+            candidates=("field-channel-rrf-k60",),
+            workloads=PROMOTION_WORKLOADS,
+            git_state=GitState(source_revision="abc123", git_dirty=False),
+        )
+    )
+
+    assert setup_sizes == [10_000, 100_000]
+    assert candidate_sizes == [10_000, 100_000]
+    comparison = report.candidates["field-channel-rrf-k60"].comparison
+    baseline = cast(dict[str, selection.JsonValue], comparison["baseline"])
+    candidate = cast(dict[str, selection.JsonValue], comparison["candidate"])
+    assert baseline["p99_ms"] == {"10000": 1.0, "100000": 10.0}
+    assert candidate["p99_ms"] == {"10000": 1.25, "100000": 10.25}
+
+
+def test_diagnostic_run_can_never_select_candidate(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(selection, "_select_candidate", lambda candidates: "field-channel-rrf-k60")
+
+    report = run_selection(
+        EvaluationConfig(
+            size=12,
+            candidates=("field-channel-rrf-k60",),
+            git_state=GitState(source_revision="abc123", git_dirty=False),
+        )
+    )
+
+    assert report.selected_candidate is None
+    assert report.metadata["promotion_mode"] is False
+    assert report.metadata["promotion_eligible"] is False
+
+
+def test_promotion_skips_large_scale_when_no_candidate_clears_quality_gate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    setup_sizes: list[int] = []
+
+    def fake_scale_setup(
+        root: Path, size: int, config: EvaluationConfig, *, retain_quality: bool
+    ) -> tuple[CorpusResult, selection._MeasuredRun]:
+        del root, config, retain_quality
+        setup_sizes.append(size)
+        return _fake_corpus(size), _fake_measured(1.0)
+
+    monkeypatch.setattr(selection, "_run_scale_setup", fake_scale_setup)
+    monkeypatch.setattr(selection, "_run_candidate_pair", lambda **kwargs: _fake_measured(1.0))
+    monkeypatch.setattr(selection, "_eligible_for_large_scale", lambda baseline, candidate: False)
+
+    report = run_selection(
+        EvaluationConfig(
+            promotion_mode=True,
+            candidates=("field-channel-rrf-k60",),
+            workloads=PROMOTION_WORKLOADS,
+            git_state=GitState(source_revision="abc123", git_dirty=False),
+        )
+    )
+
+    assert setup_sizes == [10_000]
+    assert report.selected_candidate is None
+    assert report.metadata["requested_corpus_sizes"] == [10_000]
+
+
+def test_large_scale_eligibility_accepts_high_baseline_non_regression(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    baseline = _fake_measured(20.0)
+    candidate = _fake_measured(21.0)
+    _patch_quality_metrics(
+        monkeypatch,
+        baseline=CandidateMetrics(
+            hard_recall_at_10=0.98,
+            hard_mrr=0.97,
+            recall_at_10={"overall": 0.96, "easy": 0.95, "medium": 0.95},
+            tokens_per_correct_hard_query=100.0,
+            p99_ms={},
+            complete=True,
+        ),
+        candidate=CandidateMetrics(
+            hard_recall_at_10=0.98,
+            hard_mrr=0.97,
+            recall_at_10={"overall": 0.96, "easy": 0.95, "medium": 0.95},
+            tokens_per_correct_hard_query=80.0,
+            p99_ms={},
+            complete=True,
+        ),
+    )
+
+    assert selection._eligible_for_large_scale(baseline, candidate) is True
+
+
+def test_large_scale_eligibility_requires_delta_when_baseline_below_floor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    baseline = _fake_measured(20.0)
+    candidate = _fake_measured(21.0)
+    _patch_quality_metrics(
+        monkeypatch,
+        baseline=CandidateMetrics(
+            hard_recall_at_10=0.70,
+            hard_mrr=0.70,
+            recall_at_10={"overall": 0.8666666666666667, "easy": 0.95, "medium": 0.95},
+            tokens_per_correct_hard_query=100.0,
+            p99_ms={},
+            complete=True,
+        ),
+        candidate=CandidateMetrics(
+            hard_recall_at_10=0.749,
+            hard_mrr=0.749,
+            recall_at_10={"overall": 0.883, "easy": 0.95, "medium": 0.95},
+            tokens_per_correct_hard_query=80.0,
+            p99_ms={},
+            complete=True,
+        ),
+    )
+
+    assert selection._eligible_for_large_scale(baseline, candidate) is False
+
+
+def test_incomplete_large_scale_retains_closed_failure_and_scale_status() -> None:
+    large_candidate = selection._replace_completion(
+        _fake_measured(2.0), complete=False, stop_reason="incomplete_search"
+    )
+
+    result = selection._candidate_selection(
+        name="field-channel-rrf-k60",
+        baselines={10_000: _fake_measured(1.0), 100_000: _fake_measured(2.0)},
+        candidates={10_000: _fake_measured(1.0), 100_000: large_candidate},
+        corpora={10_000: _fake_corpus(10_000), 100_000: _fake_corpus(100_000)},
+        config=EvaluationConfig(
+            promotion_mode=True,
+            candidates=("field-channel-rrf-k60",),
+            workloads=PROMOTION_WORKLOADS,
+        ),
+        git_state=GitState(source_revision="abc123", git_dirty=False),
+    )
+
+    assert result.passed is False
+    assert result.failures[0].category == "incomplete_search"
+    assert result.scales[100_000]["candidate"] == {
+        "query_count": 1,
+        "p99_ms": 2.0,
+        "complete": False,
+        "stop_reason": "incomplete_search",
+    }
+
+
+@pytest.mark.parametrize(("seed", "top_k"), [(7, 10), (42, 5)])
+def test_promotion_rejects_noncanonical_seed_or_top_k(seed: int, top_k: int) -> None:
+    with pytest.raises(ValueError, match="requires seed=42 and top_k=10"):
+        run_selection(
+            EvaluationConfig(
+                promotion_mode=True,
+                seed=seed,
+                top_k=top_k,
+                candidates=("field-channel-rrf-k60",),
+            )
+        )
+
+
+def test_promotion_rejects_missing_workload_set() -> None:
+    with pytest.raises(
+        ValueError,
+        match=(
+            "promotion mode requires workloads: realistic, gutenberg, salesforce; "
+            "missing: gutenberg, salesforce"
+        ),
+    ):
+        run_selection(
+            EvaluationConfig(
+                promotion_mode=True,
+                candidates=("field-channel-rrf-k60",),
+                workloads=("realistic",),
+            )
+        )
+
+
+def test_promotion_accepts_explicit_complete_workload_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        selection,
+        "_run_in_root",
+        lambda config, root, sizes, git_state, started: selection.SelectionReport(
+            metadata={"promotion_mode": True, "promotion_eligible": False},
+            query_manifest=(),
+            candidates={},
+            selected_candidate=None,
+            failures=(),
+        ),
+    )
+
+    report = run_selection(
+        EvaluationConfig(
+            promotion_mode=True,
+            candidates=("field-channel-rrf-k60",),
+            workloads=PROMOTION_WORKLOADS,
+            git_state=GitState(source_revision="abc123", git_dirty=False),
+        )
+    )
+
+    assert report.failures == ()
+
+
+def test_selection_failure_categories_are_closed_and_bounded(tmp_path: Path) -> None:
+    report = run_selection(
+        EvaluationConfig(
+            size=12,
+            candidates=("rgapi-0.1.22",),
+            git_state=GitState(source_revision="abc123", git_dirty=False),
+        )
+    )
+
+    assert {failure.category for failure in report.failures} <= CLOSED_FAILURE_CATEGORIES
+    for failure in report.failures:
+        assert len(failure.reason) <= 120
+        assert "\n" not in failure.reason
+
+
+def test_selection_rejects_missing_family_or_failed_workload_floor() -> None:
+    metrics = WorkloadMetrics(
+        recall_at_10=0.89,
+        mrr=0.60,
+        ndcg_at_10=0.80,
+        hard_recall_at_10=0.80,
+        hard_mrr=0.80,
+        by_family={"alias": 0.90},
+    )
+    assert validate_workload_metrics(metrics).passed is False
+
+
+def test_selection_rejects_failed_hard_mrr_workload_floor() -> None:
+    metrics = WorkloadMetrics(
+        recall_at_10=0.90,
+        mrr=0.80,
+        ndcg_at_10=0.75,
+        hard_recall_at_10=0.90,
+        hard_mrr=0.79,
+        by_family={"alias": 0.90},
+    )
+
+    verdict = validate_workload_metrics(metrics)
+
+    assert verdict.passed is False
+    assert verdict.gates["hard_mrr"] is False
+
+
+def test_selection_rejects_workload_without_hard_queries() -> None:
+    metrics = WorkloadMetrics(
+        recall_at_10=0.90,
+        mrr=0.50,
+        ndcg_at_10=0.75,
+        hard_recall_at_10=0.0,
+        hard_mrr=0.0,
+        by_family={"book-title": 0.90},
+        hard_query_count=0,
+    )
+
+    verdict = validate_workload_metrics(metrics)
+
+    assert verdict.passed is False
+    assert verdict.gates["hard_recall_at_10"] is False
+    assert verdict.gates["hard_mrr"] is False
+
+
+def test_selection_report_includes_workload_manifest_and_ndcg() -> None:
+    measured = _difficulty_measured()
+
+    result = selection._candidate_selection(
+        name="field-channel-rrf-k60",
+        baselines={10_000: measured},
+        candidates={10_000: measured},
+        corpora={10_000: _difficulty_corpus(10_000)},
+        config=EvaluationConfig(
+            promotion_mode=True,
+            candidates=("field-channel-rrf-k60",),
+            workloads=("realistic", "gutenberg", "salesforce"),
+        ),
+        git_state=GitState(source_revision="abc123", git_dirty=False),
+    )
+
+    workload_metrics = cast(dict[str, selection.JsonValue], result.to_dict()["workload_metrics"])
+    overall = cast(dict[str, selection.JsonValue], workload_metrics["overall"])
+    by_difficulty = cast(
+        dict[str, dict[str, selection.JsonValue]], workload_metrics["by_difficulty"]
+    )
+    by_workload = cast(dict[str, selection.JsonValue], workload_metrics["by_workload"])
+    realistic = cast(dict[str, selection.JsonValue], by_workload["realistic"])
+    realistic_family = cast(dict[str, selection.JsonValue], realistic["by_family"])
+    realistic_difficulty = cast(
+        dict[str, dict[str, selection.JsonValue]], realistic["by_difficulty"]
+    )
+
+    assert result.to_dict()["workload_manifest"] == [
+        {"name": "realistic", "fixture_version": "generated", "source_manifest": "seed-42"},
+        {
+            "name": "gutenberg",
+            "fixture_version": "eval/data/gutenberg-books.jsonl",
+            "source_manifest": "gutenberg-books.jsonl provenance",
+        },
+        {
+            "name": "salesforce",
+            "fixture_version": "eval/data/salesforce-facts.jsonl",
+            "source_manifest": "salesforce-facts.jsonl citations",
+        },
+    ]
+    assert overall["ndcg_at_10"] == pytest.approx(2 / 3)
+    assert realistic_family["unit"] == pytest.approx(2 / 3)
+    assert by_difficulty["easy"] == {
+        "query_count": 1,
+        "recall_at_10": 1.0,
+        "mrr": 1.0,
+        "ndcg_at_10": 1.0,
+    }
+    assert by_difficulty["medium"] == {
+        "query_count": 1,
+        "recall_at_10": 1.0,
+        "mrr": 1.0,
+        "ndcg_at_10": 1.0,
+    }
+    assert by_difficulty["hard"] == {
+        "query_count": 1,
+        "recall_at_10": 0.0,
+        "mrr": 0.0,
+        "ndcg_at_10": 0.0,
+    }
+    assert realistic_difficulty == by_difficulty
+    assert "easy query" not in json.dumps(workload_metrics)
+
+
+def test_selection_report_keeps_negative_controls_diagnostic_and_redacted() -> None:
+    negative_query_text = "raw negative query should stay out"
+    queries = [
+        QuerySpec("positive hard", ["target"], "hard", family="unit", corpus="salesforce"),
+        QuerySpec(
+            negative_query_text,
+            [],
+            "hard",
+            family="negative-control",
+            corpus="salesforce",
+            negative=True,
+        ),
+    ]
+    results = [
+        HitResult("positive hard", "hard", ["target"], ["target"], 1, 1.0),
+        HitResult(negative_query_text, "hard", [], ["unexpected"], None, 99.0, True),
+    ]
+    observations = [
+        QueryContextObservation(
+            query="positive hard",
+            difficulty="hard",
+            expected_slugs=["target"],
+            hits=[_recall_hit("target")],
+        ),
+        QueryContextObservation(
+            query=negative_query_text,
+            difficulty="hard",
+            expected_slugs=[],
+            hits=[_recall_hit("unexpected", snippet="negative " * 100)],
+            negative=True,
+        ),
+    ]
+    measured = selection._MeasuredRun(
+        results,
+        observations,
+        selection.RunSummary(2, (0, 1), (("target",), ("unexpected",)), 99.0, 0, 0, True),
+        {"name": "fake"},
+    )
+
+    workload_report = selection._workload_report(queries, results)
+    quality = selection._quality_metrics(measured, {10_000: 99.0})
+    manifest = selection._query_manifest(queries)
+    payload = json.dumps({"workload": workload_report, "manifest": manifest})
+
+    negative_controls = cast(dict[str, selection.JsonValue], workload_report["negative_controls"])
+    by_workload = cast(dict[str, selection.JsonValue], workload_report["by_workload"])
+    salesforce = cast(dict[str, selection.JsonValue], by_workload["salesforce"])
+
+    assert quality.hard_recall_at_10 == 1.0
+    assert quality.hard_mrr == 1.0
+    assert quality.tokens_per_correct_hard_query < 100
+    assert negative_controls["query_count"] == 1
+    assert negative_controls["non_empty_result_count"] == 1
+    assert salesforce["negative_controls"] == negative_controls
+    assert manifest[1] == {
+        "id": 1,
+        "corpus": "salesforce",
+        "family": "negative-control",
+        "difficulty": "hard",
+        "negative": True,
+        "expected_slugs": [],
+    }
+    assert negative_query_text not in payload
+
+
+def test_large_selection_manifest_is_bounded_by_family_and_difficulty() -> None:
+    queries = [
+        QuerySpec(f"query {index}", ["target"], "hard", family="unit", corpus="realistic")
+        for index in range(selection.SELECTION_QUERY_BOUND_THRESHOLD + 1)
+    ]
+
+    bounded = selection._bound_query_manifest(queries)
+
+    assert len(bounded) == selection.SELECTION_MAX_QUERIES_PER_GROUP
+    assert bounded[0].query == "query 0"
+
+
+def test_retained_report_excludes_prohibited_content_canaries(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    memory_canary = "PRIVATE-MEMORY-CONTENT-7f91"
+    credential_canary = "sk-live-CREDENTIAL-7f91"
+    query_canary = "raw private query 7f91"
+    stack_canary = 'Traceback (most recent call last): File "/private/secret.py"'
+    original_generate = selection._generate_snapshot
+
+    def generate_with_canaries(
+        snapshot_dir: Path,
+        *,
+        size: int,
+        seed: int,
+        workloads: tuple[selection.WorkloadName, ...] = ("realistic",),
+    ) -> CorpusResult:
+        corpus = original_generate(snapshot_dir, size=size, seed=seed, workloads=workloads)
+        corpus.queries[0].query = f"{query_canary} {credential_canary}"
+        page = next((snapshot_dir / "docs").rglob("*.md"))
+        page.write_text(
+            page.read_text(encoding="utf-8") + f"\n{memory_canary}\n{stack_canary}\n",
+            encoding="utf-8",
+        )
+        return corpus
+
+    monkeypatch.setattr(selection, "_generate_snapshot", generate_with_canaries)
+    evidence_dir = tmp_path / "profile-alice-secret" / "evidence"
+    data_root = tmp_path / "profile-alice-secret" / "paired"
+    report = run_selection(
+        EvaluationConfig(
+            size=12,
+            evidence_dir=evidence_dir,
+            data_root=data_root,
+            candidates=("field-channel-rrf-k60",),
+            git_state=GitState(source_revision="abc123", git_dirty=False),
+        )
+    )
+
+    retained = (evidence_dir / "selection-12.json").read_text(encoding="utf-8")
+    prohibited = (
+        memory_canary,
+        credential_canary,
+        query_canary,
+        stack_canary,
+        str(tmp_path),
+        str(Path.home()),
+        getpass.getuser(),
+        platform.node(),
+    )
+    assert report.report_path is not None
+    assert all(value not in retained for value in prohibited if value)
+
+
+def test_fixture_workload_rejects_unsafe_raw_row_slug(tmp_path: Path) -> None:
+    fixture = tmp_path / "fixture.jsonl"
+    _write_fixture_row(
+        fixture,
+        {
+            "slug": "../../escape",
+            "title": "Escaping Book",
+            "authors": [],
+            "metadata_only": True,
+        },
+    )
+
+    with pytest.raises(ValueError, match="invalid fixture slug"):
+        selection._append_fixture_workload(tmp_path / "snapshot", fixture, corpus="gutenberg")
+
+
+def test_fixture_page_path_rejects_symlinked_target(tmp_path: Path) -> None:
+    snapshot_dir = tmp_path / "snapshot"
+    entity_root = snapshot_dir / "docs" / "entities"
+    entity_root.mkdir(parents=True)
+    outside = tmp_path / "outside.md"
+    outside.write_text("outside", encoding="utf-8")
+    (entity_root / "gutenberg-1342.md").symlink_to(outside)
+
+    with pytest.raises(ValueError, match="destination escapes"):
+        selection._fixture_page_path(snapshot_dir, "gutenberg-1342")
+
+    assert outside.read_text(encoding="utf-8") == "outside"
+
+
+def test_fixture_workload_rejects_symlinked_entity_parent_before_write(tmp_path: Path) -> None:
+    fixture = tmp_path / "fixture.jsonl"
+    _write_fixture_row(
+        fixture,
+        {
+            "slug": "gutenberg-1342",
+            "title": "Pride and Prejudice",
+            "authors": [],
+            "metadata_only": True,
+        },
+    )
+    snapshot_dir = tmp_path / "snapshot"
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (snapshot_dir / "docs").mkdir(parents=True)
+    (snapshot_dir / "docs" / "entities").symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(ValueError, match="destination escapes"):
+        selection._append_fixture_workload(snapshot_dir, fixture, corpus="gutenberg")
+
+    assert list(outside.iterdir()) == []
+
+
+def _fake_corpus(size: int) -> CorpusResult:
+    return CorpusResult(
+        memories_written=size,
+        queries=[QuerySpec("hard query", ["target"], "hard", family="unit", corpus="realistic")],
+    )
+
+
+def _difficulty_corpus(size: int) -> CorpusResult:
+    return CorpusResult(
+        memories_written=size,
+        queries=[
+            QuerySpec("easy query", ["easy-target"], "easy", family="unit", corpus="realistic"),
+            QuerySpec(
+                "medium query", ["medium-target"], "medium", family="unit", corpus="realistic"
+            ),
+            QuerySpec("hard query", ["hard-target"], "hard", family="unit", corpus="realistic"),
+        ],
+    )
+
+
+def _fake_measured(p99_ms: float) -> selection._MeasuredRun:
+    hit = _recall_hit("target", snippet="hard query")
+    result = HitResult("hard query", "hard", ["target"], ["target"], 1, p99_ms)
+    observation = QueryContextObservation(
+        query="hard query",
+        difficulty="hard",
+        expected_slugs=["target"],
+        hits=[hit],
+    )
+    summary = selection.RunSummary(1, (0,), (("target",),), p99_ms, 1, 0, True)
+    return selection._MeasuredRun([result], [observation], summary, {"name": "fake"})
+
+
+def _difficulty_measured() -> selection._MeasuredRun:
+    queries = [
+        QuerySpec("easy query", ["easy-target"], "easy", family="unit", corpus="realistic"),
+        QuerySpec("medium query", ["medium-target"], "medium", family="unit", corpus="realistic"),
+        QuerySpec("hard query", ["hard-target"], "hard", family="unit", corpus="realistic"),
+    ]
+    results = [
+        HitResult("easy query", "easy", ["easy-target"], ["easy-target"], 1, 1.0),
+        HitResult("medium query", "medium", ["medium-target"], ["medium-target"], 1, 1.0),
+        HitResult("hard query", "hard", ["hard-target"], ["miss"], None, 1.0),
+    ]
+    observations = [
+        QueryContextObservation(
+            query=query.query,
+            difficulty=query.difficulty,
+            expected_slugs=query.expected_slugs,
+            hits=[_recall_hit(result.actual_slugs[0])],
+        )
+        for query, result in zip(queries, results, strict=True)
+    ]
+    summary = selection.RunSummary(
+        len(results),
+        tuple(range(len(results))),
+        tuple(tuple(result.actual_slugs) for result in results),
+        1.0,
+        2,
+        0,
+        True,
+    )
+    return selection._MeasuredRun(results, observations, summary, {"name": "fake"})
+
+
+def _write_memory(memex: Memex, *, title: str, body: str) -> str:
+    return memex.write(WriteInput(type="entity", title=title, body=body)).slug
+
+
+def _write_fixture_row(path: Path, row: dict[str, object]) -> None:
+    path.write_text(json.dumps(row) + "\n", encoding="utf-8")
+
+
+def _patch_quality_metrics(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    baseline: CandidateMetrics,
+    candidate: CandidateMetrics,
+) -> None:
+    calls = iter((baseline, candidate))
+
+    def fake_quality_metrics(
+        measured: selection._MeasuredRun,
+        p99_ms: dict[int, float],
+        *,
+        complete: bool | None = None,
+    ) -> CandidateMetrics:
+        del measured, p99_ms, complete
+        return next(calls)
+
+    monkeypatch.setattr(selection, "_quality_metrics", fake_quality_metrics)
+
+
+def _recall_hit(slug: str, *, snippet: str = "hard query") -> RecallHit:
+    return RecallHit(
+        slug=slug,
+        file_path=f"docs/{slug}.md",
+        title=slug.title(),
+        node_type="entity",
+        importance=0.5,
+        score=0.0,
+        rank=1,
+        snippet="hard query",
+        snippet_source="body",
+        tags=[],
+        created="2026-01-01T00:00:00Z",
+        updated="2026-01-01T00:00:00Z",
+        last_access=None,
+        transcript_ref=None,
+        links=[],
+        status="active",
+    )

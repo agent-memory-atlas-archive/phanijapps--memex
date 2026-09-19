@@ -17,3 +17,27 @@ kind = "restructure"
 source-path = "docs/index.md"
 destination-path = "docs/gitpages/index.md"
 note = "GitHub Pages site (index/guide/spec/implementation-notes/assets) moved under docs/gitpages/ so pack documentation scaffold owns docs/ top level; mkdocs docs_dir and README links updated."
+
+[[findings.accepted]]
+kind = "restructure"
+source-path = "README.md"
+destination-path = "docs/CHARTER.md"
+note = "Agentbundle charter placeholders replaced with the repository's established mission, scope, exclusions, principles, and document ownership."
+
+[[findings.accepted]]
+kind = "reference-architecture"
+source-path = "docs/gitpages/implementation-notes.md"
+destination-path = "docs/architecture/overview.md"
+note = "Generic monorepo scaffold replaced with the implemented Memex package boundaries, state ownership, runtime flows, invariants, and change guidance."
+
+[[findings.accepted]]
+kind = "restructure"
+source-path = "docs/v1_enhance.md"
+destination-path = "docs/product/roadmap.md"
+note = "Product scaffold replaced with an evidence-backed roadmap and changelog while retaining detailed proposals in their existing source documents."
+
+[[findings.accepted]]
+kind = "decision-record"
+source-path = "docs/gitpages/implementation-notes.md"
+destination-path = "docs/adr"
+note = "Created the repository's declared ADR surface and recorded four accepted, expensive-to-reverse decisions already established by the specification, implementation notes, and shipped guardrails."

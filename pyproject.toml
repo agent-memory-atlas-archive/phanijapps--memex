@@ -25,6 +25,11 @@ dependencies = [
     "openai>=1.60,<3",
 ]
 
+[project.optional-dependencies]
+eval-rgapi = [
+    "rgapi==0.1.22",
+]
+
 [project.scripts]
 memex = "memex.cli:main"
 

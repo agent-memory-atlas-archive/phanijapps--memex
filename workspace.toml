@@ -21,3 +21,29 @@
 [backlog]
 open = []
 closed = []
+
+["ini-001"]
+name      = "Memory retrieval and evidence quality"
+status    = "active"
+milestone = "Evidence-aware retrieval"
+
+["ini-001".work]
+queue   = []
+active  = [
+  { path = "docs/specs/quality-gated-retrieval/spec.md", kind = "spec", source = { mode = "repo-origin", parent = "docs/product/briefs/memory-retrieval-and-evidence.md" }, summary = "Select and ship one lexical ranker that improves hard-query accuracy and context cost within strict latency gates", needs = [] },
+]
+shipped = []
+
+["ini-001".shaping_queue]
+active  = []
+backlog = []
+
+["ini-001".brief_queue]
+draft = []
+ready = [
+  { path = "docs/product/briefs/memory-retrieval-and-evidence.md", kind = "brief", source = { mode = "repo-origin" }, summary = "Improve retrieval ranking, context efficiency, temporal evidence, and consolidation safety", needs = [] },
+]
+executing = []
+shipped   = []
+withdrawn = []
+cancelled = []

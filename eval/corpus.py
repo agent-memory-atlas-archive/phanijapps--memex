@@ -118,6 +118,14 @@ class QuerySpec:
     query: str
     expected_slugs: list[str]  # slugs that SHOULD appear in top-K
     difficulty: str  # easy | medium | hard | discriminator
+    family: str = ""
+    corpus: str = "synthetic"
+    negative: bool = False
+
+    @property
+    def relevant_slugs(self) -> list[str]:
+        """Return the complete positive relevance set for this query."""
+        return list(self.expected_slugs)
 
 
 @dataclass(slots=True)

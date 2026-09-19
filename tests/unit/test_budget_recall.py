@@ -13,7 +13,7 @@ from memex.application.context_injection import (
     estimate_tokens,
     pack_to_budget,
 )
-from memex.domain.models import RecallHit, WriteInput
+from memex.domain.models import RecallHit, RecallResult, WriteInput
 from memex.infrastructure.config import MemexConfig
 
 
@@ -105,6 +105,47 @@ class TestBudgetPacker:  # AC-0001
         assert estimate_tokens("") == 1
         assert estimate_tokens("x" * 400) == 101
 
+    def test_budgeted_recall_records_access_only_for_packed_hits(
+        self, memex: Memex, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        memex.write(WriteInput(type="entity", title="Returned first", body="findme"))
+        memex.write(WriteInput(type="entity", title="Skipped second", body="findme"))
+        memex.write(WriteInput(type="entity", title="Returned third", body="findme"))
+        hits = [
+            _hit(1, "returned-first", "a" * 4),
+            _hit(2, "skipped-second", "b" * 100),
+            _hit(3, "returned-third", "c" * 4),
+        ]
+
+        def fake_retrieve(
+            query: str,
+            *,
+            top_k: int | None = None,
+            node_type: str | None = None,
+            time_range: tuple[str, str] | None = None,
+            tags: list[str] | None = None,
+            include_expired: bool = False,
+            include_inactive: bool = False,
+        ) -> RecallResult:
+            del top_k, node_type, time_range, tags, include_expired, include_inactive
+            return RecallResult(
+                query=query,
+                hits=list(hits),
+                total_indexed=3,
+                search_engine="test",
+                search_time_ms=0.0,
+            )
+
+        monkeypatch.setattr(memex.retriever, "retrieve_without_access", fake_retrieve)
+
+        result = memex.recall("findme", max_tokens=4)
+
+        assert [hit.slug for hit in result.hits] == ["returned-first", "returned-third"]
+        assert [hit.rank for hit in result.hits] == [1, 2]
+        assert _access_count(memex, "returned-first") == 1
+        assert _access_count(memex, "skipped-second") == 0
+        assert _access_count(memex, "returned-third") == 1
+
 
 class TestInjectionFloor:  # AC-0002
     def test_weak_match_silent_for_hooks(self, memex: Memex) -> None:
@@ -146,3 +187,9 @@ class TestCliMaxTokens:  # AC-0001 CLI surface
         assert code == 0
         payload = json.loads(capture["out"])
         assert len(payload["hits"]) == 1  # top-1 whole despite tiny budget
+
+
+def _access_count(memex: Memex, slug: str) -> int:
+    row = memex.index_manager.get(slug)
+    assert row is not None
+    return int(row["access_count"])

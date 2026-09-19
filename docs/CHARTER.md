@@ -1,78 +1,81 @@
 # Charter
 
-> The foundational document for this project. One page, read whole.
-> Modeled on the [CNCF project charter pattern](https://contribute.cncf.io/maintainers/governance/charter/):
-> mission, scope, and principles in a single place, kept stable and short.
-
-Changes to this file go through an RFC. The rest of the docs in this repo
-are scaffolding around it; this file is the why.
-
----
+> The stable statement of why Memex exists, what belongs in the project, and
+> which principles resolve design trade-offs. Current product behavior lives in
+> [`product/`](product/); implementation structure lives in
+> [`architecture/`](architecture/); accepted decisions live in [`adr/`](adr/).
 
 ## Mission
 
-<!-- One sentence. What this project is, in language anyone could understand.
-     Example: "A monorepo template that helps small-to-medium teams ship
-     faster by giving Claude Code and other AI agents the structure they
-     need to be reliable contributors." -->
-
-<replace with one sentence>
+Memex gives AI coding agents durable, inspectable memory that remains under the
+user's control and survives any individual agent session or harness.
 
 ## Scope
 
-What this project does:
+Memex provides:
 
-- <bullet>
-- <bullet>
+- A local, single-user memory store made of human-readable Markdown pages.
+- A disposable SQLite FTS5 index for BM25 retrieval, freshness checks, access
+  statistics, and link adjacency.
+- Typed Python, CLI, and MCP operations for writing, recalling, consolidating,
+  retiring, importing, exporting, backing up, and restoring memories.
+- Deterministic hooks that inject relevant context and capture transcripts for
+  supported coding-agent harnesses.
+- Provenance links from stored memories to their source sessions.
+- Health checks, CI evidence, and a read-only local dashboard for inspecting the
+  store.
+- Optional LLM-assisted consolidation through an explicitly configured API or
+  an installed coding harness.
 
-What this project does **not** do:
+Memex does not provide:
 
-- <bullet>
-- <bullet>
-
-The "does not" list is at least as important as the "does" list. It's how
-we — and AI agents working in the repo — know when a request is out of
-bounds. If you find the project being asked to do things that aren't on
-either list, that's a signal to refine this section, not to drift.
+- A hosted memory service, cloud account, or always-running daemon.
+- Multi-user synchronization, shared conflict resolution, or a relay server.
+- Vector, embedding, cross-encoder, or graph-database retrieval.
+- A general agent runtime or replacement for a coding harness.
+- Automatic capture enabled by repository contents alone; installation and
+  enablement require user action outside the cloned repository.
+- A guarantee that model-generated memories are true; provenance, approval,
+  and inspectable files make them reviewable instead.
 
 ## Principles
 
-The values that resolve ties when reasonable people disagree. Five to
-seven, no more.
+1. **Files are the durable truth.** A memory must remain readable and editable
+   as Markdown even when the index, application, or harness is unavailable.
+2. **Derived state is replaceable.** SQLite accelerates retrieval but never
+   owns information that cannot be reconstructed from the files.
+3. **The user controls activation and data.** Capture, injection, and
+   consolidation are enabled deliberately, and memory contents stay local
+   unless the user configures an LLM provider.
+4. **One contract serves every adapter.** The Python API, CLI, MCP tools, and
+   harness integrations share domain models and application services rather
+   than implementing competing behavior.
+5. **Deterministic checks guard probabilistic work.** Parsing, indexing,
+   provenance, budgets, approvals, and CI checks are deterministic even when an
+   LLM helps consolidate memories.
+6. **Agent work must fail safely.** A broken recall, capture, or consolidation
+   path reports diagnostics without blocking the coding-agent turn or exposing
+   memory contents.
+7. **Provenance is part of the memory.** A durable claim should retain enough
+   source information to be reviewed, corrected, or retired later.
 
-1. **<principle>.** <one-sentence elaboration with a concrete example of
-   how we've applied it.>
-2. **<principle>.** ...
-3. **<principle>.** ...
-4. **<principle>.** ...
-5. **<principle>.** ...
+## Document ownership
 
-## What's NOT in this charter
-
-To keep this file from becoming everything-and-the-kitchen-sink:
-
-- **Decision history** lives in [`adr/`](adr/). The charter is what we
-  believe; ADRs are the choices we made because of those beliefs.
-- **Current product state** lives in [`product/`](product/). The charter
-  is direction; product/ is where we are.
-- **Current architecture state** lives in [`architecture/`](architecture/).
-- **Conventions for how we work** live in [`CONVENTIONS.md`](CONVENTIONS.md).
-- **Governance** (roles, decision-making processes, voting) lives in
-  [`GOVERNANCE.md`](GOVERNANCE.md) if and when the project is large
-  enough to need it. Most small/medium projects don't — a single
-  maintainer or small group operating by consensus is fine, and forcing
-  governance ceremony on a project that doesn't need it produces theater,
-  not clarity.
+- [`product/`](product/) records the current product direction and visible
+  release history.
+- [`architecture/`](architecture/) explains the implemented system and where
+  changes belong.
+- [`adr/`](adr/) preserves accepted architectural decisions and their
+  trade-offs.
+- [`specs/`](specs/) contains feature contracts and implementation plans.
+- [`gitpages/`](gitpages/) is the published user documentation and detailed
+  build specification.
+- [`CONVENTIONS.md`](CONVENTIONS.md) defines how repository artifacts are
+  authored and maintained.
 
 ## When to revise
 
-Revise this charter when:
-
-- The mission has actually changed (rare — usually means a fork).
-- The scope has shifted enough that PRs are routinely landing for things
-  the current scope doesn't cover.
-- A principle has stopped resolving ties — it's being ignored, or it
-  contradicts another principle in ways we haven't acknowledged.
-
-Revise via RFC. Editing the charter directly without discussion is the
-single fastest way to lose the trust this document is meant to build.
+Revise this charter when the mission, project boundary, or a principle truly
+changes. Ordinary product changes belong in the roadmap or a feature spec;
+architectural choices belong in an ADR; current implementation changes belong
+in the architecture documentation.

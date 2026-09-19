@@ -7,18 +7,48 @@ import re
 import sqlite3
 import threading
 import time
+from collections.abc import Sequence
 from pathlib import Path
 
 from memex.domain.models import RecallHit, RecallResult, utc_now_iso
 
 _QUERY_TOKENS = re.compile(r"[a-z0-9]+")
+MAX_QUERY_BYTES = 1024
+MAX_QUERY_TOKENS = 64
+_WINNER_SEARCH_ENGINE = "semantic-and-fallback-fts5"
+_WINNER_BODY_WEIGHT = 2.0
+_QUERY_STOP_WORDS = frozenset(
+    {
+        "a",
+        "an",
+        "did",
+        "do",
+        "does",
+        "from",
+        "how",
+        "in",
+        "is",
+        "of",
+        "the",
+        "to",
+        "we",
+        "what",
+        "why",
+    }
+)
+_SEMANTIC_SCAFFOLDING_PHRASES = (
+    ("instead", "of"),
+    ("how", "many"),
+    ("switch", "from"),
+)
 
 # FTS column order: slug=0, title=1, body=2, tags=3. The spec's snippet
 # example used column 1 while documenting it as body; body is column 2.
 _SNIPPET_BODY_COLUMN = 2
 _SNIPPET_TITLE_COLUMN = 1
+_WINNER_SNIPPET_TOKENS = 12
 
-_BASE_SQL = """
+_LEGACY_BASE_SQL = """
 SELECT
     w.slug, w.file_path, w.title, w.node_type, w.importance,
     w.tags, w.created, w.updated, w.last_access, w.transcript_ref, w.status,
@@ -29,6 +59,114 @@ FROM wiki_fts
 JOIN wiki_index w ON w.rowid = wiki_fts.rowid
 WHERE wiki_fts MATCH :match
 """
+_WINNER_SELECT_SQL = """
+SELECT
+    w.slug, w.file_path, w.title, w.node_type, w.importance,
+    w.tags, w.created, w.updated, w.last_access, w.transcript_ref, w.status,
+    bm25(wiki_fts, 1.0, 1.0, :body_weight, 1.0) AS score,
+    snippet(wiki_fts, 2, '<mark>', '</mark>', '...', :snippet_tokens)
+        AS body_snippet,
+    snippet(wiki_fts, 1, '<mark>', '</mark>', '...', :snippet_tokens)
+        AS title_snippet
+FROM wiki_fts
+JOIN wiki_index w ON w.rowid = wiki_fts.rowid
+WHERE wiki_fts MATCH :match
+"""
+
+
+def _stable_dedupe(tokens: list[str]) -> list[str]:
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for token in tokens:
+        if token in seen:
+            continue
+        seen.add(token)
+        deduped.append(token)
+    return deduped
+
+
+def _query_tokens(query: str) -> list[str]:
+    if len(query) > MAX_QUERY_BYTES or len(query.encode("utf-8")) > MAX_QUERY_BYTES:
+        raise ValueError(f"query exceeds {MAX_QUERY_BYTES} UTF-8 bytes")
+    tokens = _QUERY_TOKENS.findall(query.lower())
+    if not tokens:
+        raise ValueError("query contains no searchable terms")
+    if len(tokens) > MAX_QUERY_TOKENS:
+        raise ValueError(f"query contains too many searchable terms (maximum {MAX_QUERY_TOKENS})")
+    return tokens
+
+
+def _phrase_indexes(tokens: list[str], phrase: tuple[str, ...]) -> set[int]:
+    indexes: set[int] = set()
+    width = len(phrase)
+    for start in range(len(tokens) - width + 1):
+        if tuple(tokens[start : start + width]) == phrase:
+            indexes.update(range(start, start + width))
+    return indexes
+
+
+def _how_does_handle_indexes(tokens: list[str]) -> set[int]:
+    indexes: set[int] = set()
+    for start in range(len(tokens) - 2):
+        if tokens[start : start + 2] != ["how", "does"]:
+            continue
+        try:
+            handle = tokens.index("handle", start + 2)
+        except ValueError:
+            continue
+        indexes.update({start, start + 1, handle})
+    return indexes
+
+
+def _why_is_showing_indexes(tokens: list[str]) -> set[int]:
+    indexes: set[int] = set()
+    for start in range(len(tokens) - 2):
+        if tokens[start : start + 2] != ["why", "is"]:
+            continue
+        try:
+            indexes.add(tokens.index("showing", start + 2))
+        except ValueError:
+            continue
+    return indexes
+
+
+def _drop_semantic_scaffolding(tokens: list[str]) -> list[str]:
+    rejected = {
+        index
+        for phrase in _SEMANTIC_SCAFFOLDING_PHRASES
+        for index in _phrase_indexes(tokens, phrase)
+    }
+    rejected.update(_how_does_handle_indexes(tokens))
+    rejected.update(_why_is_showing_indexes(tokens))
+    return [token for index, token in enumerate(tokens) if index not in rejected]
+
+
+def production_ranker_metadata() -> dict[str, object]:
+    """Describe the promoted production retrieval algorithm."""
+    return {
+        "name": _WINNER_SEARCH_ENGINE,
+        "query_strategy": "strict-and-weighted-fts5",
+        "zero_hit_fallback": "broad-or-weighted-fts5",
+        "token_strategy": "lowercase-alphanumeric-safe-stable-dedupe",
+        "removed_scaffolding": (
+            "instead of",
+            "how does ... handle",
+            "how many",
+            "why is ... showing",
+            "switch from",
+        ),
+        "column_weights": {
+            "slug": 1.0,
+            "title": 1.0,
+            "body": _WINNER_BODY_WEIGHT,
+            "tags": 1.0,
+        },
+        "snippet_tokens": _WINNER_SNIPPET_TOKENS,
+        "tie_break": "score-then-slug",
+        "safe_query_boundary": "alphanumeric tokens only, capped before FTS5 MATCH",
+        "max_query_bytes": MAX_QUERY_BYTES,
+        "max_query_tokens": MAX_QUERY_TOKENS,
+    }
 
 
 class BM25Retriever:
@@ -55,20 +193,59 @@ class BM25Retriever:
 
     def _match_query(self, query: str) -> str:
         """Reduce free text to safe OR-joined FTS5 terms (untrusted input)."""
-        tokens = _QUERY_TOKENS.findall(query.lower())
-        if not tokens:
-            raise ValueError("query contains no searchable terms")
-        return " OR ".join(tokens)
+        return " OR ".join(_query_tokens(query))
+
+    def _semantic_tokens(self, query: str) -> list[str]:
+        raw_tokens = _query_tokens(query)
+        tokens = _drop_semantic_scaffolding(raw_tokens)
+        tokens = [token for token in tokens if token not in _QUERY_STOP_WORDS]
+        tokens = _stable_dedupe(tokens)
+        return tokens or _stable_dedupe(raw_tokens)
 
     def search_fts(self, query: str, top_k: int) -> list[tuple[str, float]]:
         """Raw (slug, score) pairs ordered by ascending bm25 score."""
         match = self._match_query(query)
         with self._lock:
             rows = self._conn.execute(
-                _BASE_SQL + " ORDER BY score LIMIT :top_k",
+                _LEGACY_BASE_SQL + " ORDER BY score, w.slug LIMIT :top_k",
                 {"match": match, "top_k": top_k},
             ).fetchall()
         return [(str(row["slug"]), float(row["score"])) for row in rows]
+
+    def retrieve_legacy_or(
+        self,
+        query: str,
+        top_k: int | None = None,
+        node_type: str | None = None,
+        time_range: tuple[str, str] | None = None,
+        tags: list[str] | None = None,
+        include_expired: bool = False,
+        include_inactive: bool = False,
+    ) -> RecallResult:
+        """Run the pre-promotion SQLite FTS5 OR baseline."""
+        limit = self._validated_limit(top_k)
+        started = time.perf_counter()
+        match = self._match_query(query)
+        rows, total = self._execute_ranked_query(
+            _LEGACY_BASE_SQL,
+            match,
+            limit=limit,
+            node_type=node_type,
+            time_range=time_range,
+            tags=tags,
+            include_expired=include_expired,
+            include_inactive=include_inactive,
+        )
+        hits = self._hits_from_rows(rows, limit)
+        self.record_access(hits)
+        elapsed_ms = (time.perf_counter() - started) * 1000
+        return RecallResult(
+            query=query,
+            hits=hits,
+            total_indexed=total,
+            search_engine="sqlite-fts5-bm25",
+            search_time_ms=round(elapsed_ms, 3),
+        )
 
     def retrieve(
         self,
@@ -82,11 +259,12 @@ class BM25Retriever:
     ) -> RecallResult:
         """Search the index and return ranked hits with metadata.
 
-        The query is reduced to alphanumeric tokens joined by OR, so
-        untrusted input never reaches the FTS5 MATCH parser. Hits are
-        ordered by ascending BM25 score — lower is better, per SQLite FTS5.
-        Nodes past ``expires_at`` or ``valid_to`` are invisible unless the
-        caller opts in; this is how soft-forgetting hides memories.
+        The query is reduced to safe alphanumeric semantic tokens, searched
+        with strict AND matching, and retried with OR only when strict matching
+        returns no rows. Untrusted input never reaches the FTS5 MATCH parser.
+        Hits are ordered by ascending BM25 score — lower is better, per SQLite
+        FTS5. Nodes past ``expires_at`` or ``valid_to`` are invisible unless
+        the caller opts in; this is how soft-forgetting hides memories.
 
         Side effects: every returned hit gets ``access_count += 1`` and a
         refreshed ``last_access``. Files are never touched.
@@ -105,16 +283,132 @@ class BM25Retriever:
             a normal result, not an error.
 
         Raises:
-            ValueError: Query has no searchable terms, or ``top_k`` outside
-                [1, 100].
+            ValueError: Query has no searchable terms, query work exceeds the
+                retriever cap, or ``top_k`` outside [1, 100].
         """
+        result = self.retrieve_without_access(
+            query,
+            top_k=top_k,
+            node_type=node_type,
+            time_range=time_range,
+            tags=tags,
+            include_expired=include_expired,
+            include_inactive=include_inactive,
+        )
+        self.record_access(result.hits)
+        return result
+
+    def retrieve_without_access(
+        self,
+        query: str,
+        top_k: int | None = None,
+        node_type: str | None = None,
+        time_range: tuple[str, str] | None = None,
+        tags: list[str] | None = None,
+        include_expired: bool = False,
+        include_inactive: bool = False,
+    ) -> RecallResult:
+        """Search the promoted ranker without mutating access statistics."""
+        limit = self._validated_limit(top_k)
+        started = time.perf_counter()
+
+        tokens = self._semantic_tokens(query)
+        rows, total = self._execute_ranked_query(
+            _WINNER_SELECT_SQL,
+            " AND ".join(tokens),
+            limit=limit,
+            node_type=node_type,
+            time_range=time_range,
+            tags=tags,
+            include_expired=include_expired,
+            include_inactive=include_inactive,
+            extra_params={
+                "body_weight": _WINNER_BODY_WEIGHT,
+                "snippet_tokens": _WINNER_SNIPPET_TOKENS,
+            },
+        )
+        if not rows:
+            rows, total = self._execute_ranked_query(
+                _WINNER_SELECT_SQL,
+                " OR ".join(tokens),
+                limit=limit,
+                node_type=node_type,
+                time_range=time_range,
+                tags=tags,
+                include_expired=include_expired,
+                include_inactive=include_inactive,
+                extra_params={
+                    "body_weight": _WINNER_BODY_WEIGHT,
+                    "snippet_tokens": _WINNER_SNIPPET_TOKENS,
+                },
+            )
+
+        hits = self._hits_from_rows(rows, limit)
+        elapsed_ms = (time.perf_counter() - started) * 1000
+        return RecallResult(
+            query=query,
+            hits=hits,
+            total_indexed=total,
+            search_engine=_WINNER_SEARCH_ENGINE,
+            search_time_ms=round(elapsed_ms, 3),
+        )
+
+    def _validated_limit(self, top_k: int | None) -> int:
         limit = top_k if top_k is not None else self.default_top_k
         if not 1 <= limit <= 100:
             raise ValueError("top_k must be between 1 and 100")
-        started = time.perf_counter()
+        return limit
 
+    def _execute_ranked_query(
+        self,
+        base_sql: str,
+        match: str,
+        *,
+        limit: int,
+        node_type: str | None,
+        time_range: tuple[str, str] | None,
+        tags: list[str] | None,
+        include_expired: bool,
+        include_inactive: bool,
+        extra_params: dict[str, object] | None = None,
+    ) -> tuple[list[sqlite3.Row], int]:
+        clauses, params = self._eligibility_filters(
+            node_type=node_type,
+            time_range=time_range,
+            tags=tags,
+            include_expired=include_expired,
+            include_inactive=include_inactive,
+        )
+        params.update(extra_params or {})
+        params.update({"match": match, "top_k": limit})
+        sql = base_sql
+        if clauses:
+            sql += " AND " + " AND ".join(clauses)
+        sql += " ORDER BY score, w.slug LIMIT :top_k"
+
+        with self._lock:
+            rows = self._conn.execute(sql, params).fetchall()
+            total = self._conn.execute("SELECT COUNT(*) AS n FROM wiki_index").fetchone()
+        return self._dedupe_rows(rows), int(total["n"])
+
+    def _hits_from_rows(self, rows: list[sqlite3.Row], limit: int) -> list[RecallHit]:
+        links = self._links([str(row["slug"]) for row in rows])
+        return [
+            self._to_hit(row, rank, links.get(str(row["slug"]), []))
+            for rank, row in enumerate(rows[:limit], start=1)
+        ]
+
+    def _eligibility_filters(
+        self,
+        *,
+        node_type: str | None,
+        time_range: tuple[str, str] | None,
+        tags: list[str] | None,
+        include_expired: bool,
+        include_inactive: bool,
+    ) -> tuple[list[str], dict[str, object]]:
         clauses: list[str] = []
-        params: dict[str, object] = {"match": self._match_query(query), "top_k": limit}
+        params: dict[str, object] = {}
         if node_type is not None:
             clauses.append("w.node_type = :node_type")
             params["node_type"] = node_type
@@ -132,30 +426,24 @@ class BM25Retriever:
             params["now"] = now
         if not include_inactive:
             clauses.append("(w.status IS NULL OR w.status = 'active')")
+        return clauses, params
 
-        sql = _BASE_SQL
-        if clauses:
-            sql += " AND " + " AND ".join(clauses)
-        sql += " ORDER BY score LIMIT :top_k"
-        with self._lock:
-            rows = self._conn.execute(sql, params).fetchall()
-            total = self._conn.execute("SELECT COUNT(*) AS n FROM wiki_index").fetchone()
-
-        hits = [self._to_hit(row, rank) for rank, row in enumerate(rows, start=1)]
-        self._record_access(hits)
-        elapsed_ms = (time.perf_counter() - started) * 1000
-        return RecallResult(
-            query=query,
-            hits=hits,
-            total_indexed=int(total["n"]),
-            search_engine="bm25",
-            search_time_ms=round(elapsed_ms, 3),
-        )
+    @staticmethod
+    def _dedupe_rows(rows: list[sqlite3.Row]) -> list[sqlite3.Row]:
+        deduped: list[sqlite3.Row] = []
+        seen: set[str] = set()
+        for row in rows:
+            slug = str(row["slug"])
+            if slug in seen:
+                continue
+            seen.add(slug)
+            deduped.append(row)
+        return deduped
 
     def close(self) -> None:
         self._conn.close()
 
-    def _record_access(self, hits: list[RecallHit]) -> None:
+    def record_access(self, hits: Sequence[RecallHit]) -> None:
         """Recall side effect: bump access_count/last_access per hit (§9.2)."""
         now = utc_now_iso()
         with self._lock, self._conn:
@@ -165,7 +453,22 @@ class BM25Retriever:
                 [(now, hit.slug) for hit in hits],
             )
 
-    def _to_hit(self, row: sqlite3.Row, rank: int) -> RecallHit:
+    def _links(self, slugs: list[str]) -> dict[str, list[str]]:
+        if not slugs:
+            return {}
+        placeholders = ",".join("?" for _ in slugs)
+        sql = (
+            "SELECT source_slug, target_slug FROM wiki_links "  # noqa: S608
+            f"WHERE source_slug IN ({placeholders}) ORDER BY source_slug, target_slug"
+        )
+        with self._lock:
+            rows = self._conn.execute(sql, tuple(slugs)).fetchall()
+        links: dict[str, list[str]] = {}
+        for row in rows:
+            links.setdefault(str(row["source_slug"]), []).append(str(row["target_slug"]))
+        return links
+
+    def _to_hit(self, row: sqlite3.Row, rank: int, links: list[str]) -> RecallHit:
         body_snippet = str(row["body_snippet"])
         title_snippet = str(row["title_snippet"])
         # FTS5 snippet() returns text even when the column itself has no
@@ -174,14 +477,6 @@ class BM25Retriever:
             snippet, source = body_snippet, "body"
         else:
             snippet, source = title_snippet, "title"
-        with self._lock:
-            links = [
-                str(link_row["target_slug"])
-                for link_row in self._conn.execute(
-                    "SELECT target_slug FROM wiki_links WHERE source_slug = ? ORDER BY target_slug",
-                    (str(row["slug"]),),
-                ).fetchall()
-            ]
         try:
             status = str(row["status"])
         except (IndexError, KeyError):

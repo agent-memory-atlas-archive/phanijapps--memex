@@ -8,6 +8,7 @@ import pytest
 from memex import cli
 from memex.application.memory import Memex
 from memex.domain.models import WriteInput
+from memex.infrastructure.bm25_retriever import MAX_QUERY_BYTES, MAX_QUERY_TOKENS
 from memex.infrastructure.config import MemexConfig
 
 FIXTURES = Path(__file__).parent.parent / "fixtures"
@@ -72,6 +73,31 @@ def test_prompt_hook_prompt_flag(seeded: Path, capture: dict[str, str]) -> None:
     code = cli.main(["--data-dir", str(seeded), "hook", "prompt", "--prompt", "ruff preferences"])
     assert code == 0
     assert "Prefer ruff" in capture["out"]
+
+
+@pytest.mark.parametrize("hook_command", ["session-start", "prompt"])
+@pytest.mark.parametrize(
+    "query",
+    [
+        "",
+        "!?",
+        "leaksecret " + ("é" * MAX_QUERY_BYTES),
+        " ".join(f"term{index}" for index in range(MAX_QUERY_TOKENS + 1)),
+    ],
+    ids=["empty", "no-searchable-terms", "byte-cap", "token-cap"],
+)
+def test_context_hook_invalid_query_is_silent(
+    seeded: Path,
+    capture: dict[str, str],
+    hook_command: str,
+    query: str,
+) -> None:
+    query_option = "--query" if hook_command == "session-start" else "--prompt"
+
+    code = cli.main(["--data-dir", str(seeded), "hook", hook_command, query_option, query])
+
+    assert code == 0
+    assert capture.get("out", "") == ""
 
 
 def test_transcript_hook_ingests_pi_session(seeded: Path, capture: dict[str, str]) -> None:

@@ -151,3 +151,33 @@ rule, and the OpenAI SDK is the single LLM client.
   `logs/runs.jsonl` run log (F2/F4); three-line memory constitution on
   every injected block (G2). Schema v2: stale `mem.db` auto-rebuilds from
   the wiki on open — no DDL migration path exists.
+
+- **Quality-gated retrieval winner.** Production recall now reports
+  `search_engine="semantic-and-fallback-fts5"`. The ranker keeps SQLite FTS5 as
+  the only runtime search dependency, reduces queries to safe tokens, removes
+  known semantic scaffolding phrases, runs strict weighted `AND` matching first
+  (`slug=1, title=1, body=2, tags=1`), and falls back to weighted `OR` only
+  when strict matching returns zero rows. Snippets are capped at 12 tokens;
+  filters apply before limiting; returned slugs are unique; links and access
+  rows are batched once after ranking; ascending slug is the final tie-break.
+  Definitive clean production-path promotion evidence at commit `226bad7` selected the
+  ranker with overall Recall@10/MRR `0.9819588`, nDCG@10 `0.9323851`, hard
+  Recall@10 `0.9809524`, and hard MRR `0.9809524` versus the `0.9738095`
+  truthful legacy baseline. Hard tokens per correct result were `966.49`
+  versus the `1251.81` threshold and `1564.77` baseline, a `38.23%` reduction.
+  10K p99 improved from `48.05 ms` to `10.12 ms`, and 100K p99 improved from
+  `400.72 ms` to `74.33 ms`. All repaired realistic, Gutenberg, and Salesforce
+  workload gates passed in the promotion report, which recorded no failures.
+  The evaluator exercised the production `BM25Retriever` no-access path, and
+  the retained candidate metadata records `max_query_bytes=1024` and
+  `max_query_tokens=64`.
+  The report also retained negative-control diagnostics for one Salesforce hard
+  negative-control query with zero non-empty results while omitting raw query
+  text. The retained report has SHA-256
+  `8a810445ff9587c0a8c5e346461dc9ee0f7982f83ae4619cf2e5cd52ae46e705`.
+
+- **Retrieval dependency disposition.** `rgapi==0.1.22` remains an optional
+  evaluation candidate only. It is not imported by `src/memex`, is not required
+  for base installs, and is not a user-facing recall selector. No embeddings,
+  cross-encoder, hosted search service, graph database, network call, or `rg`
+  executable was added to the production recall path.

@@ -1,34 +1,34 @@
 # Product
 
-> The product-side counterpart to [`architecture/`](../architecture/).
-> Architecture answers "what is the code, today?"; product answers "what
-> is the product, today?" Both are *living* docs — kept in sync with
-> reality, not historical record.
+This directory records the product as it exists and where it is headed. It is
+the product-side counterpart to [`../architecture/`](../architecture/): product
+docs describe user outcomes and priorities, while architecture docs describe
+the implemented system.
 
-## What lives here
+## Current documents
 
-- [`roadmap.md`](roadmap.md) — direction for the next 2-4 quarters.
-  Direction, not commitments. Updated quarterly.
-- [`changelog.md`](changelog.md) — user-visible changes by release,
-  in [Keep a Changelog](https://keepachangelog.com/) format. Updated
-  every PR that changes user-visible behavior.
-- [`personas.md`](personas.md) — who we're building for. Optional;
-  add only if it's actively used to make decisions.
-- [`release-checklist.md`](release-checklist.md) — manual-QA rows
-  CI cannot exercise. Copy each spec's section into the release PR
-  description before tagging. Optional; add the file the first time a
-  spec needs out-of-band verification.
+- [`roadmap.md`](roadmap.md) — current, next, and later priorities. Direction,
+  not a release commitment.
+- [`changelog.md`](changelog.md) — user-visible changes by released or
+  unreleased version.
+- [`intents/`](intents/) — accepted outcomes that have not necessarily become
+  feature specs.
 
-## What does NOT live here
+Feature contracts and plans live in [`../specs/`](../specs/). User-facing
+instructions live in [`../gitpages/`](../gitpages/). Add personas or a release
+checklist here only when the project has a concrete decision or manual release
+step for those documents to own.
 
-- **Why we made past choices** → [`../adr/`](../adr/) (immutable history).
-- **What we're proposing to change** → [`../rfc/`](../rfc/) (governance).
-- **What an individual feature does** → [`../specs/<feature>/spec.md`](../specs/).
-- **The mission and scope of the project** → [`../CHARTER.md`](../CHARTER.md).
-- **How users actually use the product** → [`../guides/`](../guides/) (Diátaxis-organized user docs).
+## Boundaries
 
-## The product/ layer is *living*
+- Past architectural choices belong in [`../adr/`](../adr/).
+- Proposed cross-cutting changes belong in `../rfc/` if the project introduces
+  an RFC process for them.
+- Mission, scope, and principles belong in
+  [`../CHARTER.md`](../CHARTER.md).
+- Current code ownership and runtime flows belong in
+  [`../architecture/`](../architecture/).
 
-Unlike ADRs and shipped specs (which are frozen records), files here must
-match current reality. Drift is a bug. The maintenance rules are in
-[`../CONVENTIONS.md`](../CONVENTIONS.md#document-lifecycle).
+Everything in this directory is living documentation. Update it in the same
+change as the product state it describes; do not preserve stale roadmap or
+changelog text as history.

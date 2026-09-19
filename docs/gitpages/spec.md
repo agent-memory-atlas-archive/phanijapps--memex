@@ -409,7 +409,7 @@ RecallResult = {
     "query": str,
     "hits": list[RecallHit],
     "total_indexed": int,                    # Total nodes in index
-    "search_engine": Literal["bm25"],        # Always "bm25" for memex
+    "search_engine": Literal["semantic-and-fallback-fts5"],  # Current default
     "search_time_ms": float,
 }
 ```
@@ -773,7 +773,7 @@ indexing YAML metadata twice.
 
 ### Utility 3: BM25Retriever
 
-**Purpose:** BM25 retrieval via SQLite FTS5 MATCH queries.
+**Purpose:** ranked lexical retrieval via SQLite FTS5 MATCH queries.
 
 **Interface:**
 
@@ -810,27 +810,34 @@ class BM25Retriever:
     def search_fts(self, query: str, top_k: int) -> list[tuple[str, float]]: ...
 ```
 
-**Implementation:** Pure SQL using SQLite's built-in `bm25(wiki_fts)` function.
-Query is preprocessed: lowercased, punctuation stripped, split into terms.
-FTS5 MATCH query: `query.split() joined by " OR "`. BM25 scores retrieved via:
+**Implementation:** Pure SQL using SQLite's built-in `bm25(wiki_fts, ...)`
+function. Query text is reduced to lower-case alphanumeric tokens, known
+semantic scaffolding phrases are removed, duplicate tokens are collapsed, and
+common stop words are ignored unless they are the only searchable tokens. The
+production query runs strict `AND` matching first with column weights
+`slug=1, title=1, body=2, tags=1`, then falls back to broad `OR` matching only
+when strict matching returns no rows. BM25 scores are retrieved via:
 
 ```sql
 SELECT
     w.slug, w.file_path, w.title, w.node_type, w.importance,
-    bm25(wiki_fts) AS score,
-    snippet(wiki_fts, 1, '<mark>', '</mark>', '...', 32) AS snippet
+    bm25(wiki_fts, 1.0, 1.0, 2.0, 1.0) AS score,
+    snippet(wiki_fts, 2, '<mark>', '</mark>', '...', 12) AS body_snippet,
+    snippet(wiki_fts, 1, '<mark>', '</mark>', '...', 12) AS title_snippet
 FROM wiki_fts
-JOIN wiki_index w ON wiki_fts.slug = w.slug
+JOIN wiki_index w ON w.rowid = wiki_fts.rowid
 WHERE wiki_fts MATCH :match_query
-ORDER BY score
+ORDER BY score, w.slug
 LIMIT :top_k;
 ```
 
-**Snippet provenance:** The `snippet()` function extracts from the body (column 1
-in the FTS table = body). If body snippet is empty, fall back to title snippet.
+**Snippet provenance:** The `snippet()` function extracts from the body
+(column 2 in the FTS table). If the body snippet has no marked term, recall uses
+the title snippet from column 1.
 
 **Scoring:** Lower BM25 score = more relevant (SQLite bm25 returns lower=better).
-Ranks are 1-based after sorting ascending by score.
+Ranks are 1-based after sorting ascending by score with ascending slug as the
+final stable tie-break.
 
 ---
 

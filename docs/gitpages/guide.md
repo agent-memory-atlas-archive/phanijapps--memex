@@ -47,8 +47,8 @@ page externally, `memex rebuild-index` (or `memex watch`) picks it up.
 (`[[Ruff Linter]]` normalizes to `[[ruff-linter]]`). Links are indexed both
 directions — backlinks answer "what mentions this?".
 
-**The index is disposable.** `mem.db` mirrors the pages for fast BM25 search
-and freshness tracking. It is never the source of truth:
+**The index is disposable.** `mem.db` mirrors the pages for fast SQLite FTS5
+search and freshness tracking. It is never the source of truth:
 
 ```bash
 rm ~/.memex/mem.db
@@ -109,12 +109,20 @@ memex recall "deploy" --top-k 5
 memex recall "linting" --type preference --tag tooling
 ```
 
-- BM25 over title, body, tags, and slug; results ranked best-first with
-  `<mark>`-highlighted snippets.
+- Local SQLite FTS5 over slug, title, body, and tags. Recall reduces the query
+  to safe alphanumeric tokens, removes known scaffolding phrases, then runs the
+  production `semantic-and-fallback-fts5` ranker: strict `AND` matching first,
+  body weighted 2x, and broad `OR` fallback only when strict matching has no
+  hits.
+- Results are deterministic and ranked best-first with short
+  `<mark>`-highlighted snippets. Filters apply before limiting, returned slugs
+  are unique, and ascending slug is the final tie-break.
 - Filters: `--type`, `--tag` (AND semantics), `--top-k` (1–100),
   `--include-expired`.
 - Every hit bumps its access counter — recall telemetry feeds
   [recency decay](#configuration-reference) and `verify` evidence.
+- Recall stays offline and dependency-light: no embeddings, hosted search,
+  runtime `rgapi`, or `rg` executable is required.
 
 ### forget
 
