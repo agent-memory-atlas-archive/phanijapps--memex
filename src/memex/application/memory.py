@@ -61,7 +61,8 @@ class Memex:
     def _open_storage(self) -> None:
         self.wiki_store = WikiStore(self.data_dir, slug_algo=self.config.wiki.slug_algo)
         self.index_manager = IndexManager(self.config.db_path)
-        if self.index_manager.needs_rebuild():
+        rebuild_on_open = self.index_manager.needs_rebuild()
+        if rebuild_on_open:
             # mem.db is disposable: a stale schema rebuilds from the wiki.
             self.index_manager.drop_for_rebuild()
         self.link_manager = LinkManager(self.index_manager.connection, self.wiki_store.wiki_dir)
@@ -76,6 +77,8 @@ class Memex:
         )
         self.backup_restore = BackupRestore(self.data_dir, self.config.db_path)
         self.import_export = ImportExport(self.wiki_store, self.index_manager, self.link_manager)
+        if rebuild_on_open:
+            self.rebuild_index(force=True)
 
     def close(self) -> None:
         self.retriever.close()
@@ -126,6 +129,10 @@ class Memex:
             expires_at=input.expires_at,
             valid_from=input.valid_from,
             valid_to=input.valid_to,
+            scope=input.scope,
+            project_id=input.project_id,
+            project_label=input.project_label,
+            project_locator=input.project_locator,
         )
         stored = self.wiki_store.write(node)
         self.index_manager.update_record(stored)
@@ -144,6 +151,8 @@ class Memex:
         include_expired: bool = False,
         include_inactive: bool = False,
         max_tokens: int | None = None,
+        scope: str = "global",
+        project_id: str | None = None,
     ) -> RecallResult:
         """BM25 search over the index; each hit records access statistics.
 
@@ -185,6 +194,8 @@ class Memex:
                 tags=tags,
                 include_expired=include_expired,
                 include_inactive=include_inactive,
+                scope=scope,
+                project_id=project_id,
             )
             result.hits = _renumber_hits(pack_to_budget(result.hits, max_tokens))
             self.retriever.record_access(result.hits)
@@ -197,6 +208,8 @@ class Memex:
                 tags=tags,
                 include_expired=include_expired,
                 include_inactive=include_inactive,
+                scope=scope,
+                project_id=project_id,
             )
         self.logger.info(
             "operation=recall hits=%d total_indexed=%d", len(result.hits), result.total_indexed
@@ -340,6 +353,12 @@ class Memex:
         )
         return report
 
+    def clear_transcripts(self, *, confirm: bool = False) -> int:
+        """Clear raw transcript files while retaining retired episode pages."""
+        count = self.transcript_hook.clear_transcripts(confirm=confirm)
+        self.logger.info("operation=clear_transcripts count=%d", count)
+        return count
+
     def rebuild_index(self, *, force: bool = False) -> RebuildIndexReport:
         """Rescan the wiki and refresh the secondary index and link graph.
 
@@ -357,16 +376,32 @@ class Memex:
         started = time.perf_counter()
         errors: list[str] = []
         nodes = self.wiki_store.scan_all(errors)
-        known_hashes: dict[str, str] = {}
+        known_hashes: dict[tuple[str, str, str, str], str] = {}
         if not force:
-            for slug in self.index_manager.get_all_slugs():
-                row = self.index_manager.get(slug)
-                if row is not None:
-                    known_hashes[str(row["slug"])] = str(row["content_hash"])
+            for row in self.index_manager.get_all_records():
+                key = (
+                    str(row["scope"]),
+                    str(row["project_id"]),
+                    str(row["node_type"]),
+                    str(row["slug"]),
+                )
+                known_hashes[key] = str(row["content_hash"])
 
-        wiki_slugs = {node.slug for node in nodes}
-        for stale in set(self.index_manager.get_all_slugs()) - wiki_slugs:
-            self.index_manager.remove_record(stale)
+        wiki_keys = {(node.scope, node.project_id or "", node.type, node.slug) for node in nodes}
+        for row in self.index_manager.get_all_records():
+            key = (
+                str(row["scope"]),
+                str(row["project_id"]),
+                str(row["node_type"]),
+                str(row["slug"]),
+            )
+            if key not in wiki_keys:
+                self.index_manager.remove_record(
+                    str(row["slug"]),
+                    scope=str(row["scope"]),
+                    project_id=str(row["project_id"]),
+                    node_type=str(row["node_type"]),
+                )
 
         skipped = 0
         for node in nodes:
@@ -374,7 +409,8 @@ class Memex:
             if node.content_hash != hash_body(node.body):
                 # Externally edited page: refresh the stale front-matter hash.
                 node = self.wiki_store.write(node)
-            if not force and known_hashes.get(node.slug) == node.content_hash:
+            key = (node.scope, node.project_id or "", node.type, node.slug)
+            if not force and known_hashes.get(key) == node.content_hash:
                 skipped += 1
                 continue
             self.index_manager.update_record(node)
@@ -489,7 +525,12 @@ class Memex:
         from memex.infrastructure.wiki_store import hash_body
 
         for node in self.wiki_store.scan_all():
-            row = self.index_manager.get(node.slug)
+            row = self.index_manager.get(
+                node.slug,
+                scope=node.scope,
+                project_id=node.project_id or "",
+                node_type=node.type,
+            )
             if row is None or str(row["content_hash"]) != hash_body(node.body):
                 stale += 1
         runs = read_runs(self.data_dir)

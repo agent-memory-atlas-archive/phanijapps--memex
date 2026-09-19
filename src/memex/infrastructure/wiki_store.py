@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 from pathlib import Path
 
 from memex.domain.errors import WikiStoreError
@@ -22,6 +23,8 @@ TYPE_DIRS: dict[str, str] = {
     "summary": "summaries",
     "episode": "episodes",
 }
+
+_SAFE_COMPONENT = re.compile(r"[a-z0-9][a-z0-9-]{0,127}")
 
 _FRONT_MATTER_KEYS: tuple[str, ...] = (
     "id",
@@ -45,6 +48,9 @@ _FRONT_MATTER_KEYS: tuple[str, ...] = (
     "source",
     "harness",
     "confidence",
+    "scope",
+    "project_id",
+    "project_label",
 )
 
 _STR_FIELDS: tuple[str, ...] = (
@@ -67,7 +73,13 @@ def hash_body(body: str) -> str:
 
 
 NodeList = list[WikiNode]
+PathList = list[Path]
 StrList = list[str]
+NamespaceKey = tuple[str, str, str, str]
+
+
+class _MissingWikiPage(WikiStoreError):
+    """Private sentinel so missing pages don't mask ambiguous pages."""
 
 
 class WikiStore:
@@ -80,24 +92,45 @@ class WikiStore:
         self.data_dir = data_dir
         legacy = data_dir / self.LEGACY_DIR
         docs = data_dir / self.PAGES_DIR
+        if legacy.is_symlink() or docs.is_symlink():
+            raise WikiStoreError("wiki path component is a symlink")
+        try:
+            docs.resolve(strict=False).relative_to(data_dir.resolve(strict=False))
+        except ValueError as exc:
+            raise WikiStoreError("wiki path escapes the data directory") from exc
         if legacy.is_dir() and not docs.exists():
             legacy.rename(docs)  # one-time migration to the docs layout
         self.wiki_dir = docs
         self.slug_algo = slug_algo
+        global_dir = self.wiki_dir / "global"
+        for component in (global_dir, *(global_dir / name for name in TYPE_DIRS.values())):
+            if component.is_symlink():
+                raise WikiStoreError(f"wiki path component is a symlink: {component}")
         for type_dir in TYPE_DIRS.values():
-            (self.wiki_dir / type_dir).mkdir(parents=True, exist_ok=True)
+            (global_dir / type_dir).mkdir(parents=True, exist_ok=True)
 
-    def get_path(self, slug: str, node_type: str | None = None) -> Path:
+    def get_path(
+        self,
+        slug: str,
+        node_type: str | None = None,
+        *,
+        scope: str | None = None,
+        project_id: str | None = None,
+        project_locator: str | None = None,
+    ) -> Path:
         """Path for a slug; searches type dirs when node_type is omitted."""
+        self._validate_page_slug(slug)
         if node_type is not None:
             if node_type not in TYPE_DIRS:
                 raise WikiStoreError(f"unknown node type: {node_type!r}")
-            return self.wiki_dir / TYPE_DIRS[node_type] / f"{slug}.md"
-        for type_dir in TYPE_DIRS.values():
-            candidate = self.wiki_dir / type_dir / f"{slug}.md"
-            if candidate.exists():
-                return candidate
-        raise WikiStoreError(f"no wiki page found for slug: {slug!r}")
+            return (
+                self._type_dir(node_type, scope or "global", project_id, project_locator)
+                / f"{slug}.md"
+            )
+        path = self._find_existing_path(slug, scope=scope, project_id=project_id)
+        if path is None:
+            raise _MissingWikiPage(f"no wiki page found for slug: {slug!r}")
+        return path
 
     def get_slug_from_path(self, path: Path) -> str:
         return path.stem
@@ -109,11 +142,17 @@ class WikiStore:
             return False
         return True
 
-    def read(self, slug: str) -> WikiNode | None:
+    def read(
+        self,
+        slug: str,
+        node_type: str | None = None,
+        *,
+        scope: str | None = None,
+        project_id: str | None = None,
+    ) -> WikiNode | None:
         """Parse a wiki page. Returns None when the slug does not exist."""
-        try:
-            path = self.get_path(slug)
-        except WikiStoreError:
+        path = self._find_existing_path(slug, node_type, scope=scope, project_id=project_id)
+        if path is None:
             return None
         return self._read_path(path)
 
@@ -127,8 +166,17 @@ class WikiStore:
         """
         if node.type not in TYPE_DIRS:
             raise WikiStoreError(f"unknown node type: {node.type!r}")
-        slug = node.slug or self._new_slug(node.title, node.id)
-        existing = self.read(slug)
+        slug = node.slug or self._new_slug(
+            node.title, node.id, node.scope, node.project_id, node.project_locator
+        )
+        existing_path = self.get_path(
+            slug,
+            node.type,
+            scope=node.scope,
+            project_id=node.project_id,
+            project_locator=node.project_locator,
+        )
+        existing = self._read_path(existing_path) if existing_path.exists() else None
 
         stored = node
         stored.slug = slug
@@ -145,7 +193,13 @@ class WikiStore:
         stored.content_hash = hash_body(stored.body)
         stored.links = _merge_links(stored.links, stored.body)
 
-        path = self.get_path(stored.slug, stored.type)
+        path = self.get_path(
+            stored.slug,
+            stored.type,
+            scope=stored.scope,
+            project_id=stored.project_id,
+            project_locator=stored.project_locator,
+        )
         self._atomic_write(path, serialize_front_matter(_node_to_dict(stored), stored.body))
         stored.file_path = str(path)
         return stored
@@ -164,23 +218,40 @@ class WikiStore:
         when ``errors`` is provided, reported as messages."""
         nodes: NodeList = []
         for type_dir in TYPE_DIRS.values():
-            directory = self.wiki_dir / type_dir
-            if not directory.is_dir():
-                continue
-            for path in sorted(directory.glob("*.md")):
+            for path in sorted(self.wiki_dir.rglob(f"{type_dir}/*.md")):
+                self._reject_unsafe_page_path(path)
                 try:
                     nodes.append(self._read_path(path))
                 except WikiStoreError as exc:
                     if errors is None:
                         raise
                     errors.append(str(exc))
+        self._reject_duplicate_namespace_keys(nodes)
         return nodes
+
+    def _type_dir(
+        self,
+        node_type: str,
+        scope: str,
+        project_id: str | None,
+        project_locator: str | None = None,
+    ) -> Path:
+        if scope == "global":
+            return self.wiki_dir / "global" / TYPE_DIRS[node_type]
+        if scope == "project" and project_id:
+            project_dir = self._project_dir(project_id, project_locator)
+            type_dir = project_dir / TYPE_DIRS[node_type]
+            if type_dir.is_symlink():
+                raise WikiStoreError(f"project path component is a symlink: {type_dir}")
+            self._ensure_inside_projects(type_dir)
+            return type_dir
+        raise WikiStoreError("project_id is required for project scope")
 
     def delete(self, slug: str) -> Path:
         """Delete a page. Raises WikiStoreError when it does not exist."""
         try:
             path = self.get_path(slug)
-        except WikiStoreError as exc:
+        except _MissingWikiPage as exc:
             raise WikiStoreError(f"cannot delete, no wiki page for slug: {slug!r}") from exc
         path.unlink()
         return path
@@ -195,27 +266,185 @@ class WikiStore:
         old_path = self.get_path(slug)
         node.type = new_type
         node.updated = utc_now_iso()
-        destination = self.get_path(slug, new_type)
+        destination = self.get_path(slug, new_type, scope=node.scope, project_id=node.project_id)
         self._atomic_write(destination, serialize_front_matter(_node_to_dict(node), node.body))
         old_path.unlink()
         node.file_path = str(destination)
         return node
 
-    def _new_slug(self, title: str, node_id: str) -> str:
+    def _new_slug(
+        self,
+        title: str,
+        node_id: str,
+        scope: str,
+        project_id: str | None,
+        project_locator: str | None = None,
+    ) -> str:
         base = derive_slug(title, algo=self.slug_algo)
         if not base:
             base = (node_id or new_id())[:8]
-        return unique_slug(base, self._taken_slugs())
+        return unique_slug(base, self._taken_slugs(scope, project_id, project_locator))
 
-    def _taken_slugs(self) -> set[str]:
-        taken: set[str] = set()
-        for type_dir in TYPE_DIRS.values():
-            directory = self.wiki_dir / type_dir
-            if directory.is_dir():
-                taken.update(path.stem for path in directory.glob("*.md"))
-        return taken
+    def _taken_slugs(
+        self, scope: str, project_id: str | None, project_locator: str | None = None
+    ) -> set[str]:
+        if scope == "global":
+            root = self.wiki_dir / "global"
+        elif scope == "project" and project_id:
+            root = self._project_dir(project_id, project_locator)
+        else:
+            return set()
+        return {path.stem for path in root.rglob("*.md")}
+
+    def _project_dir(self, project_id: str, project_locator: str | None) -> Path:
+        if project_locator is not None:
+            projects = self._projects_dir()
+            locator = self._validated_project_locator(project_locator)
+            proposed = projects / locator
+            self._reject_symlink(proposed)
+            self._ensure_inside_projects(proposed)
+            owner = self._project_id_in_dir(proposed)
+            if owner is not None and owner != project_id:
+                raise WikiStoreError(
+                    f"project directory {locator!r} belongs to a different project_id"
+                )
+        existing = self._existing_project_dir(project_id)
+        if existing is not None:
+            return existing
+
+        projects = self._projects_dir()
+        locator = self._validated_project_locator(project_locator or project_id)
+        project_dir = projects / locator
+        self._reject_symlink(project_dir)
+        self._ensure_inside_projects(project_dir)
+        owner = self._project_id_in_dir(project_dir)
+        if owner is not None and owner != project_id:
+            raise WikiStoreError(f"project directory {locator!r} belongs to a different project_id")
+        return project_dir
+
+    def _existing_project_dir(self, project_id: str) -> Path | None:
+        projects = self._projects_dir()
+        if not projects.exists():
+            return None
+        matches: list[Path] = []
+        for candidate in sorted(projects.iterdir()):
+            if not candidate.is_dir():
+                continue
+            self._reject_symlink(candidate)
+            self._ensure_inside_projects(candidate)
+            if self._project_id_in_dir(candidate) == project_id:
+                matches.append(candidate)
+        if not matches:
+            return None
+        if len(matches) == 1:
+            return matches[0]
+        self._reject_duplicate_project_keys(project_id, matches)
+        legacy = projects / project_id
+        if legacy in matches:
+            return legacy
+        names = ", ".join(path.name for path in matches)
+        raise WikiStoreError(f"project_id {project_id!r} spans multiple directories: {names}")
+
+    def _find_existing_path(
+        self,
+        slug: str,
+        node_type: str | None = None,
+        *,
+        scope: str | None = None,
+        project_id: str | None = None,
+    ) -> Path | None:
+        self._validate_page_slug(slug)
+        matches: list[WikiNode] = []
+        for path in sorted(self.wiki_dir.rglob(f"{slug}.md")):
+            if path.stem != slug or path.parent.name not in TYPE_DIRS.values():
+                continue
+            node = self._read_path(path)
+            if node_type is not None and node.type != node_type:
+                continue
+            if scope is not None and node.scope != scope:
+                continue
+            if project_id is not None and node.project_id != project_id:
+                continue
+            matches.append(node)
+        if not matches:
+            return None
+        self._reject_duplicate_namespace_keys(matches)
+        if len(matches) > 1:
+            keys = ", ".join(_format_namespace_key(_namespace_key(node)) for node in matches)
+            raise WikiStoreError(f"ambiguous wiki page for slug {slug!r}: {keys}")
+        file_path = matches[0].file_path
+        if file_path is None:
+            raise WikiStoreError(f"wiki page {slug!r} has no file path")
+        return Path(file_path)
+
+    def _reject_duplicate_project_keys(self, project_id: str, roots: PathList) -> None:
+        nodes = [
+            self._read_path(path)
+            for root in roots
+            for path in sorted(root.rglob("*.md"))
+            if path.parent.name in TYPE_DIRS.values()
+        ]
+        self._reject_duplicate_namespace_keys(
+            [node for node in nodes if node.project_id == project_id]
+        )
+
+    def _reject_duplicate_namespace_keys(self, nodes: NodeList) -> None:
+        seen: dict[NamespaceKey, WikiNode] = {}
+        for node in nodes:
+            key = _namespace_key(node)
+            previous = seen.get(key)
+            if previous is None:
+                seen[key] = node
+                continue
+            raise WikiStoreError(
+                "ambiguous wiki page namespace for "
+                f"{_format_namespace_key(key)}: {previous.file_path}, {node.file_path}"
+            )
+
+    def _project_id_in_dir(self, project_dir: Path) -> str | None:
+        if not project_dir.exists():
+            return None
+        project_ids: set[str] = set()
+        for path in sorted(project_dir.rglob("*.md")):
+            node = self._read_path(path)
+            if node.scope == "project" and node.project_id:
+                project_ids.add(node.project_id)
+        if len(project_ids) > 1:
+            raise WikiStoreError(f"project directory {project_dir.name!r} mixes project IDs")
+        return next(iter(project_ids), None)
+
+    def _projects_dir(self) -> Path:
+        if self.wiki_dir.is_symlink():
+            raise WikiStoreError(f"project path component is a symlink: {self.wiki_dir}")
+        projects = self.wiki_dir / "projects"
+        if projects.is_symlink():
+            raise WikiStoreError(f"project path component is a symlink: {projects}")
+        self._ensure_inside_data_dir(projects)
+        return projects
+
+    def _ensure_inside_projects(self, path: Path) -> None:
+        self._ensure_inside(path, self._projects_dir(), "project path escapes docs/projects")
+
+    def _ensure_inside_data_dir(self, path: Path) -> None:
+        self._ensure_inside(path, self.data_dir, "wiki path escapes the data directory")
+
+    def _ensure_inside(self, path: Path, root: Path, message: str) -> None:
+        try:
+            path.resolve(strict=False).relative_to(root.resolve(strict=False))
+        except ValueError as exc:
+            raise WikiStoreError(message) from exc
+
+    def _reject_symlink(self, path: Path) -> None:
+        if path.is_symlink():
+            raise WikiStoreError(f"project path component is a symlink: {path}")
+
+    def _validated_project_locator(self, locator: str) -> str:
+        if _SAFE_COMPONENT.fullmatch(locator):
+            return locator
+        raise WikiStoreError(f"invalid project locator: {locator!r}")
 
     def _read_path(self, path: Path) -> WikiNode:
+        self._reject_unsafe_page_path(path)
         try:
             text = path.read_text(encoding="utf-8")
         except OSError as exc:
@@ -228,6 +457,19 @@ class WikiStore:
         node.slug = path.stem
         node.file_path = str(path)
         return node
+
+    def _reject_unsafe_page_path(self, path: Path) -> None:
+        if not path.is_relative_to(self.wiki_dir):
+            raise WikiStoreError(f"wiki page path escapes docs: {path}")
+        component = path
+        while component != self.wiki_dir.parent:
+            self._reject_symlink(component)
+            component = component.parent
+        self._ensure_inside(path, self.wiki_dir, "wiki page escapes docs")
+
+    def _validate_page_slug(self, slug: str) -> None:
+        if not _SAFE_COMPONENT.fullmatch(slug):
+            raise WikiStoreError(f"invalid wiki slug: {slug!r}")
 
     def _atomic_write(self, path: Path, text: str) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -249,6 +491,15 @@ def _merge_links(explicit: list[str], body: str) -> list[str]:
         if parsed not in merged:
             merged.append(parsed)
     return merged
+
+
+def _namespace_key(node: WikiNode) -> NamespaceKey:
+    return (node.scope, node.project_id or "", node.type, node.slug)
+
+
+def _format_namespace_key(key: NamespaceKey) -> str:
+    scope, project_id, node_type, slug = key
+    return f"scope={scope!r}, project_id={project_id!r}, type={node_type!r}, slug={slug!r}"
 
 
 def _node_to_dict(node: WikiNode) -> dict[str, object]:
@@ -274,6 +525,9 @@ def _node_to_dict(node: WikiNode) -> dict[str, object]:
         "source": node.source,
         "harness": node.harness,
         "confidence": node.confidence,
+        "scope": node.scope,
+        "project_id": node.project_id,
+        "project_label": node.project_label,
     }
 
 
@@ -343,4 +597,7 @@ def _node_from_dict(data: dict[str, object], body: str) -> WikiNode:
         source=_str_value(data, "source"),
         harness=_str_value(data, "harness"),
         confidence=_str_value(data, "confidence"),
+        scope=_str_value(data, "scope") or "global",
+        project_id=_str_value(data, "project_id"),
+        project_label=_str_value(data, "project_label"),
     )

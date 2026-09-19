@@ -68,13 +68,14 @@ def test_summary_returns_first_paragraph() -> None:
     assert "\n" not in first
 
 
-def test_registry_has_the_eight_operations() -> None:
+def test_registry_has_all_operations() -> None:
     assert set(OPERATION_DESCRIPTIONS) == {
         "memex_write",
         "memex_recall",
         "memex_consolidate",
         "memex_forget",
         "memex_ingest_transcript",
+        "memex_clear_transcripts",
         "memex_provenance",
         "memex_export",
         "memex_import",

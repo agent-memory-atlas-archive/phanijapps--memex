@@ -17,6 +17,7 @@ from __future__ import annotations
 import logging
 import threading
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Annotated, Any, cast
 
 from mcp.types import ToolAnnotations
@@ -46,6 +47,7 @@ from memex.domain.operations import (
     TurnDict,
     WriteResultDict,
 )
+from memex.infrastructure.workspace_context import project_context, project_identity
 
 logger = logging.getLogger("memex")
 
@@ -94,6 +96,9 @@ def memex_write(
     tags: list[str] | None = None,
     importance: Annotated[float, Field(ge=0, le=1)] = 0.5,
     links: list[str] | None = None,
+    scope: str = "global",
+    project_id: str | None = None,
+    project_label: str | None = None,
 ) -> WriteResultDict:
     """Persist one memory node and update the index and link graph.
 
@@ -115,6 +120,12 @@ def memex_write(
         domain rejection (sanitized — see module docstring).
     """
     try:
+        project_locator = None
+        if scope == "project" and project_id is None:
+            context = project_context(Path.cwd())
+            project_id = context.project_id
+            project_label = project_label or context.label
+            project_locator = context.locator
         node = _get_memex().write(
             WriteInput(
                 type=type,
@@ -123,6 +134,10 @@ def memex_write(
                 tags=tags or [],
                 importance=importance,
                 links=links or [],
+                scope=scope,
+                project_id=project_id,
+                project_label=project_label,
+                project_locator=project_locator,
             )
         )
         return {"slug": node.slug, "file_path": node.file_path}
@@ -134,6 +149,8 @@ def memex_recall(
     query: str,
     top_k: Annotated[int, Field(ge=1, le=100)] = 10,
     node_type: NodeType | None = None,
+    scope: str = "global",
+    project_id: str | None = None,
 ) -> RecallResultDict:
     """Search the index with BM25 and return ranked hits.
 
@@ -155,10 +172,22 @@ def memex_recall(
         only; memory files are untouched).
     """
     try:
-        result = _get_memex().recall(query, top_k=top_k, node_type=node_type)
+        if scope == "project" and project_id is None:
+            project_id, _ = project_identity(Path.cwd())
+        result = _get_memex().recall(
+            query, top_k=top_k, node_type=node_type, scope=scope, project_id=project_id
+        )
         return cast(RecallResultDict, to_jsonable(result))
     except Exception as exc:
         return cast(RecallResultDict, _caught("memex_recall", exc))
+
+
+def memex_clear_transcripts(confirm: bool = False) -> dict[str, int | str]:
+    """Clear raw transcripts after explicit confirmation and retire episodes."""
+    try:
+        return {"cleared": _get_memex().clear_transcripts(confirm=confirm)}
+    except Exception as exc:
+        return cast(dict[str, int | str], _caught("memex_clear_transcripts", exc))
 
 
 def memex_consolidate(
@@ -364,6 +393,17 @@ _TOOL_SPECS: tuple[ToolSpec, ...] = (
         ),
     ),
     ToolSpec(
+        memex_clear_transcripts,
+        "Memex: clear raw transcripts",
+        ToolAnnotations(
+            title="Memex: clear raw transcripts",
+            read_only_hint=False,
+            destructive_hint=True,
+            idempotent_hint=True,
+            open_world_hint=False,
+        ),
+    ),
+    ToolSpec(
         memex_provenance,
         "Memex: trace provenance",
         ToolAnnotations(
@@ -400,7 +440,7 @@ _TOOL_SPECS: tuple[ToolSpec, ...] = (
 
 
 def build_server() -> Any:
-    """Construct the MCP server with all eight memex tools.
+    """Construct the MCP server with all registered Memex tools.
 
     Descriptions come from OPERATION_DESCRIPTIONS in the domain (the
     shared operation contract); a KeyError here means a tool is missing

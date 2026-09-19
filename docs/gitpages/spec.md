@@ -497,11 +497,32 @@ Every wiki `.md` file has YAML front matter followed by Markdown body text.
 The filesystem path determines the node type:
 
 ```
-~/.memex/docs/{type}/{slug}.md
+~/.memex/docs/global/{type}/{slug}.md
+~/.memex/docs/projects/git-{repo}/{type}/{slug}.md
+~/.memex/docs/projects/{folder}/{type}/{slug}.md
 ```
 
 Where `type` ∈ {entities, preferences, procedures, summaries, episodes}
-and `slug` is a kebab-cased identifier derived from the title.
+and `slug` is a kebab-cased identifier derived from the title. Project
+directory names are readable locators: a usable Git origin on any provider,
+including self-hosted or enterprise GitLab, contributes the repository basename
+with a `git-` prefix; local Git without a usable origin and non-Git workspaces
+use the workspace folder name.
+Global recall searches every namespace. Local recall selects one project ID.
+Project IDs are opaque hashes derived from the Git remote when available, or
+the local folder identity otherwise; front matter and SQLite use that
+`project_id` as the namespace authority, not the directory name. Raw remote
+URLs, credentials, internal hosts, and absolute workspace paths are never
+stored in project metadata or in the folder locator.
+
+Legacy `docs/projects/{project_id}/{type}/{slug}.md` directories remain
+readable and indexable. Runtime writes continue in a project's existing
+directory when only an explicit `project_id` is supplied, and otherwise use an
+ID-named directory if no validated locator is available. Runtime operations do
+not rename or move legacy directories; existing-store moves require a separate
+preview, backup, collision review, and operation-specific confirmation. If two
+directories contain the same `(project_id, type, slug)`, lookup and force
+rebuild refuse the ambiguity.
 
 **Complete wiki file structure:**
 
@@ -520,6 +541,9 @@ expires_at: null         # ISO8601 or null
 valid_from: "2026-09-15T10:00:00Z"
 valid_to: null           # ISO8601 or null
 transcript_ref: null     # Path relative to ~/.memex/ (only for episode nodes)
+scope: "global"          # global | project
+project_id: null          # opaque project identity for project pages
+project_label: null       # display-only project name for project pages
 links: ["python-3-11", "project-tooling"]   # Outgoing [[slug]] references
 content_hash: "sha256:abc123..."  # SHA-256 of body text (for change detection)
 ---
@@ -638,7 +662,9 @@ CREATE INDEX IF NOT EXISTS idx_wiki_links_target ON wiki_links(target_slug);
 
 ### 6.3 Transcript File Format
 
-Each session produces two files in `~/.memex/transcripts/`:
+Each session produces two files in `~/.memex/transcripts/<yyyy-mm-dd>/`, using
+the UTC capture date. Clearing raw transcripts requires explicit confirmation;
+it preserves episode pages and changes their transcript reference to retired.
 
 **`{session_id}.jsonl`** — optional session header on the first line,
 then one JSON object per line, each turn:
@@ -713,7 +739,11 @@ parser using regex + string ops handles the front matter format defined above.
 **Slug derivation:** `WikiStore._to_slug(title: str) -> str` — kebab-case algorithm
 from §6.1. Returns the first 64 chars, collision-resolved by appending `-2`, `-3`, etc.
 
-**File layout:** `WikiStore` enforces `data_dir / "wiki" / {node_type} / {slug}.md`.
+**File layout:** `WikiStore` writes global pages under
+`data_dir / "docs" / "global" / {type_dir} / {slug}.md` and project pages under
+`data_dir / "docs" / "projects" / {project_folder} / {type_dir} / {slug}.md`.
+The project folder is a readable locator; `project_id` in front matter is the
+namespace authority.
 
 **Conflict handling:** If `write()` finds an existing slug, update the `updated`
 timestamp, increment `access_count` (not — write doesn't count as access;
@@ -860,16 +890,16 @@ class LinkManager:
     def get_link_graph(self) -> dict[str, list[str]]: ...  # Full adjacency list
 ```
 
-**Implementation:** Regex: `r'\[\[([a-z0-9-]+)\]\]'` (case-insensitive match,
-normalized to lowercase). Parses every `[[slug]]` in the body text. Deletes all
-existing `(source_slug, *)` pairs for this source, then inserts the newly parsed
-list atomically. This is the "replace all outgoing links" model.
+**Implementation:** Parses each `[[slug]]` in the body and atomically replaces
+outgoing links for that source's `(scope, project_id, slug)` namespace. A
+slug-only source query refuses ambiguity when distinct projects share the slug.
 
-**Backlinks:** `SELECT source_slug FROM wiki_links WHERE target_slug = :slug`.
+**Backlinks:** The link graph retains each source page's scope and project ID;
+it does not merge same-slug sources from different projects.
 
-**Broken link detection:** `get_backlinks` resolves each target_slug against the
-filesystem — if `data_dir / "wiki" / {type} / {target_slug}.md` doesn't exist,
-the link is broken. Returns list of broken targets.
+**Broken link detection:** Link targets are validated as safe slugs, then
+resolved against pages under `docs/global/` and `docs/projects/`. A target
+without a matching page is reported as broken.
 
 **Link format note:** `[[Wiki Link]]` and `[[wiki-link]]` are both matched
 case-insensitively and normalized to kebab-case slug form.
@@ -988,12 +1018,14 @@ class TranscriptHook:
 
 **Implementation details:**
 
-1. **Transcript storage:** Write `turns` as JSONL to `~/.memex/transcripts/{session_id}.jsonl`.
-   Write metadata to `~/.memex/transcripts/{session_id}.meta.json`.
+1. **Transcript storage:** Write `turns` as JSONL to
+   `~/.memex/transcripts/{yyyy-mm-dd}/{session_id}.jsonl`. Write metadata to
+   `~/.memex/transcripts/{yyyy-mm-dd}/{session_id}.meta.json`.
 
 2. **Episode node creation:** Create a new `WikiNode(type="episode", session_id=session_id)`
-   in `~/.memex/docs/episodes/{session_id}.md` with `transcript_ref: "transcripts/{session_id}.jsonl"`
-   in front matter. The episode body is a one-paragraph summary of the session.
+   in `~/.memex/docs/global/episodes/{session_id}.md` with
+   `transcript_ref: "transcripts/{yyyy-mm-dd}/{session_id}.jsonl"` in front
+   matter. The episode body is a one-paragraph summary of the session.
 
 3. **Transcript file format:** One JSON object per line (`jsonl`). Turn `content`
    is stored exactly as provided (no redaction, no summarization).
@@ -1251,7 +1283,9 @@ def write(
 `slug`, `file_path`, and auto-computed fields (`content_hash`, parsed `links`).
 
 **Side effects:**
-1. Writes `~/.memex/docs/{type}/{slug}.md` with YAML front matter + Markdown body.
+1. Writes a scoped page under `~/.memex/docs/global/` or
+   `~/.memex/docs/projects/{project_folder}/` with YAML front matter and a
+   Markdown body.
 2. Calls `IndexManager.update_record(node)`.
 3. Calls `LinkManager.sync_links(slug, body)` to update cross-reference table.
 4. Appends to `logs/memex.log`.
@@ -1365,7 +1399,8 @@ ForgetResult = {
 ```
 
 **Side effects:**
-- `hard`: Deletes `~/.memex/docs/{type}/{slug}.md` from filesystem; removes from `wiki_index`; removes from `wiki_links`.
+- `hard`: Deletes the selected scoped page under `~/.memex/docs/`; removes its
+  index row and namespace-owned outgoing links.
 - `soft`: Sets `valid_to` in front matter; updates `updated` timestamp; upserts index.
 - `decay`: Sets `expires_at` in front matter; updates `updated` timestamp; upserts index.
 
@@ -1389,9 +1424,9 @@ def ingest_transcript(
 **Returns:** `TranscriptLinkReport`.
 
 **Side effects:**
-1. Writes `~/.memex/transcripts/{session_id}.jsonl`.
-2. Writes `~/.memex/transcripts/{session_id}.meta.json`.
-3. Creates `~/.memex/docs/episodes/{session_id}.md` (episode node) with `transcript_ref` in front matter.
+1. Writes `~/.memex/transcripts/{yyyy-mm-dd}/{session_id}.jsonl`.
+2. Writes `~/.memex/transcripts/{yyyy-mm-dd}/{session_id}.meta.json`.
+3. Creates `~/.memex/docs/global/episodes/{session_id}.md` (episode node) with `transcript_ref` in front matter.
 4. Updates `wiki_index` with the new episode record.
 5. Optionally runs `NodeExtractor.extract(turns)` to auto-extract facts/preferences (if configured).
 6. Appends to `logs/memex.log`.
@@ -1627,22 +1662,24 @@ back from any wiki page.
 ```
 ~/.memex/
 ├── transcripts/
-│   ├── 2026-09-15-sess-abc123.jsonl    # Raw conversation turns
-│   ├── 2026-09-15-sess-abc123.meta.json # Session metadata
-│   └── 2026-09-15-sess-def456.jsonl
+│   └── 2026-09-15/
+│       ├── sess-abc123.jsonl           # Raw conversation turns
+│       ├── sess-abc123.meta.json       # Session metadata
+│       └── sess-def456.jsonl
 └── docs/
-    └── episodes/
-        └── 2026-09-15-sess-abc123.md    # Episode node with transcript_ref
+    └── global/
+        └── episodes/
+            └── sess-abc123.md          # Episode node with transcript_ref
 ```
 
 ### 12.3 Linking Mechanism
 
 When a transcript is ingested:
 
-1. The raw turns are written to `transcripts/{session_id}.jsonl`.
-2. Metadata is written to `transcripts/{session_id}.meta.json`.
-3. An episode node is created at `docs/episodes/{session_id}.md`.
-4. The episode node's front matter contains `transcript_ref: "transcripts/{session_id}.jsonl"`.
+1. The raw turns are written to `transcripts/{yyyy-mm-dd}/{session_id}.jsonl`.
+2. Metadata is written to `transcripts/{yyyy-mm-dd}/{session_id}.meta.json`.
+3. An episode node is created at `docs/global/episodes/{session_id}.md`.
+4. The episode node's front matter contains `transcript_ref: "transcripts/{yyyy-mm-dd}/{session_id}.jsonl"`.
 
 This creates a bidirectional link:
 - **Forward:** Episode node → transcript file (via `transcript_ref`)
@@ -1654,7 +1691,7 @@ From any wiki page, you can trace back to the originating transcript:
 
 ```python
 report = memex.get_provenance("user-prefers-ruff")
-# report.direct_transcript_ref  → "transcripts/sess-abc123.jsonl"
+# report.direct_transcript_ref  → "transcripts/2026-09-15/sess-abc123.jsonl"
 # report.confidence             → "direct" or "inferred"
 ```
 

@@ -35,7 +35,7 @@ from memex.infrastructure.harness_transcripts import (
     read_transcript_turns,
     suggest_session_id,
 )
-from memex.infrastructure.workspace_context import session_query
+from memex.infrastructure.workspace_context import project_context, session_query
 
 _SESSION_ID_CHARS = re.compile(r"[^A-Za-z0-9._-]+")
 
@@ -59,6 +59,9 @@ def _build_parser() -> argparse.ArgumentParser:
     write.add_argument("--expires-at", default=None)
     write.add_argument("--valid-from", default=None)
     write.add_argument("--valid-to", default=None)
+    write.add_argument("--scope", choices=["global", "project"], default="global")
+    write.add_argument("--project-id", default=None)
+    write.add_argument("--project-label", default=None)
 
     recall = sub.add_parser("recall", help=summary("memex_recall"))
     recall.add_argument("query")
@@ -68,6 +71,8 @@ def _build_parser() -> argparse.ArgumentParser:
     recall.add_argument("--include-expired", action="store_true")
     recall.add_argument("--include-inactive", action="store_true")
     recall.add_argument("--max-tokens", type=int, default=None)
+    recall.add_argument("--scope", choices=["global", "project"], default="global")
+    recall.add_argument("--project-id", default=None)
 
     consolidate = sub.add_parser("consolidate", help=summary("memex_consolidate"))
     consolidate.add_argument("--mode", choices=["full", "dry-run"], default="full")
@@ -82,6 +87,11 @@ def _build_parser() -> argparse.ArgumentParser:
     ingest.add_argument("--session-id", required=True)
     ingest.add_argument("--turns-file", type=Path, required=True)
     ingest.add_argument("--overwrite", action="store_true")
+
+    clear_transcripts = sub.add_parser(
+        "clear-transcripts", help="Clear raw transcripts and retire episode references"
+    )
+    clear_transcripts.add_argument("--confirm", action="store_true")
 
     rebuild = sub.add_parser("rebuild-index", help="Rebuild the secondary index from the wiki")
     rebuild.add_argument("--force", action="store_true")
@@ -448,8 +458,8 @@ def _hook_transcript(args: argparse.Namespace) -> int:
 
     memex = _make_memex(args)
     try:
-        existing_path = memex.data_dir / "transcripts" / f"{session_id}.jsonl"
-        old_usage = _load_turn_usage(memex.data_dir / "transcripts" / f"{session_id}.meta.json")
+        existing_path = memex.transcript_hook.get_transcript_path(session_id)
+        old_usage = _load_turn_usage(existing_path.with_suffix(".meta.json"))
         if existing_path.exists():
             turns = _merge_turns(read_transcript_turns(existing_path), turns, old_usage=old_usage)
         report = memex.ingest_transcript(
@@ -543,6 +553,7 @@ def _run(args: argparse.Namespace) -> int:
     memex = _make_memex(args)
     try:
         if args.command == "write":
+            project_id, project_label, project_locator = _project_arguments(args)
             node = memex.write(
                 WriteInput(
                     type=args.type,
@@ -555,10 +566,15 @@ def _run(args: argparse.Namespace) -> int:
                     expires_at=args.expires_at,
                     valid_from=args.valid_from,
                     valid_to=args.valid_to,
+                    scope=args.scope,
+                    project_id=project_id,
+                    project_label=project_label,
+                    project_locator=project_locator,
                 )
             )
             _emit({"slug": node.slug, "file_path": node.file_path})
         elif args.command == "recall":
+            project_id, _, _ = _project_arguments(args)
             _emit(
                 memex.recall(
                     args.query,
@@ -568,6 +584,8 @@ def _run(args: argparse.Namespace) -> int:
                     include_expired=args.include_expired,
                     include_inactive=args.include_inactive,
                     max_tokens=args.max_tokens,
+                    scope=args.scope,
+                    project_id=project_id,
                 )
             )
         elif args.command == "consolidate":
@@ -585,6 +603,8 @@ def _run(args: argparse.Namespace) -> int:
                     overwrite=args.overwrite,
                 )
             )
+        elif args.command == "clear-transcripts":
+            _emit({"cleared": memex.clear_transcripts(confirm=args.confirm)})
         elif args.command == "rebuild-index":
             _emit(memex.rebuild_index(force=args.force))
         elif args.command == "backup":
@@ -620,6 +640,7 @@ def _run(args: argparse.Namespace) -> int:
                 memex.index_manager,
                 memex.wiki_store,
                 poll_interval=args.poll_interval,
+                link_mgr=memex.link_manager,
             )
             watcher.start_polling()
             print("watching for wiki edits; press Ctrl-C to stop", file=sys.stderr)
@@ -648,6 +669,20 @@ def _info(memex: Memex) -> dict[str, object]:
         "last_index_rebuild": memex.index_manager.get_meta("last_index_rebuild"),
         "llm_provider": memex.config.llm.provider,
     }
+
+
+def _project_arguments(args: argparse.Namespace) -> tuple[str | None, str | None, str | None]:
+    """Resolve project scope without exposing a remote URL or local path."""
+    if getattr(args, "scope", "global") != "project":
+        return None, None, None
+    if args.project_id:
+        return args.project_id, getattr(args, "project_label", None), None
+    context = project_context(Path.cwd())
+    return (
+        context.project_id,
+        getattr(args, "project_label", None) or context.label,
+        context.locator,
+    )
 
 
 def main(argv: Sequence[str] | None = None) -> int:

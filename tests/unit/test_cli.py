@@ -5,6 +5,7 @@ import pytest
 
 from memex import cli
 from memex.infrastructure.bm25_retriever import MAX_QUERY_BYTES
+from memex.infrastructure.workspace_context import ProjectContext
 
 
 @pytest.fixture
@@ -36,6 +37,68 @@ def test_write_and_recall_roundtrip(data_dir: Path, capture: dict[str, str]) -> 
     assert code == 0
     result = json.loads(capture["out"])
     assert [hit["slug"] for hit in result["hits"]] == ["cli-entity"]
+
+
+def test_project_write_uses_derived_readable_locator(
+    data_dir: Path, capture: dict[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        cli,
+        "project_context",
+        lambda cwd: ProjectContext("a" * 24, "memex", "git-memex"),
+    )
+
+    code = cli.main(
+        [
+            "--data-dir",
+            str(data_dir),
+            "write",
+            "--type",
+            "preference",
+            "--title",
+            "Example",
+            "--body",
+            "project-scoped",
+            "--scope",
+            "project",
+        ]
+    )
+
+    assert code == 0
+    payload = json.loads(capture["out"])
+    assert payload["file_path"].endswith("docs/projects/git-memex/preferences/example.md")
+
+
+def test_project_write_with_explicit_id_uses_id_fallback(
+    data_dir: Path, capture: dict[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        cli,
+        "project_context",
+        lambda cwd: ProjectContext("a" * 24, "memex", "git-memex"),
+    )
+
+    code = cli.main(
+        [
+            "--data-dir",
+            str(data_dir),
+            "write",
+            "--type",
+            "preference",
+            "--title",
+            "Example",
+            "--body",
+            "project-scoped",
+            "--scope",
+            "project",
+            "--project-id",
+            "b" * 24,
+        ]
+    )
+
+    assert code == 0
+    payload = json.loads(capture["out"])
+    assert payload["file_path"].endswith(f"docs/projects/{'b' * 24}/preferences/example.md")
 
 
 def test_recall_rejects_oversized_query_without_echoing_input(
@@ -135,7 +198,7 @@ def test_export_import_cli(data_dir: Path, capture: dict[str, str], tmp_path: Pa
     assert code == 0
     payload = json.loads(capture["out"])
     assert payload["imported"] == 1
-    assert (other_dir / "docs/entities/ex.md").exists()
+    assert (other_dir / "docs/global/entities/ex.md").exists()
 
 
 def test_consolidate_requires_api_key(

@@ -27,6 +27,7 @@ ForgetMode = Literal["hard", "soft", "decay"]
 ConsolidateMode = Literal["full", "dry-run"]
 
 _ISO = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+_PROJECT_ID = re.compile(r"^[a-f0-9]{24,64}$")
 
 
 def utc_now_iso() -> str:
@@ -46,6 +47,17 @@ def _check_iso(value: str, field_name: str) -> None:
         datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ")
     except ValueError as exc:
         raise ValueError(f"{field_name} is not a valid date: {value}") from exc
+
+
+def _check_project_metadata(scope: str, project_id: str | None, project_label: str | None) -> None:
+    """Reject identity inputs that could expose a repository remote or path."""
+    if scope == "project" and (project_id is None or not _PROJECT_ID.fullmatch(project_id)):
+        raise ValueError("project_id must be an opaque lowercase hexadecimal identifier")
+    if project_label is not None and (
+        not project_label.strip()
+        or any(token in project_label for token in ("/", "\\", "://", "@"))
+    ):
+        raise ValueError("project_label must be a plain display name")
 
 
 def _norm_tags(tags: list[str]) -> list[str]:
@@ -166,6 +178,10 @@ class WriteInput:
     source: str | None = None
     harness: str | None = None
     confidence: str | None = None
+    scope: str = "global"
+    project_id: str | None = None
+    project_label: str | None = None
+    project_locator: str | None = None
 
     def __post_init__(self) -> None:
         if self.type not in NODE_TYPES:
@@ -190,6 +206,13 @@ class WriteInput:
                 _check_iso(value, name)
         if self.transcript_ref is not None and not self.transcript_ref.strip():
             raise ValueError("transcript_ref must be non-empty when provided")
+        if self.scope not in {"global", "project"}:
+            raise ValueError("scope must be 'global' or 'project'")
+        if self.scope == "project" and not (self.project_id or "").strip():
+            raise ValueError("project_id is required for project scope")
+        if self.scope == "global" and self.project_id is not None:
+            raise ValueError("project_id is only allowed for project scope")
+        _check_project_metadata(self.scope, self.project_id, self.project_label)
 
 
 @dataclass(slots=True)
@@ -220,6 +243,10 @@ class WikiNode:
     source: str | None = None
     harness: str | None = None
     confidence: str | None = None
+    scope: str = "global"
+    project_id: str | None = None
+    project_label: str | None = None
+    project_locator: str | None = None
 
     def __post_init__(self) -> None:
         if self.type not in NODE_TYPES:
@@ -232,6 +259,13 @@ class WikiNode:
             raise ValueError(f"status must be one of {PAGE_STATUSES}, got {self.status!r}")
         if self.occurred_at is not None:
             _check_iso(self.occurred_at, "occurred_at")
+        if self.scope not in {"global", "project"}:
+            raise ValueError("scope must be 'global' or 'project'")
+        if self.scope == "project" and not (self.project_id or "").strip():
+            raise ValueError("project_id is required for project scope")
+        if self.scope == "global" and self.project_id is not None:
+            raise ValueError("project_id is only allowed for project scope")
+        _check_project_metadata(self.scope, self.project_id, self.project_label)
 
 
 @dataclass(slots=True)
@@ -254,6 +288,9 @@ class RecallHit:
     transcript_ref: str | None
     links: list[str]
     status: str = "active"
+    scope: str = "global"
+    project_id: str | None = None
+    project_label: str | None = None
 
 
 @dataclass(slots=True)

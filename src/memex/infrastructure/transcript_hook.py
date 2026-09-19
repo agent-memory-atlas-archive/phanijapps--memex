@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import re
+from datetime import UTC, datetime
 from pathlib import Path
 
 from memex.application.dto import to_jsonable
@@ -20,6 +22,7 @@ from memex.infrastructure.link_manager import LinkManager
 from memex.infrastructure.wiki_store import WikiStore
 
 _SUMMARY_EXCERPT_CHARS = 200
+_SESSION_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 
 def episode_slug(session_id: str) -> str:
@@ -63,8 +66,9 @@ class TranscriptHook:
                 and ``overwrite`` is False.
             ValueError: ``session_id`` or a turn entry is invalid.
         """
-        jsonl_path = self.get_transcript_path(input.session_id)
-        meta_path = self._meta_path(input.session_id)
+        captured_at = self._capture_date(input)
+        jsonl_path = self.get_transcript_path(input.session_id, captured_at)
+        meta_path = self._meta_path(input.session_id, captured_at)
         if jsonl_path.exists() and not overwrite:
             raise FileExistsError(f"transcript already exists: {jsonl_path.name}")
 
@@ -115,10 +119,14 @@ class TranscriptHook:
             tool_turns=counts["tool"],
         )
 
-    def get_transcript_path(self, session_id: str) -> Path:
-        return self.transcripts_dir / f"{session_id}.jsonl"
+    def get_transcript_path(self, session_id: str, captured_at: str | None = None) -> Path:
+        self._require_session_id(session_id)
+        if captured_at is None:
+            return self._find_transcript(session_id, ".jsonl")
+        return self._date_dir(captured_at) / f"{session_id}.jsonl"
 
     def get_episode_path(self, session_id: str) -> Path:
+        self._require_session_id(session_id)
         return self._store.get_path(episode_slug(session_id), "episode")
 
     def get_episode_by_session(self, session_id: str) -> WikiNode | None:
@@ -145,21 +153,59 @@ class TranscriptHook:
         return self._report(slug, [], "none")
 
     def list_sessions(self) -> list[SessionSummary]:
-        sessions: list[SessionSummary] = []
-        for meta_path in sorted(self.transcripts_dir.glob("*.meta.json")):
-            sessions.append(self._load_session_summary(meta_path))
-        return sessions
+        return self.list_sessions_report()[0]
 
-    def delete_transcript(self, session_id: str) -> None:
-        jsonl = self.get_transcript_path(session_id)
-        meta = self._meta_path(session_id)
-        jsonl.unlink(missing_ok=True)
-        meta.unlink(missing_ok=True)
+    def list_sessions_report(self) -> tuple[list[SessionSummary], int]:
+        """Return valid sessions and the count of unreadable metadata records."""
+        sessions: list[SessionSummary] = []
+        unreadable = 0
+        root = self.transcripts_dir.resolve()
+        for meta_path in sorted(self.transcripts_dir.rglob("*.meta.json")):
+            try:
+                if not meta_path.resolve().is_relative_to(root):
+                    unreadable += 1
+                    continue
+                sessions.append(self._load_session_summary(meta_path))
+            except (OSError, ValueError, TypeError, AttributeError, RuntimeError):
+                unreadable += 1
+                continue
+        return sessions, unreadable
+
+    def delete_transcript(self, session_id: str, *, confirm: bool = False) -> None:
+        if not confirm:
+            raise ValueError("transcript deletion requires confirm=True")
+        self._require_session_id(session_id)
+        jsonl = self._find_transcript(session_id, ".jsonl")
+        meta = self._find_transcript(session_id, ".meta.json")
+        self._unlink_confined(jsonl)
+        self._unlink_confined(meta)
         slug = episode_slug(session_id)
-        if self._store.exists(slug):
-            self._store.delete(slug)
-            self._index.remove_record(slug)
-            self._links.remove_slug(slug)
+        episode = self._store.read(slug)
+        if episode is not None:
+            episode.transcript_ref = f"retired:{episode.transcript_ref or session_id}"
+            stored = self._store.write(episode)
+            self._index.update_record(stored)
+
+    def clear_transcripts(self, *, confirm: bool = False) -> int:
+        """Delete raw transcripts while retaining episodes with retired references."""
+        if not confirm:
+            raise ValueError("transcript clearing requires confirm=True")
+        cleared = 0
+        for meta_path in self.transcripts_dir.rglob("*.meta.json"):
+            session_id = meta_path.name.removesuffix(".meta.json")
+            if not self.is_valid_session_id(session_id):
+                continue
+            transcript_path = meta_path.with_name(f"{session_id}.jsonl")
+            self._unlink_confined(transcript_path)
+            self._unlink_confined(meta_path)
+            episode = self._store.read(episode_slug(session_id))
+            if episode is not None:
+                episode.transcript_ref = f"retired:{transcript_path.relative_to(self.data_dir)}"
+                stored = self._store.write(episode)
+                self._index.update_record(stored)
+                self._links.sync_node(stored)
+            cleared += 1
+        return cleared
 
     def _write_episode(self, input: IngestTranscriptInput) -> WikiNode:
         slug = episode_slug(input.session_id)
@@ -173,7 +219,11 @@ class TranscriptHook:
             id="",
             slug=slug,
             session_id=input.session_id,
-            transcript_ref=f"transcripts/{input.session_id}.jsonl",
+            transcript_ref=str(
+                self.get_transcript_path(input.session_id, self._capture_date(input)).relative_to(
+                    self.data_dir
+                )
+            ),
         )
         stored = self._store.write(episode)
         self._index.update_record(stored)
@@ -235,8 +285,10 @@ class TranscriptHook:
         transcript_files: list[str] = []
         meta_files: list[str] = []
         for session in sessions:
-            transcript_files.append(str(self.get_transcript_path(session)))
-            meta_files.append(str(self._meta_path(session)))
+            transcript_path = self._find_transcript(session, ".jsonl")
+            meta_path = self._find_transcript(session, ".meta.json")
+            transcript_files.append(str(transcript_path))
+            meta_files.append(str(meta_path))
         return ProvenanceReport(
             slug=slug,
             direct_transcript_ref=None,
@@ -249,21 +301,70 @@ class TranscriptHook:
     def _load_session_summary(self, meta_path: Path) -> SessionSummary:
         try:
             meta = json.loads(meta_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            meta = {}
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ValueError("unreadable session metadata") from exc
+        if not isinstance(meta, dict):
+            raise ValueError("session metadata must be an object")
         session_id = str(meta.get("session_id", meta_path.name.removesuffix(".meta.json")))
+        self._require_session_id(session_id)
+        started_at = meta.get("started_at")
+        ended_at = meta.get("ended_at")
+        if started_at is not None and not isinstance(started_at, str):
+            raise ValueError("invalid session start time")
+        if ended_at is not None and not isinstance(ended_at, str):
+            raise ValueError("invalid session end time")
+        turn_count = int(meta.get("turn_count", 0))
+        if turn_count < 0:
+            raise ValueError("invalid session turn count")
         slug = episode_slug(session_id)
         return SessionSummary(
             session_id=session_id,
-            started_at=meta.get("started_at"),
-            ended_at=meta.get("ended_at"),
-            turn_count=int(meta.get("turn_count", 0)),
+            started_at=started_at,
+            ended_at=ended_at,
+            turn_count=turn_count,
             episode_slug=slug if self._store.exists(slug) else None,
-            file_path=str(self.get_transcript_path(session_id)),
+            file_path=str(meta_path.with_name(f"{session_id}.jsonl")),
         )
 
-    def _meta_path(self, session_id: str) -> Path:
-        return self.transcripts_dir / f"{session_id}.meta.json"
+    def _meta_path(self, session_id: str, captured_at: str | None = None) -> Path:
+        self._require_session_id(session_id)
+        return self._date_dir(captured_at) / f"{session_id}.meta.json"
+
+    def _capture_date(self, input: IngestTranscriptInput) -> str:
+        value = (
+            input.header.captured_at if input.header else (input.turns[0].ts if input.turns else "")
+        )
+        try:
+            return datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").strftime("%Y-%m-%d")
+        except ValueError:
+            return datetime.now(UTC).strftime("%Y-%m-%d")
+
+    def _date_dir(self, captured_at: str | None) -> Path:
+        day = captured_at or datetime.now(UTC).strftime("%Y-%m-%d")
+        directory = self.transcripts_dir / day
+        directory.mkdir(parents=True, exist_ok=True)
+        return directory
+
+    def _find_transcript(self, session_id: str, suffix: str) -> Path:
+        self._require_session_id(session_id)
+        matches = list(self.transcripts_dir.rglob(f"{session_id}{suffix}"))
+        return matches[0] if matches else self.transcripts_dir / f"{session_id}{suffix}"
+
+    @staticmethod
+    def is_valid_session_id(session_id: str) -> bool:
+        return bool(_SESSION_ID.fullmatch(session_id))
+
+    def _require_session_id(self, session_id: str) -> None:
+        if not self.is_valid_session_id(session_id):
+            raise ValueError("session_id must be alphanumeric with '.', '_', '-' only")
+
+    def _unlink_confined(self, path: Path) -> None:
+        root = self.transcripts_dir.resolve()
+        try:
+            path.resolve().relative_to(root)
+        except ValueError as exc:
+            raise ValueError("transcript path escapes the transcript directory") from exc
+        path.unlink(missing_ok=True)
 
     @staticmethod
     def _count_roles(turns: list[TurnStreamEntry]) -> dict[str, int]:

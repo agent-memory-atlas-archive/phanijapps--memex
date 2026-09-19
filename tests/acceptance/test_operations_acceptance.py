@@ -139,7 +139,7 @@ def test_backup_and_restore(config: MemexConfig, data_dir: Path) -> None:
     assert restore_report.file_counts["transcripts"] == 2
     assert restored_memex.wiki_store.exists("backup-entity")
     assert restored_memex.wiki_store.exists("second-entity")
-    assert (data_dir / "transcripts/sess-backup.jsonl").exists()
+    assert (data_dir / "transcripts/2026-09-15/sess-backup.jsonl").exists()
 
     result = restored_memex.recall("survives backup")
     assert result.hits[0].slug == "backup-entity"

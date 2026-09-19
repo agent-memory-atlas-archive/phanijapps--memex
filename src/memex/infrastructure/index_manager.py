@@ -15,11 +15,12 @@ import re
 import sqlite3
 import threading
 from pathlib import Path
+from typing import cast
 
 from memex.domain.errors import IndexManagerError
 from memex.domain.models import WikiNode, utc_now_iso
 
-SCHEMA_VERSION = "2"
+SCHEMA_VERSION = "4"
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS index_meta (
@@ -29,7 +30,10 @@ CREATE TABLE IF NOT EXISTS index_meta (
 
 CREATE TABLE IF NOT EXISTS wiki_index (
     id            TEXT PRIMARY KEY,
-    slug          TEXT UNIQUE NOT NULL,
+    slug          TEXT NOT NULL,
+    scope         TEXT NOT NULL DEFAULT 'global',
+    project_id    TEXT NOT NULL DEFAULT '',
+    project_label TEXT,
     file_path     TEXT UNIQUE NOT NULL,
     title         TEXT NOT NULL,
     node_type     TEXT NOT NULL,
@@ -50,6 +54,7 @@ CREATE TABLE IF NOT EXISTS wiki_index (
     content_hash  TEXT NOT NULL,
     transcript_ref TEXT,
     body          TEXT NOT NULL DEFAULT ''
+    , UNIQUE(scope, project_id, node_type, slug)
 );
 
 CREATE VIRTUAL TABLE IF NOT EXISTS wiki_fts USING fts5(
@@ -80,16 +85,20 @@ CREATE TRIGGER IF NOT EXISTS wiki_index_au AFTER UPDATE ON wiki_index BEGIN
 END;
 
 CREATE TABLE IF NOT EXISTS wiki_links (
+    source_scope TEXT NOT NULL DEFAULT 'global',
+    source_project_id TEXT NOT NULL DEFAULT '',
     source_slug TEXT NOT NULL,
     target_slug TEXT NOT NULL,
-    PRIMARY KEY (source_slug, target_slug)
+    PRIMARY KEY (source_scope, source_project_id, source_slug, target_slug)
 );
 
 CREATE INDEX IF NOT EXISTS idx_wiki_index_type ON wiki_index(node_type);
+CREATE INDEX IF NOT EXISTS idx_wiki_index_scope ON wiki_index(scope, project_id);
 CREATE INDEX IF NOT EXISTS idx_wiki_index_updated ON wiki_index(updated);
 CREATE INDEX IF NOT EXISTS idx_wiki_index_importance ON wiki_index(importance);
 CREATE INDEX IF NOT EXISTS idx_wiki_index_access ON wiki_index(last_access);
-CREATE INDEX IF NOT EXISTS idx_wiki_links_source ON wiki_links(source_slug);
+CREATE INDEX IF NOT EXISTS idx_wiki_links_source
+    ON wiki_links(source_scope, source_project_id, source_slug);
 CREATE INDEX IF NOT EXISTS idx_wiki_links_target ON wiki_links(target_slug);
 """
 
@@ -97,15 +106,15 @@ _SAFE_SLUG = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 
 _UPSERT = """
 INSERT INTO wiki_index (
-    id, slug, file_path, title, node_type, importance, tags, created, updated,
+    id, slug, scope, project_id, project_label, file_path, title, node_type, importance, tags, created, updated,
     access_count, last_access, expires_at, valid_from, valid_to,
     content_hash, transcript_ref, body, status, occurred_at, source, harness, confidence
 ) VALUES (
-    :id, :slug, :file_path, :title, :node_type, :importance, :tags, :created, :updated,
+    :id, :slug, :scope, :project_id, :project_label, :file_path, :title, :node_type, :importance, :tags, :created, :updated,
     :access_count, :last_access, :expires_at, :valid_from, :valid_to,
     :content_hash, :transcript_ref, :body, :status, :occurred_at, :source, :harness, :confidence
 )
-ON CONFLICT(slug) DO UPDATE SET
+ON CONFLICT(scope, project_id, node_type, slug) DO UPDATE SET
     id = excluded.id,
     file_path = excluded.file_path,
     title = excluded.title,
@@ -132,6 +141,9 @@ def node_record(node: WikiNode) -> dict[str, object]:
     return {
         "id": node.id,
         "slug": node.slug,
+        "scope": node.scope,
+        "project_id": node.project_id or "",
+        "project_label": node.project_label,
         "file_path": node.file_path or "",
         "title": node.title,
         "node_type": node.type,
@@ -170,6 +182,7 @@ class IndexManager:
         self.db_path = db_path
         db_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
+        self._needs_rebuild = False
         self._conn = sqlite3.connect(db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA journal_mode=WAL")
@@ -199,8 +212,17 @@ class IndexManager:
             return True  # no table at all
         if not columns:
             return True
-        expected = {"status", "occurred_at", "source", "harness", "confidence"}
-        return not expected <= columns
+        expected = {
+            "status",
+            "occurred_at",
+            "source",
+            "harness",
+            "confidence",
+            "scope",
+            "project_id",
+            "project_label",
+        }
+        return self._needs_rebuild or not expected <= columns
 
     def drop_for_rebuild(self) -> None:
         with self._lock:
@@ -211,13 +233,44 @@ class IndexManager:
                 "DROP TABLE IF EXISTS index_meta;"
             )
             self._conn.commit()
+            self._needs_rebuild = False
         self.initialize()
 
     def initialize(self) -> None:
         with self._lock:
+            if self._index_schema_is_incompatible():
+                self._needs_rebuild = True
+                self._conn.executescript(
+                    "DROP TABLE IF EXISTS wiki_links;"
+                    "DROP TABLE IF EXISTS wiki_fts;"
+                    "DROP TABLE IF EXISTS wiki_index;"
+                    "DROP TABLE IF EXISTS index_meta;"
+                )
+            elif self._links_schema_is_incompatible():
+                self._needs_rebuild = True
+                self._conn.execute("DROP TABLE IF EXISTS wiki_links")
             self._conn.executescript(_SCHEMA)
             self.set_meta("schema_version", SCHEMA_VERSION)
             self._conn.commit()
+
+    def _index_schema_is_incompatible(self) -> bool:
+        """Detect a disposable pre-namespace index before creating new indexes."""
+        row = self._conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'wiki_index'"
+        ).fetchone()
+        if row is None:
+            return False
+        columns = {row["name"] for row in self._conn.execute("PRAGMA table_info(wiki_index)")}
+        return not {"scope", "project_id", "project_label"} <= columns
+
+    def _links_schema_is_incompatible(self) -> bool:
+        row = self._conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'wiki_links'"
+        ).fetchone()
+        if row is None:
+            return False
+        columns = {row["name"] for row in self._conn.execute("PRAGMA table_info(wiki_links)")}
+        return not {"source_scope", "source_project_id"} <= columns
 
     def build(self, nodes: list[WikiNode]) -> int:
         """Bulk upsert. Returns the number of records written."""
@@ -242,12 +295,36 @@ class IndexManager:
                 self._conn.rollback()
                 raise IndexManagerError(f"index update failed for {node.slug!r}: {exc}") from exc
 
-    def remove_record(self, slug: str) -> None:
+    def remove_record(
+        self,
+        slug: str,
+        *,
+        scope: str | None = None,
+        project_id: str | None = None,
+        node_type: str | None = None,
+    ) -> None:
         safe = check_slug(slug)
+        query = (
+            "DELETE FROM wiki_index WHERE slug = ?"
+            " AND (? IS NULL OR scope = ?)"
+            " AND (? IS NULL OR project_id = ?)"
+            " AND (? IS NULL OR node_type = ?)"
+        )
+        params = (safe, scope, scope, project_id, project_id, node_type, node_type)
         with self._lock:
-            self._conn.execute("DELETE FROM wiki_links WHERE source_slug = ?", (safe,))
-            self._conn.execute("DELETE FROM wiki_links WHERE target_slug = ?", (safe,))
-            self._conn.execute("DELETE FROM wiki_index WHERE slug = ?", (safe,))
+            link_params = (safe, scope, scope, project_id, project_id)
+            self._conn.execute(
+                "DELETE FROM wiki_links WHERE source_slug = ?"
+                " AND (? IS NULL OR source_scope = ?)"
+                " AND (? IS NULL OR source_project_id = ?)",
+                link_params,
+            )
+            self._conn.execute(query, params)
+            self._conn.execute(
+                "DELETE FROM wiki_links WHERE target_slug = ?"
+                " AND NOT EXISTS (SELECT 1 FROM wiki_index WHERE slug = ?)",
+                (safe, safe),
+            )
             self._conn.commit()
 
     def reset(self) -> None:
@@ -258,18 +335,40 @@ class IndexManager:
             self._conn.execute("DELETE FROM wiki_index")
             self._conn.commit()
 
-    def get(self, slug: str) -> sqlite3.Row | None:
+    def get(
+        self,
+        slug: str,
+        *,
+        scope: str | None = None,
+        project_id: str | None = None,
+        node_type: str | None = None,
+    ) -> sqlite3.Row | None:
         safe = check_slug(slug)
+        query = (
+            "SELECT * FROM wiki_index WHERE slug = ?"
+            " AND (? IS NULL OR scope = ?)"
+            " AND (? IS NULL OR project_id = ?)"
+            " AND (? IS NULL OR node_type = ?)"
+            " ORDER BY scope, project_id, node_type"
+        )
+        params = (safe, scope, scope, project_id, project_id, node_type, node_type)
         with self._lock:
-            row: sqlite3.Row | None = self._conn.execute(
-                "SELECT * FROM wiki_index WHERE slug = ?", (safe,)
-            ).fetchone()
-        return row
+            rows = self._conn.execute(query, params).fetchall()
+        if not rows:
+            return None
+        if len(rows) > 1:
+            raise IndexManagerError(f"ambiguous index row for slug: {slug!r}")
+        return cast(sqlite3.Row, rows[0])
 
     def get_all_slugs(self) -> list[str]:
         with self._lock:
             rows = self._conn.execute("SELECT slug FROM wiki_index ORDER BY slug").fetchall()
         return [str(row["slug"]) for row in rows]
+
+    def get_all_records(self) -> list[sqlite3.Row]:
+        """Return index rows for namespace-aware maintenance operations."""
+        with self._lock:
+            return self._conn.execute("SELECT * FROM wiki_index").fetchall()
 
     def get_by_type(self, node_type: str) -> list[str]:
         with self._lock:

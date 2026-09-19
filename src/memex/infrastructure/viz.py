@@ -15,13 +15,25 @@ import json
 import re
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, quote, urlencode, urlparse
 
 from memex.application.memory import Memex
-from memex.domain.models import WikiNode
+from memex.domain.models import SessionSummary, WikiNode
 from memex.infrastructure.markdown import render_markdown
+from memex.infrastructure.viz_components import DASHBOARD_CSS, PAGE_SHELL, escape, scope_controls
+from memex.infrastructure.viz_explorer import (
+    MemorySelection,
+    direct_url,
+    fragment_url,
+    paginate,
+    parse_page,
+    render_pager,
+)
+from memex.infrastructure.viz_sessions import SessionView, render_replay, render_session_groups
 
 DEFAULT_PORT = 7171
+SEARCH_SCOPES = {"best", "project", "global"}
+MAX_CHART_TOKENS = 1_000_000_000_000
 
 _HTMX_PATH = Path(__file__).parent / "htmx.min.js"
 _HTMX_BYTES: bytes = (
@@ -29,244 +41,11 @@ _HTMX_BYTES: bytes = (
 )
 
 _ENRICHED_MARKER = re.compile(r"<!-- enriched -->\s*", re.DOTALL)
-_MARK_TAG = re.compile(r"</?mark>")
-
-_CSS = """
-:root {
-  --bg: #0d1117; --surface: #161b22; --border: #30363d;
-  --text: #e6edf3; --text-muted: #8b949e; --text-dim: #6e7681;
-  --accent: #58a6ff; --ok: #3fb950; --warn: #d29922; --error: #f85149;
-  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-  --radius: 6px; --space: 1rem;
-}
-@media (prefers-color-scheme: light) {
-  :root {
-    --bg: #f6f8fa; --surface: #fff; --border: #d0d7de;
-    --text: #1f2328; --text-muted: #656d76; --text-dim: #8c959f;
-    --accent: #0969da; --ok: #1a7f37; --warn: #9a6700; --error: #cf222e;
-  }
-}
-* { margin:0; padding:0; box-sizing:border-box; }
-body { font-family:var(--sans); background:var(--bg); color:var(--text);
-       font-size:14px; line-height:1.5; }
-a { color:var(--accent); text-decoration:none; }
-a:hover { text-decoration:underline; }
-
-/* ---- Shell ---- */
-.shell { max-width:1200px; margin:0 auto; padding:1.5rem; }
-header { display:flex; align-items:center; gap:1rem; margin-bottom:1rem; }
-header h1 { font-size:1.1rem; font-weight:600; letter-spacing:-0.02em; }
-.datapath { font-family:var(--mono); font-size:.75rem; color:var(--text-dim); }
-
-/* ---- Nav tabs ---- */
-nav { display:flex; gap:.25rem; border-bottom:1px solid var(--border); margin-bottom:1rem; }
-nav a { padding:.5rem .9rem; font-size:.82rem; font-weight:500; color:var(--text-muted);
-        border-bottom:2px solid transparent; }
-nav a:hover { color:var(--text); text-decoration:none; }
-nav a[aria-current] { color:var(--text); border-bottom-color:var(--accent); }
-
-/* ---- Status bar ---- */
-.statusbar { display:flex; align-items:center; gap:1rem; padding:.6rem .9rem;
-             background:var(--surface); border:1px solid var(--border);
-             border-radius:var(--radius); margin-bottom:1rem; font-size:.82rem; }
-.statusbar .dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
-.statusbar .dot.ok { background:var(--ok); }
-.statusbar .dot.warn { background:var(--warn); }
-.statusbar .dot.error { background:var(--error); }
-.statusbar .metric { display:flex; gap:.3rem; align-items:baseline; }
-.statusbar .metric b { font-variant-numeric:tabular-nums; }
-.statusbar .metric span { color:var(--text-muted); }
-.statusbar .spacer { flex:1; }
-.statusbar a { font-size:.78rem; }
-
-/* ---- KPI grid ---- */
-.kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:.75rem; margin-bottom:1rem; }
-.kpi { background:var(--surface); border:1px solid var(--border);
-       border-radius:var(--radius); padding:.9rem 1rem; }
-.kpi .value { font-size:1.6rem; font-weight:700; font-variant-numeric:tabular-nums;
-              letter-spacing:-0.02em; }
-.kpi .label { font-size:.72rem; color:var(--text-muted); text-transform:uppercase;
-              letter-spacing:.05em; margin-top:.15rem; }
-@media (max-width:768px) { .kpis { grid-template-columns:repeat(2,1fr); } }
-
-/* ---- Section headers ---- */
-.section { font-size:.72rem; font-weight:600; color:var(--text-muted);
-           text-transform:uppercase; letter-spacing:.08em; margin:1.2rem 0 .5rem; }
-
-/* ---- Memory cards ---- */
-.cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:.6rem; }
-.card { background:var(--surface); border:1px solid var(--border);
-        border-radius:var(--radius); padding:.75rem .85rem; }
-.card h3 { font-size:.85rem; font-weight:600; margin-bottom:.2rem; }
-.card .body { font-size:.78rem; color:var(--text-muted); line-height:1.4;
-              max-height:3.6em; overflow:hidden; }
-.card .meta { font-size:.7rem; color:var(--text-dim); margin-top:.3rem;
-              display:flex; gap:.4rem; flex-wrap:wrap; align-items:center; }
-.card .meta .sep { color:var(--border); }
-
-/* ---- Type badges ---- */
-.badge { display:inline-block; padding:1px 6px; border-radius:3px;
-         font-size:.68rem; font-weight:600; font-family:var(--mono); }
-.badge.entity { color:#a371f7; background:rgba(163,113,247,.12); }
-.badge.preference { color:#f0883e; background:rgba(240,136,62,.12); }
-.badge.procedure { color:#58a6ff; background:rgba(88,166,255,.12); }
-.badge.summary { color:#3fb950; background:rgba(63,185,80,.12); }
-.badge.episode { color:#8b949e; background:rgba(139,148,158,.12); }
-.badge.pending { color:var(--warn); background:rgba(210,153,34,.12); }
-.badge.archived { color:var(--text-dim); background:rgba(110,118,129,.12); }
-.badge.superseded { color:#f85149; background:rgba(248,81,73,.12); }
-
-/* ---- Filter pills ---- */
-.filters { display:flex; gap:.35rem; margin-bottom:.6rem; flex-wrap:wrap; }
-.filters a { padding:.2rem .65rem; border-radius:99px; font-size:.75rem;
-             font-weight:500; color:var(--text-muted); background:var(--surface);
-             border:1px solid var(--border); }
-.filters a:hover { color:var(--text); text-decoration:none; }
-.filters a[aria-current] { color:var(--accent); border-color:var(--accent); }
-
-/* ---- Search ---- */
-.search-bar { position:relative; margin-bottom:.8rem; }
-.search-bar input { width:100%; padding:.6rem .9rem; background:var(--surface);
-                    border:1px solid(var(--border)); border-radius:var(--radius);
-                    color:var(--text); font-size:.88rem; font-family:var(--sans); }
-.search-bar input:focus { outline:none; border-color:var(--accent); }
-.search-bar input::placeholder { color:var(--text-dim); }
-mark { background:rgba(88,166,255,.2); color:inherit; padding:0 1px;
-       border-radius:2px; }
-
-/* ---- Tables ---- */
-table { width:100%; border-collapse:collapse; font-size:.78rem; }
-th { text-align:left; padding:.4rem .5rem; color:var(--text-muted);
-     font-weight:500; font-size:.72rem; text-transform:uppercase;
-     letter-spacing:.05em; border-bottom:1px solid(var(--border)); }
-td { padding:.4rem .5rem; border-bottom:1px solid(var(--border));
-     font-family:var(--mono); font-size:.75rem; }
-td.muted { color:var(--text-muted); }
-tr:last-child td { border-bottom:none; }
-
-/* ---- Charts ---- */
-.chart-box { background:var(--surface); border:1px solid(var(--border));
-             border-radius:var(--radius); padding:1rem; }
-.chart-box svg { width:100%; height:auto; display:block; }
-.bar { fill:var(--accent); opacity:.8; }
-.bar:hover { opacity:1; }
-.grid-line { stroke:var(--border); stroke-width:.5; opacity:.3; }
-.axis-label { fill:var(--text-dim); font-size:10px; font-family:var(--mono); }
-
-/* ---- Slide-out detail panel ---- */
-.panel-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.5);
-  opacity:0; pointer-events:none; transition:opacity .25s; z-index:98; }
-.panel-backdrop.open { opacity:1; pointer-events:auto; }
-.panel { position:fixed; top:0; right:0; bottom:0; width:min(640px,90vw);
-  background:var(--surface); border-left:1px solid var(--border);
-  transform:translateX(100%); transition:transform .25s ease-out;
-  z-index:99; display:flex; flex-direction:column; }
-.panel.open { transform:translateX(0); }
-.panel-header { display:flex; align-items:center; justify-content:space-between;
-  padding:.8rem 1rem; border-bottom:1px solid var(--border); flex-shrink:0; }
-.panel-header h2 { font-size:.95rem; font-weight:600; }
-.panel-close { background:none; border:none; color:var(--text-muted);
-  font-size:1.3rem; cursor:pointer; padding:.2rem .4rem; line-height:1; }
-.panel-close:hover { color:var(--text); }
-.panel-body { flex:1; overflow-y:auto; padding:1rem; }
-.panel-body h1, .panel-body h2, .panel-body h3 { margin-top:1.2rem; margin-bottom:.4rem; }
-.panel-body h1 { font-size:1.2rem; } .panel-body h2 { font-size:1.05rem; }
-.panel-body h3 { font-size:.95rem; }
-.panel-body p { margin-bottom:.6rem; font-size:.88rem; line-height:1.55; }
-.panel-body pre { background:var(--bg); border:1px solid(var(--border));
-  border-radius:var(--radius); padding:.7rem; margin:.5rem 0; overflow-x:auto; }
-.panel-body code { font-family:var(--mono); font-size:.8rem; }
-.panel-body pre code { display:block; }
-.panel-body ul, .panel-body ol { padding-left:1.3rem; margin:.4rem 0; }
-.panel-body li { font-size:.88rem; margin-bottom:.2rem; }
-.panel-body blockquote { border-left:3px solid(var(--border));
-  padding:.4rem .8rem; margin:.5rem 0; color:var(--text-muted); }
-.panel-body hr { border:none; border-top:1px solid(var(--border)); margin:.8rem 0; }
-.wikilink { color:var(--accent); background:rgba(88,166,255,.08);
-  padding:0 3px; border-radius:3px; font-family:var(--mono); font-size:.82em; }
-
-/* ---- Session transcript viewer ---- */
-.turn { margin-bottom:.8rem; padding:.6rem .8rem; border-radius:var(--radius);
-        border-left:3px solid transparent; background:var(--bg); }
-.turn.user { border-left-color:var(--accent); }
-.turn.agent { border-left-color:var(--ok); }
-.turn.tool { border-left-color:var(--text-dim); }
-.turn .role { font-size:.68rem; font-weight:600; text-transform:uppercase;
-              letter-spacing:.05em; margin-bottom:.3rem; display:flex; align-items:center; gap:.4rem; }
-.turn.user .role { color:var(--accent); }
-.turn.agent .role { color:var(--ok); }
-.turn.tool .role { color:var(--text-muted); }
-.turn .content { font-size:.82rem; line-height:1.5; color:var(--text); white-space:pre-wrap; word-break:break-word; }
-.turn .tool-result { font-size:.78rem; color:var(--text-muted); background:var(--surface);
-                     border:1px solid(var(--border)); border-radius:4px; padding:.4rem .6rem; margin-top:.3rem;
-                     font-family:var(--mono); max-height:6em; overflow-y:auto; }
-.turn .timestamp { font-size:.68rem; color:var(--text-dim); font-family:var(--mono); }
-.tool-name { background:rgba(139,148,158,.15); padding:0 4px; border-radius:3px;
-             font-family:var(--mono); font-size:.72rem; }
-
-/* ---- Empty/error states ---- */
-.empty { padding:1.5rem; text-align:center; color:var(--text-muted);
-         background:var(--surface); border:1px dashed var(--border);
-         border-radius:var(--radius); font-size:.85rem; }
-.error { padding:1rem; color:var(--error); background:var(--surface);
-         border:1px solid var(--error); border-radius:var(--radius); font-size:.82rem; }
-
-/* ---- Misc ---- */
-.htmx-indicator { opacity:0; transition:opacity .2s; }
-.htmx-request .htmx-indicator { opacity:1; }
-.subtle { font-size:.72rem; color:var(--text-dim); }
-"""
-
-_PAGE_SHELL = """<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>memex viz</title>
-<link rel="stylesheet" href="/style.css">
-<script src="/htmx.js"></script>
-</head>
-<body>
-<div class="shell">
-<header>
-<h1>memex</h1>
-<span class="datapath">@@DATA_DIR@@</span>
-</header>
-<nav>
-  <a href="/view/overview" hx-get="/overview" hx-target="#main" hx-push-url="true">Overview</a>
-  <a href="/view/memories" hx-get="/pages" hx-target="#main" hx-push-url="true">Memories</a>
-  <a href="/view/sessions" hx-get="/sessions" hx-target="#main" hx-push-url="true">Sessions</a>
-  <a href="/view/tokens" hx-get="/tokens" hx-target="#main" hx-push-url="true">Tokens</a>
-</nav>
-<main id="main" hx-get="/overview" hx-trigger="load"></main>
-</div>
-<div class="panel-backdrop" id="panel-backdrop" onclick="closePanel()"></div>
-<aside class="panel" id="panel">
-  <div class="panel-header">
-    <h2 id="panel-title"></h2>
-    <button class="panel-close" onclick="closePanel()">&times;</button>
-  </div>
-  <div class="panel-body" id="panel-body"></div>
-</aside>
-<script>
-function closePanel(){document.getElementById('panel').classList.remove('open');
-document.getElementById('panel-backdrop').classList.remove('open');}
-document.addEventListener('htmx:afterSwap',function(e){
-if(e.detail.target.id==='panel-body'){
-var h=e.detail.target.querySelector('h1,h2,h3');
-document.getElementById('panel-title').textContent=h?h.textContent:'Detail';
-document.getElementById('panel').classList.add('open');
-document.getElementById('panel-backdrop').classList.add('open');}});
-document.addEventListener('keydown',function(e){if(e.key==='Escape')closePanel();});
-</script>
-</body>
-</html>"""
 
 
 def _esc(text: object) -> str:
     """HTML-escape any value at the interpolation boundary."""
-    return html.escape(str(text if text is not None else ""))
+    return escape(text)
 
 
 def _clean_snippet(snippet: str) -> str:
@@ -314,18 +93,36 @@ class VizHandler(BaseHTTPRequestHandler):
         if route == "/htmx.js":
             self._bytes(_HTMX_BYTES, "application/javascript")
         elif route == "/style.css":
-            self._text(_CSS, "text/css")
-        elif route == "/":
-            self._text(
-                _PAGE_SHELL.replace("@@DATA_DIR@@", _esc(str(self._m().data_dir))), "text/html"
-            )
+            self._text(DASHBOARD_CSS, "text/css")
+        elif route in {
+            "/",
+            "/view/overview",
+            "/view/memories",
+            "/view/search",
+            "/view/sessions",
+            "/view/tokens",
+        } or route.startswith(("/view/page/", "/view/session/")):
+            self._text(self._shell(route, qs), "text/html")
         elif route == "/overview":
             self._text(self._frag_overview(), "text/html")
         elif route == "/pages":
-            node_type = qs.get("type", [None])[0]
-            self._text(self._frag_pages(node_type), "text/html")
+            scope = qs.get("scope", ["project" if "project" in qs else "best"])[0]
+            selection = MemorySelection(
+                qs.get("type", [None])[0],
+                scope,
+                qs.get("project", [None])[0],
+                parse_page(qs.get("page", [None])[0]),
+            )
+            self._text(self._frag_pages(selection), "text/html")
         elif route == "/search":
-            self._text(self._frag_search(qs.get("q", [""])[0]), "text/html")
+            self._text(
+                self._frag_search(
+                    qs.get("q", [""])[0],
+                    qs.get("scope", ["project" if qs.get("project", [""])[0] else "best"])[0],
+                    qs.get("project", [None])[0],
+                ),
+                "text/html",
+            )
         elif route == "/sessions":
             self._text(self._frag_sessions(), "text/html")
         elif route == "/tokens":
@@ -335,7 +132,7 @@ class VizHandler(BaseHTTPRequestHandler):
             self._text(self._frag_session_detail(session_id), "text/html")
         elif route.startswith("/page/"):
             slug = route.removeprefix("/page/")
-            self._text(self._frag_page_detail(slug), "text/html")
+            self._text(self._frag_page_detail(slug, qs.get("project", [None])[0]), "text/html")
         elif route == "/health":
             self._text(self._frag_health(), "text/html")
         else:
@@ -349,7 +146,11 @@ class VizHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", f"{ctype}; charset=utf-8")
         self.send_header("Content-Length", str(len(payload)))
         self.end_headers()
-        self.wfile.write(payload)
+        try:
+            self.wfile.write(payload)
+        except BrokenPipeError:
+            # Browsers can cancel a fragment swap while the response is in flight.
+            return
 
     def _text(self, body: str, ctype: str, code: int = 200) -> None:
         self._bytes(body.encode(), ctype, code)
@@ -358,6 +159,77 @@ class VizHandler(BaseHTTPRequestHandler):
         if self.memex is None:
             raise RuntimeError("viz handler not initialized")
         return self.memex
+
+    def _projects(self) -> dict[str, str]:
+        """Project ids mapped to their safe display labels."""
+        projects: dict[str, str] = {}
+        for node in self._m().wiki_store.list():
+            if node.scope == "project" and node.project_id:
+                projects.setdefault(node.project_id, node.project_label or "Project")
+        return projects
+
+    def _sessions(self) -> tuple[list[SessionSummary], int] | None:
+        try:
+            return self._m().transcript_hook.list_sessions_report()
+        except (OSError, ValueError, TypeError, AttributeError):
+            return None
+
+    def _shell(self, route: str, qs: dict[str, list[str]]) -> str:
+        known = {
+            "/": "/overview",
+            "/view/overview": "/overview",
+            "/view/memories": "/pages",
+            "/view/search": "/search",
+            "/view/sessions": "/sessions",
+            "/view/tokens": "/tokens",
+        }
+        fragment = known.get(route)
+        if fragment is None:
+            fragment = route.removeprefix("/view")
+        if fragment == "/pages":
+            params = {
+                key: values[0]
+                for key, values in qs.items()
+                if key in {"type", "scope", "project", "page"} and values
+            }
+            if params:
+                fragment += "?" + urlencode(params)
+        elif fragment.startswith("/page/") and qs.get("project"):
+            fragment += "?" + urlencode({"project": qs["project"][0]})
+        if fragment == "/overview":
+            initial = self._frag_overview()
+        elif fragment.startswith("/pages"):
+            scope = qs.get("scope", ["project" if "project" in qs else "best"])[0]
+            initial = self._frag_pages(
+                MemorySelection(
+                    qs.get("type", [None])[0],
+                    scope,
+                    qs.get("project", [None])[0],
+                    parse_page(qs.get("page", [None])[0]),
+                )
+            )
+        elif fragment.startswith("/search"):
+            initial = '<div id="search-results">' + self._frag_search(
+                qs.get("q", [""])[0],
+                qs.get("scope", ["project" if qs.get("project", [""])[0] else "best"])[0],
+                qs.get("project", [None])[0],
+            )
+            initial += "</div>"
+        elif fragment == "/sessions":
+            initial = self._frag_sessions()
+        elif fragment == "/tokens":
+            initial = self._frag_tokens()
+        elif fragment.startswith("/session/"):
+            initial = self._frag_session_detail(route.removeprefix("/view/session/"))
+        else:
+            initial = self._frag_page_detail(
+                route.removeprefix("/view/page/"), qs.get("project", [None])[0]
+            )
+        shell = PAGE_SHELL.replace("@@INITIAL_CONTENT@@", initial)
+        active_href = "/" if route == "/view/overview" else route
+        return shell.replace(
+            f'href="{active_href}"', f'href="{active_href}" aria-current="page"', 1
+        )
 
     def _frag_overview(self) -> str:
         stats = self._m().status()
@@ -368,7 +240,13 @@ class VizHandler(BaseHTTPRequestHandler):
         health = '<span class="dot ok"></span>' if stale == 0 else '<span class="dot warn"></span>'
 
         # Recent non-episode memories (the interesting ones)
-        nodes = [n for n in self._m().wiki_store.list() if n.type != "episode"][:8]
+        all_nodes = self._m().wiki_store.list()
+        nodes = sorted(
+            (node for node in all_nodes if node.type != "episode"),
+            key=lambda node: (str(node.updated or ""), node.slug),
+            reverse=True,
+        )[:8]
+        projects = self._projects()
         cards = "".join(self._card(n) for n in nodes)
         memories = (
             f'<div class="cards">{cards}</div>'
@@ -376,6 +254,39 @@ class VizHandler(BaseHTTPRequestHandler):
             else '<div class="empty">No distilled memories yet — run <code>memex consolidate</code></div>'
         )
         token_chart = self._frag_tokens()
+        type_counts = "".join(
+            f'<div class="kpi"><div class="value">{sum(node.type == kind for node in all_nodes)}</div>'
+            f'<div class="label">{kind.title()}</div></div>'
+            for kind in ("entity", "preference", "procedure", "summary", "episode")
+        )
+        options = "".join(
+            f'<option value="{_esc(identifier)}">{_esc(label)}</option>'
+            for identifier, label in sorted(projects.items(), key=lambda item: item[1].casefold())
+        )
+        session_report = self._sessions()
+        sessions, unreadable = session_report if session_report is not None else ([], 0)
+        recent_sessions = sorted(
+            sessions, key=lambda session: session.started_at or "", reverse=True
+        )[:3]
+        session_cards = (
+            "".join(
+                f'<div class="card"><h3><a href="/view/session/{_esc(session.session_id)}" '
+                f'hx-get="/session/{_esc(session.session_id)}" hx-target="#panel-body">'
+                f"{_esc(session.session_id[:18])}</a></h3>"
+                f'<span class="meta">{_esc(str(session.started_at or "Unknown date")[:16])} · '
+                f"{_esc(session.turn_count)} turns</span></div>"
+                for session in recent_sessions
+                if self._m().transcript_hook.is_valid_session_id(session.session_id)
+            )
+            or '<div class="empty">No captured sessions yet</div>'
+        )
+        if session_report is None:
+            session_cards = '<div class="error">Session metadata unavailable</div>'
+        elif unreadable:
+            session_cards = (
+                f'<div class="error">{unreadable} session metadata record(s) unreadable</div>'
+                + session_cards
+            )
 
         return f"""
 <div class="statusbar" id="health" hx-get="/health" hx-trigger="every 5s" hx-swap="innerHTML">
@@ -388,17 +299,26 @@ class VizHandler(BaseHTTPRequestHandler):
 </div>
 <div class="kpis">
   <div class="kpi"><div class="value">{total}</div><div class="label">Memory pages</div></div>
+  <div class="kpi"><div class="value">{len(projects)}</div><div class="label">Projects</div></div>
   <div class="kpi"><div class="value">{pending}</div><div class="label">Pending approval</div></div>
   <div class="kpi"><div class="value">{stale}</div><div class="label">Stale index rows</div></div>
   <div class="kpi"><div class="value">{int(str(stats.get("zero_yield_streak", "0") or "0"))}</div><div class="label" title="Consecutive consolidations that produced zero new nodes">Zero-yield streak</div></div>
 </div>
-<div class="search-bar">
-  <input type="search" placeholder="Search memories…" autocomplete="off"
-    hx-get="/search" hx-trigger="keyup changed delay:300ms" hx-target="#search-results" name="q">
-</div>
+<form class="search-bar" action="/view/search" method="get" hx-get="/search"
+  hx-trigger="input changed delay:300ms, change, submit" hx-target="#search-results">
+  <input type="search" placeholder="Search memories…" aria-label="Search memories"
+    autocomplete="off" name="q">
+  <select name="scope" aria-label="Search scope"><option value="best">Best match · all</option>
+    <option value="global">Global only</option><option value="project">Project</option></select>
+  <select name="project" aria-label="Search project"><option value="">Choose project</option>{options}</select>
+  <button type="submit">Search</button>
+</form>
 <div id="search-results"></div>
+<div class="section">Memory types</div><div class="kpis">{type_counts}</div>
 <div class="section">Recent memories</div>
 {memories}
+<div class="section">Recent sessions <a href="/view/sessions">View all</a></div>
+<div class="cards">{session_cards}</div>
 <div class="section">Token consumption</div>
 {token_chart}
 """
@@ -410,7 +330,7 @@ class VizHandler(BaseHTTPRequestHandler):
         pending = int(str(stats.get("pending", "0") or "0"))
         total = int(str(stats.get("index_total", "0") or "0"))
         streak = int(str(stats.get("zero_yield_streak", "0") or "0"))
-        link = ' · <a href="#">run memex verify</a>' if stale > 0 else ""
+        link = " · Run memex verify in the CLI" if stale > 0 else ""
         return (
             f'{dot}<span class="metric"><b>{total}</b><span>pages</span></span>'
             f'<span class="metric"><b>{pending}</b><span>pending</span></span>'
@@ -423,8 +343,13 @@ class VizHandler(BaseHTTPRequestHandler):
         body_raw = _strip_enriched(str(getattr(node, "body", "")))
         badge = _type_badge(getattr(node, "type", ""), getattr(node, "status", "active"))
         slug = getattr(node, "slug", "")
+        page_url = "/page/" + quote(slug, safe="")
+        if node.scope == "project" and node.project_id:
+            page_url += "?" + urlencode({"project": node.project_id})
+        safe_url = _esc(page_url)
+        direct_url = _esc("/view" + page_url)
         title_html = (
-            f'<a href="/page/{slug}" hx-get="/page/{slug}" '
+            f'<a href="{direct_url}" hx-get="{safe_url}" '
             f'hx-target="#panel-body" hx-swap="innerHTML">'
             f"{_esc(getattr(node, 'title', ''))}</a>"
             if slug
@@ -433,163 +358,222 @@ class VizHandler(BaseHTTPRequestHandler):
         return (
             f'<div class="card"><h3>{title_html} {badge}</h3>'
             f'<div class="body">{_esc(body_raw[:200])}</div>'
-            f"{_meta_line(node)}</div>"
+            f'{_meta_line(node)}<span class="meta">'
+            f"{_esc(node.project_label or 'Project') if node.scope == 'project' else 'Global'}"
+            "</span></div>"
         )
 
-    def _frag_pages(self, node_type: str | None) -> str:
-        if node_type and node_type not in (
+    def _frag_pages(self, selection: MemorySelection) -> str:
+        if selection.node_type and selection.node_type not in {
             "entity",
             "preference",
             "procedure",
             "summary",
             "episode",
+        }:
+            return '<div class="empty">Unknown memory type</div>'
+        projects = self._projects()
+        if selection.scope not in SEARCH_SCOPES:
+            return '<div class="empty">Unknown memory scope</div>'
+        if selection.scope == "project" and selection.project_id not in projects:
+            return '<div class="empty">Unknown project scope</div>'
+        result = paginate(self._m().wiki_store.list(selection.node_type), selection)
+        selected = selection.project_id if selection.scope == "project" else selection.scope
+        route = "/pages"
+        if selection.node_type:
+            route += "?" + urlencode({"type": selection.node_type})
+        scopes = scope_controls(projects, selected, route)
+        filters = []
+        for node_type, label in (
+            (None, "All types"),
+            ("entity", "Entities"),
+            ("preference", "Preferences"),
+            ("procedure", "Procedures"),
+            ("summary", "Summaries"),
+            ("episode", "Episodes"),
         ):
-            return f'<div class="empty">Unknown type: {_esc(node_type)}. <a href="/pages">View all</a></div>'
-        nodes = self._m().wiki_store.list(node_type)
-        if not nodes:
-            return '<div class="empty">No memories of this type yet</div>'
-        nodes = sorted(nodes, key=lambda n: getattr(n, "updated", ""), reverse=True)[:24]
-        cards = "".join(self._card(n) for n in nodes)
-        filters = '<div class="filters">'
-        if node_type is None:
-            filters += '<a href="#" aria-current="true">All</a>'
-        else:
-            filters += '<a href="#" hx-get="/pages" hx-target="#main" hx-push-url="true">All</a>'
-        for t in ("entity", "preference", "procedure", "summary", "episode"):
-            active = ' aria-current="true"' if t == node_type else ""
-            filters += f' <a href="#" hx-get="/pages?type={t}" hx-target="#main" hx-push-url="true"{active}>{t}</a>'
-        filters += "</div>"
-        return f'{filters}<div class="cards">{cards}</div>'
-
-    def _frag_search(self, q: str) -> str:
-        if not q.strip():
-            return ""
-        try:
-            result = self._m().recall(q, top_k=8)
-        except Exception:
-            return '<div class="error">Search failed — index may be stale. Run <code>memex rebuild-index</code>.</div>'
-        if not result.hits:
-            return f'<div class="empty">No memories match "{_esc(q)}"</div>'
-        items = []
-        for hit in result.hits:
-            snippet = _clean_snippet(hit.snippet[:250] if hit.snippet else "")
-            badge = f'<span class="badge {hit.node_type}">{_esc(hit.node_type)}</span>'
-            items.append(
-                f'<div class="card"><h3>{_esc(hit.title)} {badge}</h3>'
-                f'<div class="body">{snippet}</div>'
-                f'<div class="meta"><span>rank {hit.rank}</span><span class="sep">·</span>'
-                f"<span>imp {hit.importance}</span></div></div>"
+            target = MemorySelection(node_type, selection.scope, selection.project_id)
+            fragment = _esc(fragment_url(target, 1))
+            direct = _esc(direct_url(target, 1))
+            current = ' aria-current="true"' if selection.node_type == node_type else ""
+            filters.append(
+                f'<a href="{direct}" hx-get="{fragment}" hx-target="#main" '
+                f'hx-push-url="{direct}"{current}>{label}</a>'
             )
-        return f'<div class="cards">{"".join(items)}</div>'
-
-    def _frag_sessions(self) -> str:
-        sessions = self._m().transcript_hook.list_sessions()
-        if not sessions:
-            return '<div class="empty">No sessions captured yet — install a harness adapter (<code>memex install codex</code>)</div>'
-        sessions = sorted(sessions, key=lambda s: s.started_at or "", reverse=True)[:20]
-        rows = []
-        for s in sessions:
-            sid_full = str(s.session_id)
-            sid = _esc(sid_full[:18])
-            turns = _esc(s.turn_count)
-            started = _esc(str(s.started_at or "?")[:16])
-            ep = _esc(str(s.episode_slug or "—")[:24] if s.episode_slug else "—")
-            link = (
-                f'<a href="/session/{sid_full}" '
-                f'hx-get="/session/{sid_full}" hx-target="#panel-body" hx-swap="innerHTML">{sid}</a>'
-            )
-            rows.append(
-                f'<tr><td>{link}</td><td>{turns}</td><td class="muted">{started}</td><td class="muted">{ep}</td></tr>'
-            )
+        filter_html = '<div class="filters" aria-label="Memory type">' + "".join(filters) + "</div>"
+        page_html = render_pager(result, selection)
+        cards = "".join(self._card(node) for node in result.nodes)
+        content = (
+            f'<div class="cards">{cards}</div>'
+            if cards
+            else '<div class="empty">No memories match this selection</div>'
+        )
         return (
-            "<table><thead><tr><th>Session</th><th>Turns</th><th>Started</th><th>Episode</th></tr></thead>"
-            + "".join(rows)
-            + "</table>"
+            '<h1 class="page-heading">Memories</h1>'
+            + scopes
+            + filter_html
+            + page_html
+            + content
+            + page_html
         )
 
-    def _frag_session_detail(self, session_id: str) -> str:
-        """Chronological transcript viewer: user/agent messages + tool calls."""
-        jsonl_path = self._m().transcript_hook.get_transcript_path(session_id)
-        if not jsonl_path.exists():
-            return f'<div class="empty">Session not found: {_esc(session_id)}</div>'
+    def _frag_search(self, q: str, scope: str = "best", project_id: str | None = None) -> str:
+        if not q.strip():
+            return '<div class="empty">Enter a search term to find memory</div>'
+        if scope not in SEARCH_SCOPES:
+            return '<div class="empty">Unknown search scope</div>'
+        projects = self._projects()
+        if scope == "project" and project_id not in projects:
+            return '<div class="empty">Choose a project to search</div>'
+        if project_id and project_id not in projects:
+            return '<div class="empty">Unknown project scope</div>'
+        try:
+            if scope in {"project", "best"} and project_id:
+                result = self._m().retriever.retrieve_without_access(
+                    q,
+                    top_k=20,
+                    scope="project",
+                    project_id=project_id,
+                )
+                if scope == "best" and not result.hits:
+                    result = self._m().retriever.retrieve_without_access(q, top_k=20)
+            else:
+                result = self._m().retriever.retrieve_without_access(q, top_k=20)
+        except ValueError:
+            return '<div class="empty">Enter a searchable word</div>'
+        except Exception:
+            return (
+                '<div class="error">Search unavailable. Run memex rebuild-index from the CLI.</div>'
+            )
+        hits = result.hits
+        if not hits:
+            return f'<div class="empty">No memories match “{_esc(q)}”</div>'
+        cards = []
+        for hit in hits[:20]:
+            snippet = _clean_snippet(hit.snippet[:250] if hit.snippet else "")
+            page_url = "/page/" + quote(hit.slug, safe="")
+            if hit.scope == "project" and hit.project_id:
+                page_url += "?" + urlencode({"project": hit.project_id})
+            safe_url = _esc(page_url)
+            direct_url = _esc("/view" + page_url)
+            label = _esc(hit.project_label or "Project") if hit.scope == "project" else "Global"
+            cards.append(
+                f'<div class="card"><h3><a href="{direct_url}" hx-get="{safe_url}" '
+                f'hx-target="#panel-body">{_esc(hit.title)}</a></h3>'
+                f'<div class="body">{snippet}</div>'
+                f'<span class="meta">{label} · {_esc(hit.node_type)}</span></div>'
+            )
+        selected = project_id if scope == "project" else scope
+        controls = scope_controls(projects, selected, "/search?" + urlencode({"q": q}))
+        return controls + '<div class="cards">' + "".join(cards) + "</div>"
 
-        turns = []
+    def _frag_sessions(self) -> str:
+        session_report = self._sessions()
+        if session_report is None:
+            return '<div class="error">Session metadata unavailable</div>'
+        sessions, unreadable = session_report
+        if not sessions:
+            return (
+                f'<div class="error">{unreadable} session metadata record(s) unreadable</div>'
+                if unreadable
+                else '<div class="empty">No sessions captured yet</div>'
+            )
+        episodes = {
+            node.session_id: node
+            for node in self._m().wiki_store.list("episode")
+            if node.session_id
+        }
+        views = []
+        for session in sessions:
+            if not self._m().transcript_hook.is_valid_session_id(session.session_id):
+                continue
+            meta = self._session_metadata(session.session_id)
+            episode = episodes.get(session.session_id)
+            label = episode.project_label if episode and episode.scope == "project" else None
+            metadata_label = meta.get("project_label")
+            if (
+                not label
+                and isinstance(metadata_label, str)
+                and 0 < len(metadata_label) <= 80
+                and not any(character in metadata_label for character in "/\\:@")
+            ):
+                label = metadata_label
+            harness = str(
+                meta.get("harness") or (episode.harness if episode else "") or "Unknown harness"
+            )
+            day = Path(session.file_path).parent.name
+            if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", day):
+                day = str(session.started_at or "Unknown date")[:10]
+            views.append(
+                SessionView(
+                    session.session_id,
+                    day,
+                    str(session.started_at or ""),
+                    session.turn_count,
+                    session.episode_slug,
+                    label or "Global or unscoped",
+                    harness,
+                )
+            )
+        warning = (
+            f'<div class="error">{unreadable} session metadata record(s) unreadable</div>'
+            if unreadable
+            else ""
+        )
+        return warning + (
+            render_session_groups(views) if views else '<div class="empty">No valid sessions</div>'
+        )
+
+    def _session_metadata(self, session_id: str) -> dict[str, object]:
+        """Read optional session display metadata without exposing its path."""
+        path = self._m().transcript_hook.get_transcript_path(session_id).with_suffix(".meta.json")
+        if not self._confined_transcript(path):
+            return {}
+        try:
+            value = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return {}
+        return value if isinstance(value, dict) else {}
+
+    def _confined_transcript(self, path: Path) -> bool:
+        root = self._m().transcript_hook.transcripts_dir.resolve()
+        return path.resolve().is_relative_to(root)
+
+    def _frag_session_detail(self, session_id: str) -> str:
+        if not self._m().transcript_hook.is_valid_session_id(session_id):
+            return '<div class="empty">Session not found</div>'
+        jsonl_path = self._m().transcript_hook.get_transcript_path(session_id)
+        if not self._confined_transcript(jsonl_path) or not jsonl_path.exists():
+            return '<div class="empty">Session not found</div>'
+        turns: list[dict[str, object]] = []
         try:
             for line in jsonl_path.read_text(encoding="utf-8", errors="replace").splitlines():
-                line = line.strip()
-                if not line:
+                if not line.strip():
                     continue
                 try:
                     entry = json.loads(line)
                 except json.JSONDecodeError:
                     continue
-                if isinstance(entry, dict) and "role" in entry:
+                if isinstance(entry, dict) and entry.get("role") in {"user", "agent", "tool"}:
                     turns.append(entry)
         except OSError:
-            return f'<div class="empty">Cannot read transcript for {_esc(session_id)}</div>'
+            return '<div class="empty">Cannot read transcript</div>'
+        return render_replay(turns, self._session_metadata(session_id))
 
-        if not turns:
-            return '<div class="empty">Transcript is empty</div>'
-
-        html_parts = []
-        for turn in turns:
-            role = str(turn.get("role", ""))
-            content = str(turn.get("content", ""))
-            ts = str(turn.get("ts", "")) or ""
-            tool_name = turn.get("tool_name")
-            result = turn.get("result")
-            query = turn.get("query")
-
-            if role == "user":
-                html_parts.append(
-                    '<div class="turn user"><div class="role">User'
-                    + (f' <span class="timestamp">{_esc(ts)}</span>' if ts else "")
-                    + "</div>"
-                    + f'<div class="content">{_esc(content)}</div></div>'
-                )
-            elif role == "agent":
-                body_html = render_markdown(content) if content else ""
-                html_parts.append(
-                    '<div class="turn agent"><div class="role">Agent'
-                    + (f' <span class="timestamp">{_esc(ts)}</span>' if ts else "")
-                    + "</div>"
-                    + f'<div class="content">{body_html}</div></div>'
-                )
-            elif role == "tool":
-                parts = [
-                    '<div class="turn tool"><div class="role">Tool'
-                    + (f' <span class="tool-name">{_esc(tool_name)}</span>' if tool_name else "")
-                    + (f' <span class="timestamp">{_esc(ts)}</span>' if ts else "")
-                    + "</div>"
-                ]
-                if query:
-                    parts.append(
-                        f'<div class="content"><code>{_esc(str(query)[:500])}</code></div>'
-                    )
-                if result:
-                    parts.append(f'<div class="tool-result">{_esc(str(result)[:2000])}</div>')
-                parts.append("</div>")
-                html_parts.append("".join(parts))
-
-        meta_path = jsonl_path.with_suffix(".meta.json")
-        meta_line = ""
-        if meta_path.exists():
-            try:
-                meta = json.loads(meta_path.read_text(encoding="utf-8"))
-                meta_line = (
-                    f'<span class="subtle">'
-                    f"{_esc(meta.get('turn_count', '?'))} turns · "
-                    f"started {_esc(str(meta.get('started_at', '?'))[:16])} · "
-                    f"harness {_esc(meta.get('harness', '?'))}" + "</span>"
-                )
-            except (OSError, json.JSONDecodeError):
-                pass
-
-        return f'<div style="margin-bottom:.6rem">{meta_line}</div>' + "".join(html_parts)
-
-    def _frag_page_detail(self, slug: str) -> str:
+    def _frag_page_detail(self, slug: str, project_id: str | None = None) -> str:
         """Rendered Markdown view of a single memory page."""
-        node = self._m().wiki_store.read(slug)
+        if not re.fullmatch(r"[a-z0-9][a-z0-9-]*", slug):
+            return '<div class="empty">Page not found</div>'
+        if project_id is not None and project_id not in self._projects():
+            return '<div class="empty">Page not found</div>'
+        node = next(
+            (
+                candidate
+                for candidate in self._m().wiki_store.list()
+                if candidate.slug == slug and candidate.project_id == project_id
+            ),
+            None,
+        )
         if node is None:
             return '<div class="empty">Page not found</div>'
 
@@ -599,9 +583,14 @@ class VizHandler(BaseHTTPRequestHandler):
         # Provenance
         provenance = ""
         if node.transcript_ref:
+            transcript_status = (
+                "Transcript retired"
+                if node.transcript_ref.startswith("retired:")
+                else "Transcript reference"
+            )
             provenance = (
                 f'<div class="section">Provenance</div>'
-                f'<p class="subtle"><code>{_esc(node.transcript_ref)}</code></p>'
+                f'<p class="subtle">{transcript_status}: <code>{_esc(node.transcript_ref)}</code></p>'
             )
 
         # Meta line
@@ -625,7 +614,9 @@ class VizHandler(BaseHTTPRequestHandler):
     def _frag_tokens(self) -> str:
         """Token consumption chart with proper axes, labels, and gridlines."""
         metas = []
-        for meta_path in sorted(self._m().transcript_hook.transcripts_dir.glob("*.meta.json")):
+        for meta_path in sorted(self._m().transcript_hook.transcripts_dir.rglob("*.meta.json")):
+            if not self._confined_transcript(meta_path):
+                continue
             try:
                 meta = json.loads(meta_path.read_text(encoding="utf-8"))
                 if isinstance(meta, dict):
@@ -644,7 +635,11 @@ class VizHandler(BaseHTTPRequestHandler):
                 if not isinstance(usage, dict):
                     continue
                 raw = usage.get("total_tokens", 0)
-                if not isinstance(raw, (int, float)):
+                if (
+                    isinstance(raw, bool)
+                    or not isinstance(raw, (int, float))
+                    or not 0 <= raw <= MAX_CHART_TOKENS
+                ):
                     continue
                 sid = str(m.get("session_id", "?"))
                 started = str(m.get("started_at", "") or "")
@@ -790,9 +785,9 @@ def serve(data_dir: Path | None = None, port: int = DEFAULT_PORT) -> None:
     """Start the viz server. Blocks until interrupted."""
     import webbrowser
 
-    from memex.infrastructure.config import MemexConfig
+    from memex.infrastructure.config import ConfigLoader
 
-    config = MemexConfig(data_dir=data_dir) if data_dir else MemexConfig()
+    config = ConfigLoader().load(data_dir=data_dir)
 
     class BoundVizHandler(VizHandler):
         memex = Memex(config)

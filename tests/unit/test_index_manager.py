@@ -17,7 +17,21 @@ def test_initialize_is_idempotent(data_dir: Path) -> None:
     index = IndexManager(data_dir / "mem.db")
     index.initialize()
     index.initialize()
-    assert index.get_meta("schema_version") == "2"
+    assert index.get_meta("schema_version") == "4"
+
+
+def test_initialize_replaces_a_pre_namespace_disposable_index(data_dir: Path) -> None:
+    import sqlite3
+
+    data_dir.mkdir()
+    connection = sqlite3.connect(data_dir / "mem.db")
+    connection.execute("CREATE TABLE wiki_index (id TEXT PRIMARY KEY, slug TEXT NOT NULL)")
+    connection.commit()
+    connection.close()
+
+    index = IndexManager(data_dir / "mem.db")
+    columns = {row["name"] for row in index.connection.execute("PRAGMA table_info(wiki_index)")}
+    assert {"scope", "project_id", "project_label"} <= columns
 
 
 def test_upsert_updates_existing_row(data_dir: Path) -> None:
@@ -33,18 +47,84 @@ def test_upsert_updates_existing_row(data_dir: Path) -> None:
     assert index.count() == 1
 
 
+def test_get_refuses_ambiguous_duplicate_project_slug(data_dir: Path) -> None:
+    index = IndexManager(data_dir / "mem.db")
+    index.update_record(
+        _node(
+            slug="shared",
+            id="first",
+            file_path=str(data_dir / "docs/projects/git-one/entities/shared.md"),
+            scope="project",
+            project_id="a" * 24,
+        )
+    )
+    index.update_record(
+        _node(
+            slug="shared",
+            id="second",
+            file_path=str(data_dir / "docs/projects/git-two/entities/shared.md"),
+            scope="project",
+            project_id="b" * 24,
+        )
+    )
+
+    with pytest.raises(IndexManagerError, match="ambiguous index row"):
+        index.get("shared")
+    assert index.get("shared", scope="project", project_id="b" * 24, node_type="entity") is not None
+
+
 def test_remove_record_purges_links(data_dir: Path) -> None:
     index = IndexManager(data_dir / "mem.db")
     index.initialize()
     node = _node(slug="t", file_path=str(data_dir / "t.md"))
     index.update_record(node)
-    index.connection.execute("INSERT INTO wiki_links VALUES ('t', 'other')")
+    index.connection.execute(
+        "INSERT INTO wiki_links (source_scope, source_project_id, source_slug, target_slug)"
+        " VALUES ('global', '', 't', 'other')"
+    )
     index.connection.commit()
 
     index.remove_record("t")
     assert index.get("t") is None
     remaining = index.connection.execute("SELECT COUNT(*) AS n FROM wiki_links").fetchone()
     assert remaining["n"] == 0
+
+
+def test_scoped_remove_record_preserves_backlinks_to_remaining_duplicate_slug(
+    data_dir: Path,
+) -> None:
+    index = IndexManager(data_dir / "mem.db")
+    index.update_record(_node(slug="source", file_path="/source"))
+    index.update_record(
+        _node(
+            slug="shared",
+            id="first",
+            file_path="/first",
+            scope="project",
+            project_id="a" * 24,
+        )
+    )
+    index.update_record(
+        _node(
+            slug="shared",
+            id="second",
+            file_path="/second",
+            scope="project",
+            project_id="b" * 24,
+        )
+    )
+    index.connection.execute(
+        "INSERT INTO wiki_links (source_scope, source_project_id, source_slug, target_slug)"
+        " VALUES ('global', '', 'source', 'shared')"
+    )
+    index.connection.commit()
+
+    index.remove_record("shared", scope="project", project_id="a" * 24, node_type="entity")
+
+    remaining = index.connection.execute(
+        "SELECT source_slug, target_slug FROM wiki_links"
+    ).fetchall()
+    assert [(row["source_slug"], row["target_slug"]) for row in remaining] == [("source", "shared")]
 
 
 def test_body_is_full_text_searchable(data_dir: Path) -> None:

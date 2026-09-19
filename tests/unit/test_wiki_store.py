@@ -24,7 +24,7 @@ class TestWriteRead:
         stored = store.write(make_node(id=""))
         assert stored.slug == "ruff-linter"
         assert stored.id
-        assert stored.file_path == str(data_dir / "docs/entities/ruff-linter.md")
+        assert stored.file_path == str(data_dir / "docs/global/entities/ruff-linter.md")
         assert stored.content_hash == hash_body(stored.body)
 
     def test_update_preserves_stored_fields(self, data_dir: Path) -> None:
@@ -35,6 +35,278 @@ class TestWriteRead:
         assert stored.body == "updated body"
         assert stored.slug == "ruff-linter"
         assert store.list() and len(store.list()) == 1
+
+    def test_project_pages_are_isolated_by_project_namespace(self, data_dir: Path) -> None:
+        store = WikiStore(data_dir)
+        first = store.write(
+            make_node(
+                id="",
+                scope="project",
+                project_id="a" * 24,
+                project_label="One",
+                project_locator="git-memex",
+            )
+        )
+        second = store.write(
+            make_node(
+                id="",
+                scope="project",
+                project_id="b" * 24,
+                project_label="Two",
+                project_locator="git-other",
+            )
+        )
+
+        assert first.slug == second.slug == "ruff-linter"
+        assert first.file_path == str(data_dir / "docs/projects/git-memex/entities/ruff-linter.md")
+        assert second.file_path == str(data_dir / "docs/projects/git-other/entities/ruff-linter.md")
+        assert f'project_id: "{"a" * 24}"' in Path(first.file_path).read_text(encoding="utf-8")
+
+    def test_project_write_without_locator_uses_existing_directory(self, data_dir: Path) -> None:
+        store = WikiStore(data_dir)
+        first = store.write(
+            make_node(
+                id="",
+                scope="project",
+                project_id="a" * 24,
+                project_label="One",
+                project_locator="git-memex",
+            )
+        )
+        second = store.write(
+            make_node(
+                id="",
+                title="Second",
+                scope="project",
+                project_id="a" * 24,
+                project_label="One",
+            )
+        )
+
+        assert first.file_path is not None
+        assert second.file_path == str(data_dir / "docs/projects/git-memex/entities/second.md")
+
+    def test_project_write_without_existing_directory_falls_back_to_id(
+        self, data_dir: Path
+    ) -> None:
+        store = WikiStore(data_dir)
+
+        stored = store.write(
+            make_node(id="", scope="project", project_id="a" * 24, project_label="One")
+        )
+
+        assert stored.file_path == str(
+            data_dir / "docs/projects" / ("a" * 24) / "entities/ruff-linter.md"
+        )
+
+    def test_project_read_can_select_duplicate_slug_by_project_id(self, data_dir: Path) -> None:
+        store = WikiStore(data_dir)
+        first_project_id = "a" * 24
+        second_project_id = "b" * 24
+        first = store.write(
+            make_node(
+                id="",
+                scope="project",
+                project_id=first_project_id,
+                project_label="One",
+                project_locator="git-memex",
+            )
+        )
+        second = store.write(
+            make_node(
+                id="",
+                scope="project",
+                project_id=second_project_id,
+                project_label="Two",
+                project_locator="git-other",
+            )
+        )
+
+        assert first.slug == second.slug == "ruff-linter"
+        read_back = store.read(
+            "ruff-linter", "entity", scope="project", project_id=second_project_id
+        )
+        assert read_back is not None and read_back.file_path == second.file_path
+
+    def test_duplicate_same_project_key_refuses_lookup_and_scan(self, data_dir: Path) -> None:
+        store = WikiStore(data_dir)
+        project_id = "a" * 24
+        stored = store.write(
+            make_node(
+                id="",
+                scope="project",
+                project_id=project_id,
+                project_label="One",
+                project_locator="git-memex",
+            )
+        )
+        duplicate = data_dir / "docs/projects" / project_id / "entities/ruff-linter.md"
+        duplicate.parent.mkdir(parents=True)
+        duplicate.write_text(Path(stored.file_path or "").read_text(encoding="utf-8"))
+
+        with pytest.raises(WikiStoreError, match="ambiguous wiki page namespace"):
+            store.read("ruff-linter", "entity", scope="project", project_id=project_id)
+        with pytest.raises(WikiStoreError, match="ambiguous wiki page namespace"):
+            store.scan_all([])
+
+    def test_readable_project_directory_rejects_different_project_id(self, data_dir: Path) -> None:
+        store = WikiStore(data_dir)
+        store.write(
+            make_node(
+                id="",
+                scope="project",
+                project_id="a" * 24,
+                project_label="One",
+                project_locator="git-memex",
+            )
+        )
+
+        with pytest.raises(WikiStoreError, match="belongs to a different project"):
+            store.write(
+                make_node(
+                    id="",
+                    scope="project",
+                    project_id="b" * 24,
+                    project_label="Two",
+                    project_locator="git-memex",
+                )
+            )
+
+        assert not (data_dir / "docs/projects/git-memex/entities/ruff-linter-2.md").exists()
+
+    def test_legacy_project_refuses_owned_proposed_locator(self, data_dir: Path) -> None:
+        store = WikiStore(data_dir)
+        legacy_id = "a" * 24
+        store.write(make_node(id="", scope="project", project_id=legacy_id))
+        store.write(
+            make_node(
+                id="",
+                scope="project",
+                project_id="b" * 24,
+                project_locator="git-memex",
+            )
+        )
+
+        with pytest.raises(WikiStoreError, match="belongs to a different project"):
+            store.write(
+                make_node(
+                    id="",
+                    title="Another page",
+                    scope="project",
+                    project_id=legacy_id,
+                    project_locator="git-memex",
+                )
+            )
+
+        assert not (data_dir / "docs/projects" / legacy_id / "entities/another-page.md").exists()
+
+    def test_scoped_get_path_without_type_honors_project_id(self, data_dir: Path) -> None:
+        store = WikiStore(data_dir)
+        store.write(make_node(id="", scope="project", project_id="a" * 24))
+        second = store.write(make_node(id="", scope="project", project_id="b" * 24))
+
+        assert store.get_path("ruff-linter", scope="project", project_id="b" * 24) == Path(
+            second.file_path or ""
+        )
+
+    def test_symlinked_project_page_is_not_read_or_scanned(
+        self, data_dir: Path, tmp_path: Path
+    ) -> None:
+        store = WikiStore(data_dir)
+        stored = store.write(make_node(id="", scope="project", project_id="a" * 24))
+        outside = tmp_path / "outside.md"
+        outside.write_text(Path(stored.file_path or "").read_text(encoding="utf-8"))
+        page = Path(stored.file_path or "")
+        page.unlink()
+        page.symlink_to(outside)
+
+        with pytest.raises(WikiStoreError, match="symlink"):
+            store.read("ruff-linter", scope="project", project_id="a" * 24)
+        with pytest.raises(WikiStoreError, match="symlink"):
+            store.scan_all()
+
+    def test_readable_project_directory_rejects_unsafe_locator(self, data_dir: Path) -> None:
+        store = WikiStore(data_dir)
+
+        with pytest.raises(WikiStoreError, match="project locator"):
+            store.write(
+                make_node(
+                    id="",
+                    scope="project",
+                    project_id="a" * 24,
+                    project_label="One",
+                    project_locator="../escape",
+                )
+            )
+
+    def test_readable_project_directory_rejects_symlinked_projects_dir(
+        self, data_dir: Path, tmp_path: Path
+    ) -> None:
+        store = WikiStore(data_dir)
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        projects = data_dir / "docs/projects"
+        projects.parent.mkdir(parents=True, exist_ok=True)
+        projects.symlink_to(outside, target_is_directory=True)
+
+        with pytest.raises(WikiStoreError, match="symlink"):
+            store.write(
+                make_node(
+                    id="",
+                    scope="project",
+                    project_id="a" * 24,
+                    project_label="One",
+                    project_locator="git-memex",
+                )
+            )
+
+    def test_initialization_rejects_symlinked_docs_without_writing(
+        self, data_dir: Path, tmp_path: Path
+    ) -> None:
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        data_dir.mkdir(parents=True)
+        (data_dir / "docs").symlink_to(outside, target_is_directory=True)
+
+        with pytest.raises(WikiStoreError, match="symlink"):
+            WikiStore(data_dir)
+
+        assert list(outside.iterdir()) == []
+
+    def test_initialization_rejects_symlinked_global_without_writing(
+        self, data_dir: Path, tmp_path: Path
+    ) -> None:
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        global_dir = data_dir / "docs/global"
+        global_dir.parent.mkdir(parents=True)
+        global_dir.symlink_to(outside, target_is_directory=True)
+
+        with pytest.raises(WikiStoreError, match="symlink"):
+            WikiStore(data_dir)
+
+        assert list(outside.iterdir()) == []
+
+    def test_readable_project_directory_rejects_project_dir_symlink_escape(
+        self, data_dir: Path, tmp_path: Path
+    ) -> None:
+        store = WikiStore(data_dir)
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        project_dir = data_dir / "docs/projects/git-memex"
+        project_dir.parent.mkdir(parents=True, exist_ok=True)
+        project_dir.symlink_to(outside, target_is_directory=True)
+
+        with pytest.raises(WikiStoreError, match="symlink"):
+            store.write(
+                make_node(
+                    id="",
+                    scope="project",
+                    project_id="a" * 24,
+                    project_label="One",
+                    project_locator="git-memex",
+                )
+            )
 
     def test_read_missing_returns_none(self, data_dir: Path) -> None:
         store = WikiStore(data_dir)
@@ -65,11 +337,29 @@ class TestDeleteMove:
         store.write(make_node())
         node = store.move("ruff-linter", "preference")
         assert node.file_path is not None
-        assert node.file_path.endswith("docs/preferences/ruff-linter.md")
+        assert node.file_path.endswith("docs/global/preferences/ruff-linter.md")
         assert store.read("ruff-linter") is not None
+
+    def test_move_keeps_project_namespace(self, data_dir: Path) -> None:
+        store = WikiStore(data_dir)
+        store.write(make_node(scope="project", project_id="a" * 24, project_label="One"))
+        node = store.move("ruff-linter", "preference")
+        assert node.file_path is not None
+        assert node.file_path.endswith(f"docs/projects/{'a' * 24}/preferences/ruff-linter.md")
 
 
 class TestGuardrails:
+    def test_glob_slug_cannot_select_or_delete_a_page(self, data_dir: Path) -> None:
+        store = WikiStore(data_dir)
+        stored = store.write(make_node())
+
+        with pytest.raises(WikiStoreError, match="invalid wiki slug"):
+            store.read("*")
+        with pytest.raises(WikiStoreError, match="invalid wiki slug"):
+            store.delete("*")
+
+        assert Path(stored.file_path or "").exists()
+
     def test_get_path_unknown_type(self, data_dir: Path) -> None:
         with pytest.raises(WikiStoreError, match="unknown node type"):
             WikiStore(data_dir).get_path("x", "folder")
@@ -104,7 +394,7 @@ class TestListScan:
     def test_scan_all_collects_errors(self, data_dir: Path) -> None:
         store = WikiStore(data_dir)
         store.write(make_node())
-        bad = data_dir / "docs/entities/broken.md"
+        bad = data_dir / "docs/global/entities/broken.md"
         bad.write_text("garbage\n", encoding="utf-8")
         errors: list[str] = []
         nodes = store.scan_all(errors)

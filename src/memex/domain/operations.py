@@ -26,7 +26,9 @@ summary worth recalling in later sessions.
 Key constraints: type is one of "entity", "preference", "procedure",
 "summary", "episode"; importance within [0, 1]; body is Markdown and
 may include [[slug]] links to other memory nodes. Episode nodes belong
-to memex_ingest_transcript, not this tool.
+to memex_ingest_transcript, not this tool. Scope is "global" or "project";
+project writes require an opaque project_id and may include a display-only
+project_label. Same-named projects remain separate by project_id.
 
 Returns {"slug", "file_path"} of the stored node. Writing an existing
 slug updates it, preserving creation history and access counts.
@@ -35,8 +37,9 @@ Failures arrive on two channels: schema violations (wrong types,
 importance out of range) are rejected by the server with an is_error
 result naming the field; domain rejections return
 {"error": "..."} — check that key before using the result. Side
-effects: writes docs/{type}/{slug}.md and updates the search index
-and link graph.""",
+effects: writes docs/global/{type}/{slug}.md or a project page under
+docs/projects/{readable-folder}/{type}/{slug}.md (existing legacy ID-named
+folders remain in place), then updates the search index and link graph.""",
     "memex_recall": """Search stored memories with BM25 full-text ranking.
 
 When to use: at the start of a task, or whenever context from earlier
@@ -46,7 +49,9 @@ forgetting it.
 Key constraints: the query needs at least one alphanumeric token and is
 limited to 1,024 UTF-8 bytes and 64 searchable tokens; top_k within
 [1, 100] (default 10); optional node_type filter. Expired or
-soft-forgotten nodes are hidden by default.
+soft-forgotten nodes are hidden by default. Scope is "global" (all memory)
+or "project" (requires project_id); project_id selects the opaque project
+namespace, not a directory name.
 
 Returns hits ranked best-first, each with slug, title, snippet,
 node_type, importance, and file_path. Empty hits is a normal result.
@@ -111,6 +116,14 @@ by the server with an is_error result naming the field; invalid
 values return {"error": "..."} — check that key first. Re-ingesting
 an existing session_id fails. Side effects: writes transcript and
 episode files and updates the index.""",
+    "memex_clear_transcripts": """Delete every raw transcript after explicit confirmation.
+
+When to use: reclaim transcript storage while preserving the episode memory
+pages. Pass confirm=true; without it nothing is deleted. Episode pages remain
+searchable and their transcript_ref is changed to a retired marker.
+
+Returns {"cleared": int}. Errors return {"error": "..."}. Side effects:
+deletes raw JSONL and metadata transcript files only after confirmation.""",
     "memex_provenance": """Trace a memory node back to the conversation that produced it.
 
 When to use: the user asks where a memory came from, or you need to

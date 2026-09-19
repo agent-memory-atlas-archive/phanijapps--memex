@@ -49,12 +49,13 @@ def test_transcript_ingest_and_link(hook: tuple[TranscriptHook, WikiStore, Index
     meta = Path(report.meta_file)
     assert jsonl.exists() and meta.exists()
     assert jsonl.name == "sess-abc123.jsonl"
-    assert jsonl.parent.name == "transcripts"
+    assert jsonl.parent.name == "2026-09-15"
+    assert jsonl.parent.parent.name == "transcripts"
 
     episode = store.read(report.episode_node)
     assert episode is not None
     assert episode.type == "episode"
-    assert episode.transcript_ref == "transcripts/sess-abc123.jsonl"
+    assert episode.transcript_ref == "transcripts/2026-09-15/sess-abc123.jsonl"
     assert episode.session_id == "sess-abc123"
 
     assert report.turn_count == 3
@@ -92,7 +93,9 @@ def test_transcript_provenance_trace(hook: tuple[TranscriptHook, WikiStore, Inde
     provenance = transcript_hook.get_provenance(fact.slug)
     assert provenance is not None
     assert provenance.confidence == "inferred"
-    assert provenance.transcript_files == [str(transcript_hook.get_transcript_path("sess-prov"))]
+    assert provenance.transcript_files == [
+        str(transcript_hook.transcripts_dir / "2026-09-15" / "sess-prov.jsonl")
+    ]
     assert provenance.linked_episodes == [report.episode_node]
 
     direct = transcript_hook.get_provenance(report.episode_node)

@@ -121,8 +121,7 @@ def test_transcript_hook_ingests_pi_session(seeded: Path, capture: dict[str, str
     assert report["turn_count"] >= 3
 
     data_dir = seeded
-    transcript = data_dir / f"transcripts/{report['session_id']}.jsonl"
-    assert transcript.exists()
+    assert list(data_dir.glob(f"transcripts/*/{report['session_id']}.jsonl"))
 
 
 def test_transcript_hook_idempotent(seeded: Path, capture: dict[str, str]) -> None:
@@ -139,7 +138,7 @@ def test_transcript_hook_idempotent(seeded: Path, capture: dict[str, str]) -> No
     assert cli.main(args) == 0
     assert cli.main(args) == 0  # overwrite by default: no error, no duplicate
 
-    episodes = list((seeded / "docs/episodes").glob("*.md"))
+    episodes = list((seeded / "docs/global/episodes").glob("*.md"))
     assert len(episodes) == 1
 
 

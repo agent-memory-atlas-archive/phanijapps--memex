@@ -43,7 +43,7 @@ class TestFrontMatterRoundTrip:
     def test_missing_status_defaults_active(self, data_dir: Path) -> None:
         store = WikiStore(data_dir)
         store.write(_node())
-        page = data_dir / "docs/entities/plain.md"
+        page = data_dir / "docs/global/entities/plain.md"
         text = page.read_text(encoding="utf-8")
         assert 'status: "active"' in text  # explicit default is serialized
         read_back = store.read("plain")

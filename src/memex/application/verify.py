@@ -44,14 +44,25 @@ def verify(
 
     stale = 0
     for node in nodes:
-        row = memex.index_manager.get(node.slug)
+        row = memex.index_manager.get(
+            node.slug,
+            scope=node.scope,
+            project_id=node.project_id or "",
+            node_type=node.type,
+        )
         if row is None or str(row["content_hash"]) != hash_body(node.body):
             stale += 1
     checks.append(_check("index-fresh", stale == 0, f"{stale} stale or missing rows"))
 
     broken: list[str] = []
     for node in nodes:
-        broken.extend(memex.link_manager.validate_links(node.slug))
+        broken.extend(
+            memex.link_manager.validate_links(
+                node.slug,
+                source_scope=node.scope,
+                source_project_id=node.project_id or "",
+            )
+        )
     checks.append(_check("links-resolve", not broken, f"{len(broken)} broken links"))
 
     warnings: list[str] = []
@@ -63,9 +74,8 @@ def verify(
     if streak >= 3:
         warnings.append(f"{streak} consecutive zero-yield consolidations")
     if since is not None:
-        for slug in memex.index_manager.get_all_slugs():
-            row = memex.index_manager.get(slug)
-            if row is not None and row["last_access"] and str(row["last_access"]) >= since:
+        for row in memex.index_manager.get_all_records():
+            if row["last_access"] and str(row["last_access"]) >= since:
                 recall_evidence = True
                 break
         write_evidence = any(node.updated >= since for node in nodes)

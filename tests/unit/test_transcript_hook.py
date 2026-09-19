@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -45,12 +46,32 @@ def test_invalid_session_id_rejected() -> None:
 
 def test_delete_transcript_removes_everything(hook: TranscriptHook, data_dir: Path) -> None:
     report = hook.ingest(_input("sess-del"))
-    hook.delete_transcript("sess-del")
+    hook.delete_transcript("sess-del", confirm=True)
 
-    assert not (data_dir / "transcripts/sess-del.jsonl").exists()
-    assert not (data_dir / "transcripts/sess-del.meta.json").exists()
-    assert not (data_dir / "wiki/episodes/sess-del.md").exists()
-    assert hook.get_provenance(report.episode_node) is None
+    assert not list((data_dir / "transcripts").rglob("sess-del.jsonl"))
+    assert not list((data_dir / "transcripts").rglob("sess-del.meta.json"))
+    episode = hook.get_episode_by_session(report.episode_node)
+    assert episode is not None
+    assert episode.transcript_ref is not None
+    assert episode.transcript_ref.startswith("retired:")
+
+
+def test_clear_ignores_tampered_metadata_session_id_outside_transcript_tree(
+    hook: TranscriptHook, data_dir: Path
+) -> None:
+    outside = data_dir / "sensitive.jsonl"
+    outside.write_text("do not delete", encoding="utf-8")
+    meta = data_dir / "transcripts" / "2026-09-15" / "safe.meta.json"
+    meta.parent.mkdir(parents=True)
+    meta.write_text(json.dumps({"session_id": "../sensitive"}), encoding="utf-8")
+
+    assert hook.clear_transcripts(confirm=True) == 1
+    assert outside.read_text(encoding="utf-8") == "do not delete"
+
+
+def test_transcript_paths_reject_path_like_session_ids(hook: TranscriptHook) -> None:
+    with pytest.raises(ValueError, match="session_id"):
+        hook.get_transcript_path("../outside")
 
 
 def test_provenance_missing_node_returns_none(hook: TranscriptHook) -> None:

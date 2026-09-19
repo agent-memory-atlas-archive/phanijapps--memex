@@ -22,11 +22,16 @@ page externally, `memex rebuild-index` (or `memex watch`) picks it up.
 ```
 ~/.memex/
 ├── docs/
-│   ├── entities/        # people, tools, concepts
-│   ├── preferences/     # "the user prefers ruff over flake8"
-│   ├── procedures/      # rules and how-tos
-│   ├── summaries/       # synthesized overviews
-│   └── episodes/        # one per captured session
+│   ├── global/          # shared memories, grouped by type
+│   │   ├── entities/
+│   │   ├── preferences/
+│   │   ├── procedures/
+│   │   ├── summaries/
+│   │   └── episodes/
+│   └── projects/        # project memories, grouped by readable project folder
+│       └── git-memex/
+│           ├── preferences/
+│           └── episodes/
 ├── transcripts/         # raw session JSONL + metadata
 ├── mem.db               # disposable BM25 index (rebuildable)
 ├── memex.toml           # configuration
@@ -77,7 +82,7 @@ memex write --type preference --title "Deploy on Fridays" \
 memex recall "deploy"
 
 # it's a plain file — read it, edit it, commit it
-cat ~/.memex/docs/preferences/deploy-on-fridays.md
+cat ~/.memex/docs/global/preferences/deploy-on-fridays.md
 ```
 
 Version-control your memory if you like:
@@ -183,6 +188,46 @@ database URLs, JWTs) before anything is stored, replacing matches with
 typed `[REDACTED:<kind>]` markers. Redaction categories are logged; matched
 text never is.
 
+### Project memory and dashboard
+
+The durable layout separates global pages at `docs/global/<type>/` from project
+pages at `docs/projects/<project-folder>/<type>/`. The project folder is a
+readable locator, not the project identity. When memex can read a usable Git
+origin, including an enterprise or self-hosted GitLab remote, it uses the
+repository basename with a `git-` prefix, such as
+`docs/projects/git-memex/preferences/example.md`. A local Git repository
+without a usable origin and a non-Git workspace use the workspace folder name,
+such as `docs/projects/memex/preferences/example.md`.
+
+Project front matter remains the authority for the opaque `project_id` and safe
+display label. Use `--scope project --project-id <id> --project-label <name>`
+when writing, then use the same scope and id to recall only that project.
+Omitting project selectors recalls across all memory. Explicit `project_id`
+values stay supported: if that project already has pages, writes continue in
+its existing directory; otherwise memex uses an ID-named directory unless the
+caller supplies an explicit validated folder locator.
+
+Legacy ID-named project folders remain readable and rebuildable. Normal runtime
+operations do not rename, move, or merge them; an existing store move is a
+separate maintenance procedure with preview, backup, collision review, and an
+operation-specific confirmation. If two folders contain the same
+`project_id`, node type, and slug, lookup and force rebuild fail closed instead
+of choosing one page.
+
+`memex viz` starts a localhost-only, read-only dashboard. It provides direct
+links and HTMX-enhanced navigation for global and project memory, health,
+sessions, and token use. The dashboard does not write pages or transcript data.
+The Memories view shows 20 newest-first cards per page and preserves type
+and scope in direct Previous/Next URLs. Selecting a new type or scope starts on
+page one. “All memory” browses every namespace; “Global only” browses global
+pages; a project label browses that project. Dashboard search uses BM25 without
+updating access counters: “Best match” searches the chosen project first and
+falls back to all memory, while “Search everywhere” searches all namespaces.
+The Sessions view groups captured sessions by date, project label when known,
+and harness. A session replay shows separate User, AI assistant, and Tool cards;
+tool input and output have bounded previews with expandable detail and a
+truncation notice for longer values.
+
 ### Maintenance
 
 ```bash
@@ -195,6 +240,11 @@ memex info                     # counts, index state, last rebuild
 
 Store a session transcript and memex links it to an episode node — the
 foundation for tracing any memory back to the conversation that produced it.
+
+Transcript JSONL and metadata use dated directories under
+`~/.memex/transcripts/YYYY-MM-DD/`. `memex clear-transcripts --confirm` removes
+raw transcript files and retires their episode transcript links; it is an
+explicit lifecycle operation, not part of dashboard browsing.
 
 ```bash
 memex ingest-transcript --session-id sess-abc --turns-file turns.jsonl
@@ -218,8 +268,8 @@ session totals (`token_usage`) and per-turn usage
 summed across cumulative records. Older turn-only transcripts remain
 readable; repeated captures rewrite the sidecar with current totals.
 
-Ingestion writes `transcripts/sess-abc.jsonl` + `.meta.json`, creates
-`docs/episodes/sess-abc.md` with a `transcript_ref`, and indexes it. From
+Ingestion writes `transcripts/YYYY-MM-DD/sess-abc.jsonl` + `.meta.json`, creates
+`docs/global/episodes/sess-abc.md` with a `transcript_ref`, and indexes it. From
 Python or MCP, `get_provenance(slug)` / `memex_provenance` reports how a
 node traces back: **direct** (it has a transcript), **inferred** (an episode
 links to it), or **none**.
