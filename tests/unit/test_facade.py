@@ -75,6 +75,38 @@ def test_export_import_roundtrip(memex: Memex, data_dir: Path) -> None:
     assert memex.index_manager.get("export-me") is not None
 
 
+def test_export_import_roundtrip_preserves_project_scope(memex: Memex, data_dir: Path) -> None:
+    node = memex.write(
+        WriteInput(
+            type="entity",
+            title="Scoped export",
+            body="roundtrip project body",
+            scope="project",
+            project_id="a" * 24,
+            project_label="Project alpha",
+            project_locator="git-alpha",
+        )
+    )
+    export_path = data_dir.parent / "scoped-export.json"
+    document = memex.import_export.export(export_path)
+    nodes = document["nodes"]
+    assert isinstance(nodes, list)
+    exported = nodes[0]
+    assert isinstance(exported, dict)
+    assert exported["scope"] == "project"
+    assert exported["project_id"] == "a" * 24
+    assert exported["project_label"] == "Project alpha"
+
+    import shutil
+
+    shutil.rmtree(data_dir / "docs")
+    memex.import_export.import_file(export_path)
+
+    restored = memex.wiki_store.read(node.slug, "entity", scope="project", project_id="a" * 24)
+    assert restored is not None
+    assert restored.project_id == "a" * 24
+
+
 def test_rebuild_after_manual_edit(memex: Memex) -> None:
     memex.write(WriteInput(type="entity", title="Manual edit", body="original"))
     page = data_dir_page(memex)
@@ -88,7 +120,7 @@ def test_rebuild_after_manual_edit(memex: Memex) -> None:
 
 
 def data_dir_page(memex: Memex) -> Path:
-    return next((memex.data_dir / "docs/entities").glob("*.md"))
+    return next((memex.data_dir / "docs/global/entities").glob("*.md"))
 
 
 def test_apply_decay_via_facade(memex: Memex) -> None:

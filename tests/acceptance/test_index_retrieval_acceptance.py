@@ -115,7 +115,7 @@ def test_index_rebuild_from_wiki(components: dict[str, object]) -> None:
     assert count == 5
     assert fresh_index.count() == 5
     assert fresh_index.get_meta("last_index_rebuild") == "2026-09-15T00:00:00Z"
-    assert fresh_index.get_meta("schema_version") == "2"
+    assert fresh_index.get_meta("schema_version") == "4"
 
 
 def test_bm25_scoring(components: dict[str, object]) -> None:

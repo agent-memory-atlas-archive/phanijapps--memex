@@ -61,7 +61,7 @@ class TestBoundaryIntegration:
             ]
         )
         assert code == 0
-        page = next((data_dir / "docs/entities").glob("*.md"))
+        page = next((data_dir / "docs/global/entities").glob("*.md"))
         assert secret not in page.read_text(encoding="utf-8")
         assert "[REDACTED:" in page.read_text(encoding="utf-8")
 

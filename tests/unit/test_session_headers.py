@@ -103,7 +103,7 @@ class TestTranscriptWriter:
 
     def test_usage_in_meta_not_transcript(self, data_dir: Path) -> None:
         _memex, report = self._ingest(data_dir)
-        jsonl = data_dir / f"transcripts/{report.session_id}.jsonl"
+        jsonl = Path(report.transcript_file)
         lines = jsonl.read_text().splitlines()
         header = json.loads(lines[0])
         assert header["type"] == "memex_session_header"
@@ -111,7 +111,7 @@ class TestTranscriptWriter:
         assert "token_usage" not in header["meta"]  # counts never in the JSONL
         for line in lines[1:]:
             assert "token_usage" not in json.loads(line)
-        meta = json.loads((data_dir / f"transcripts/{report.session_id}.meta.json").read_text())
+        meta = json.loads(Path(report.meta_file).read_text())
         assert meta["token_usage"]["input_tokens"] == 71759
         per_turn = meta["turn_token_usage"]
         assert {entry["turn"] for entry in per_turn} == {2, 4}  # agent turns billed
@@ -150,16 +150,16 @@ class TestTranscriptWriter:
             ),
             overwrite=True,
         )
-        meta = json.loads((data_dir / f"transcripts/{report.session_id}.meta.json").read_text())
+        meta = json.loads(Path(report.meta_file).read_text())
         assert meta["token_usage"]["input_tokens"] == 90000
-        episodes = list((data_dir / "docs/episodes").glob("*.md"))
+        episodes = list((data_dir / "docs/global/episodes").glob("*.md"))
         assert len(episodes) == 1  # idempotent, no duplicate episode
 
 
 class TestReaders:
     def test_reader_skips_header(self, data_dir: Path) -> None:
         _memex, report = TestTranscriptWriter()._ingest(data_dir)
-        turns = read_transcript_turns(data_dir / f"transcripts/{report.session_id}.jsonl")
+        turns = read_transcript_turns(Path(report.transcript_file))
         assert turns and all(isinstance(turn, TurnStreamEntry) for turn in turns)
 
     def test_old_turn_only_transcripts_readable(self, tmp_path: Path) -> None:
@@ -177,7 +177,7 @@ class TestReaders:
         from memex import cli
 
         _memex, report = TestTranscriptWriter()._ingest(data_dir)
-        source = data_dir / f"transcripts/{report.session_id}.jsonl"
+        source = Path(report.transcript_file)
         code = cli.main(
             [
                 "--data-dir",

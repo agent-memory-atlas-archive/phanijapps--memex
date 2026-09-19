@@ -32,7 +32,11 @@ queue   = []
 active  = [
   { path = "docs/specs/quality-gated-retrieval/spec.md", kind = "spec", source = { mode = "repo-origin", parent = "docs/product/briefs/memory-retrieval-and-evidence.md" }, summary = "Select and ship one lexical ranker that improves hard-query accuracy and context cost within strict latency gates", needs = [] },
 ]
-shipped = []
+shipped = [
+  { path = "docs/specs/project-scoped-memory-migration/spec.md", kind = "spec", source = { mode = "repo-origin", parent = "docs/product/briefs/project-scoped-memory.md" }, summary = "Add project-scoped pages, scoped recall, and dated transcript lifecycle without runtime migration", needs = [] },
+  { path = "docs/specs/dashboard-memory-explorer/spec.md", kind = "spec", source = { mode = "repo-origin", parent = "docs/product/briefs/modern-htmx-dashboard.md" }, summary = "Paginate scoped memories and render grouped session replay in the local dashboard", needs = [] },
+  { path = "docs/specs/readable-project-folders/spec.md", kind = "spec", source = { mode = "repo-origin", parent = "none" }, summary = "Store project memory in readable Git or folder directories without merging distinct project IDs", needs = [] },
+]
 
 ["ini-001".shaping_queue]
 active  = []
@@ -42,8 +46,11 @@ backlog = []
 draft = []
 ready = [
   { path = "docs/product/briefs/memory-retrieval-and-evidence.md", kind = "brief", source = { mode = "repo-origin" }, summary = "Improve retrieval ranking, context efficiency, temporal evidence, and consolidation safety", needs = [] },
+  { path = "docs/product/briefs/modern-htmx-dashboard.md", kind = "brief", source = { mode = "repo-origin" }, summary = "Revamp Memex into a modern, dashboard-first HTMX experience", needs = [] },
 ]
 executing = []
-shipped   = []
+shipped   = [
+  { path = "docs/product/briefs/project-scoped-memory.md", kind = "brief", source = { mode = "repo-origin" }, summary = "Organize memory by project with project-level and global search", needs = [] },
+]
 withdrawn = []
 cancelled = []

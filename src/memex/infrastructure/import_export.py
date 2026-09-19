@@ -84,6 +84,9 @@ class ImportExport:
             "body": node.body,
             "links": node.links,
             "transcript_ref": node.transcript_ref,
+            "scope": node.scope,
+            "project_id": node.project_id,
+            "project_label": node.project_label,
         }
 
     def _node_from_json(self, item: dict[str, object]) -> WikiNode:
@@ -98,6 +101,17 @@ class ImportExport:
             raise ValueError("importance must be numeric")
         slug = item.get("slug")
         transcript_ref = item.get("transcript_ref")
+        scope = item.get("scope", "global")
+        project_id = item.get("project_id")
+        project_label = item.get("project_label")
+        if scope not in {"global", "project"}:
+            raise ValueError("scope must be 'global' or 'project'")
+        if scope == "project" and not isinstance(project_id, str):
+            raise ValueError("project_id is required for project scope")
+        if project_id is not None and not isinstance(project_id, str):
+            raise ValueError("project_id must be a string or null")
+        if project_label is not None and not isinstance(project_label, str):
+            raise ValueError("project_label must be a string or null")
         return WikiNode(
             type=node_type,
             title=title,
@@ -110,6 +124,9 @@ class ImportExport:
             updated=self._str(item, "updated") or utc_now_iso(),
             transcript_ref=transcript_ref if isinstance(transcript_ref, str) else None,
             links=self._str_list(item, "links"),
+            scope=str(scope),
+            project_id=project_id,
+            project_label=project_label,
         )
 
     @staticmethod

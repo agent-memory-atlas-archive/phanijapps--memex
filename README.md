@@ -37,7 +37,7 @@ solve this with infrastructure. Memex solves it with a **filesystem**:
 
 | Layer | Mechanism | Guarantee |
 |---|---|---|
-| **Pull** | 8 typed MCP tools (`memex serve-mcp`) | The model can read/write memory when it chooses |
+| **Pull** | 9 typed MCP tools (`memex serve-mcp`) | The model can read/write memory when it chooses |
 | **Push** | Harness hooks (`memex hook …`) | Memories are injected into context **every turn**; transcripts are captured automatically |
 | **Proof** | `memex verify` in CI | Health and memory-activity evidence — or the build fails |
 
@@ -69,7 +69,7 @@ memex write --type preference --title "Deploy on Fridays" \
 memex recall "deploy"
 
 # read it, edit it by hand, commit it to git
-cat ~/.memex/docs/preferences/deploy-on-fridays.md
+cat ~/.memex/docs/global/preferences/deploy-on-fridays.md
 ```
 
 <details>
@@ -91,7 +91,7 @@ memex.close()
 
 `memex_write` · `memex_recall` · `memex_consolidate` · `memex_forget` ·
 `memex_ingest_transcript` · `memex_provenance` · `memex_export` ·
-`memex_import`
+`memex_import` · `memex_clear_transcripts`
 
 ```bash
 claude mcp add memex -- memex serve-mcp
@@ -124,6 +124,27 @@ Exit 1 fails the build. Ready-made workflow: [marketplace/copilot/memex-verify.y
 | `serve-mcp` | stdio MCP server (official SDK) |
 | `rebuild-index` / `watch` | Rebuild `mem.db` from the pages; poll for hand edits |
 | `backup` / `restore` / `export` / `import` | Hardened tar.gz archives; JSON node portability |
+| `viz` | Local, read-only HTMX dashboard for memory, projects, sessions, tokens, and index health |
+| `clear-transcripts --confirm` | Remove raw dated transcripts and retire their episode links |
+
+## Projects, transcripts, and the dashboard
+
+Global memories live under `~/.memex/docs/global/`. Project memories live under
+`~/.memex/docs/projects/<opaque-project-id>/`; their Markdown front matter carries
+a safe project label. Use `memex write --scope project --project-id <id> --project-label <name>`
+to write one, and `memex recall "query" --scope project --project-id <id>` to search
+within it. Omit the project arguments to search global memory.
+
+Raw transcripts and sidecars live under `~/.memex/transcripts/YYYY-MM-DD/`.
+`memex clear-transcripts --confirm` clears those raw files and retires related
+episode transcript links; use it only when the raw session record is no longer needed.
+
+Run `memex viz` to open the localhost-only, read-only dashboard. The Memories
+view shows 20 newest-first cards per page; type and project controls keep their
+selection while Previous and Next work as normal links or HTMX updates. Search
+can look across all memory or within a selected project. Sessions are grouped
+by capture date, project label, and harness; opening one shows a readable
+User/AI/Tool replay with long tool output safely shortened.
 
 ## Documentation
 

@@ -5,9 +5,12 @@ from __future__ import annotations
 import threading
 from pathlib import Path
 
+from memex.domain.models import WikiNode
 from memex.infrastructure.index_manager import IndexManager
 from memex.infrastructure.link_manager import LinkManager
 from memex.infrastructure.wiki_store import WikiStore, hash_body
+
+ChangeKey = tuple[str, str, str, str]
 
 
 class IndexWatcher:
@@ -31,34 +34,26 @@ class IndexWatcher:
         self._store = wiki_store
         self._links = link_mgr
         self.poll_interval = poll_interval
-        self._mtimes: dict[str, float] = {}
+        self._mtimes: dict[ChangeKey, float] = {}
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self.snapshot()
 
     def snapshot(self) -> None:
-        self._mtimes = {
-            path.stem: path.stat().st_mtime
-            for path in self._wiki_dir.rglob("*.md")
-            if path.is_file()
-        }
+        self._mtimes = self._current_mtimes()
 
     def check(self) -> list[str]:
         """Slugs whose mtime differs from the last snapshot, plus deletions."""
-        changed: list[str] = []
-        current = {
-            path.stem: path.stat().st_mtime
-            for path in self._wiki_dir.rglob("*.md")
-            if path.is_file()
-        }
-        for slug, mtime in current.items():
-            if self._mtimes.get(slug) != mtime:
-                changed.append(slug)
-        for slug in self._mtimes:
-            if slug not in current:
-                changed.append(slug)
+        changed: list[ChangeKey] = []
+        current = self._current_mtimes()
+        for key, mtime in current.items():
+            if self._mtimes.get(key) != mtime:
+                changed.append(key)
+        for key in self._mtimes:
+            if key not in current:
+                changed.append(key)
         self._mtimes = current
-        return sorted(changed)
+        return [_format_key(key) for key in sorted(changed)]
 
     def reindex_changed(self) -> int:
         """Re-index pages whose content actually changed. Returns the count.
@@ -68,14 +63,19 @@ class IndexWatcher:
         a freshly computed hash instead.
         """
         count = 0
-        for slug in self.check():
-            row = self._index.get(slug)
-            node = self._store.read(slug)
+        changed = self._changed_keys()
+        for scope, project_id, node_type, slug in changed:
+            row = self._index.get(slug, scope=scope, project_id=project_id, node_type=node_type)
+            node = self._store.read(slug, node_type, scope=scope, project_id=project_id or None)
             if node is None:
                 if row is not None:
-                    self._index.remove_record(slug)
+                    self._index.remove_record(
+                        slug, scope=scope, project_id=project_id, node_type=node_type
+                    )
                     if self._links is not None:
-                        self._links.remove_slug(slug)
+                        self._links.remove_slug(
+                            slug, source_scope=scope, source_project_id=project_id
+                        )
                 continue
             if row is not None and str(row["content_hash"]) == hash_body(node.body):
                 continue  # touched but not edited
@@ -85,6 +85,23 @@ class IndexWatcher:
                 self._links.sync_node(stored)
             count += 1
         return count
+
+    def _changed_keys(self) -> list[ChangeKey]:
+        current = self._current_mtimes()
+        changed = [key for key, mtime in current.items() if self._mtimes.get(key) != mtime]
+        changed.extend(key for key in self._mtimes if key not in current)
+        self._mtimes = current
+        return sorted(changed)
+
+    def _current_mtimes(self) -> dict[ChangeKey, float]:
+        mtimes: dict[ChangeKey, float] = {}
+        for node in self._store.scan_all():
+            if node.file_path is None:
+                continue
+            path = Path(node.file_path)
+            if path.is_file():
+                mtimes[_node_key(node)] = path.stat().st_mtime
+        return mtimes
 
     def start_polling(self) -> None:
         if self.poll_interval <= 0 or self._thread is not None:
@@ -102,3 +119,16 @@ class IndexWatcher:
     def _poll_loop(self) -> None:
         while not self._stop.wait(self.poll_interval):
             self.reindex_changed()
+
+
+def _node_key(node: WikiNode) -> ChangeKey:
+    return (
+        node.scope,
+        node.project_id or "",
+        node.type,
+        node.slug,
+    )
+
+
+def _format_key(key: ChangeKey) -> str:
+    return key[3]

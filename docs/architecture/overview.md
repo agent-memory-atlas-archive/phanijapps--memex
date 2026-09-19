@@ -41,6 +41,15 @@ The CLI has two deliberate infrastructure-facing seams: harness installation
 and harness-native transcript parsing. They adapt external files and processes
 before handing normalized data to the shared application contract.
 
+The dashboard keeps `viz.py` as the public local-server seam and route adapter.
+`viz_components.py` owns the shell and scope controls; `dashboard.css` owns the
+local visual system; `viz_explorer.py` owns selection and pagination; and
+`viz_sessions.py` owns grouped session and replay rendering. Routes compose
+server-rendered fragments from those parts. Dashboard search uses the
+retriever's non-mutating read path, so GET requests do not update index access
+counters. The dashboard is a read-only localhost projection. Its durable
+trust-boundary rules live in [dashboard security](security.md).
+
 ## Runtime flows
 
 ### Write
@@ -126,10 +135,12 @@ the previous store in a timestamped directory before replacement.
 ```text
 ~/.memex/                         # overridden by MEMEX_DATA_DIR
 ├── memex.toml                    # user-owned configuration
-├── docs/<type>/<slug>.md         # authoritative memory pages
+├── docs/global/<type>/<slug>.md  # global authoritative memory pages
+├── docs/projects/git-<repo>/<type>/<slug>.md    # project pages from a Git origin
+├── docs/projects/<folder>/<type>/<slug>.md      # project pages without a usable origin
 ├── mem.db                        # disposable SQLite/FTS5 index
-├── transcripts/<session>.jsonl   # captured turns
-├── transcripts/<session>.meta.json
+├── transcripts/<yyyy-mm-dd>/<session>.jsonl     # captured turns
+├── transcripts/<yyyy-mm-dd>/<session>.meta.json
 └── logs/                         # diagnostics and operation evidence
 ```
 
@@ -140,6 +151,19 @@ an isolated `MEMEX_DATA_DIR` rather than the developer's real store.
 ## Invariants
 
 - Markdown pages remain sufficient to rebuild the searchable memory store.
+- Page front matter carries scope. Project identifiers are opaque hashes and
+  remain the namespace authority; readable project directories are locators
+  only.
+- Git origins use `git-<repo>` from the repository basename for any usable
+  provider, including enterprise GitLab. Local Git without a usable origin and
+  non-Git workspaces fall back to the workspace folder name.
+- Raw repository remotes, credentials, internal hostnames, and absolute local
+  paths are never stored in project metadata or the folder locator.
+- Legacy ID-named project folders stay readable and rebuildable until a
+  separately confirmed external migration moves them. Runtime code does not
+  move or merge existing project folders.
+- A duplicate `(project_id, node_type, slug)` across folders is an ambiguous
+  source-of-truth state; lookup and force rebuild fail closed.
 - Domain modules perform no I/O.
 - CLI and MCP behavior share services and wire datatypes.
 - Stored memories, transcript data, archive members, and tool inputs are

@@ -73,7 +73,7 @@ class TestHookMergeIdempotency:
     def test_repeated_capture_no_duplicate_episode(self, data_dir: Path) -> None:
         self._capture(data_dir, FIXTURES / "codex_rollout_compacted.jsonl")
         self._capture(data_dir, FIXTURES / "codex_rollout_compacted.jsonl")
-        episodes = list((data_dir / "docs/episodes").glob("*.md"))
+        episodes = list((data_dir / "docs/global/episodes").glob("*.md"))
         assert len(episodes) == 1
 
     def test_merge_preserves_earlier_turns_after_shorter_parse(
@@ -82,7 +82,8 @@ class TestHookMergeIdempotency:
         # First capture: full rollout.
         self._capture(data_dir, FIXTURES / "codex_rollout_compacted.jsonl")
         session_id = "sess-comp"  # header-provided id wins
-        first = read_transcript_turns(data_dir / f"transcripts/{session_id}.jsonl")
+        transcript = next(data_dir.glob(f"transcripts/*/{session_id}.jsonl"))
+        first = read_transcript_turns(transcript)
         assert len(first) == 9
 
         # Simulate post-compaction fresh rollout: shorter, divergent tail.
@@ -91,7 +92,7 @@ class TestHookMergeIdempotency:
         # Keep meta + the post-compaction conversation only.
         shorter.write_text("\n".join([lines[0], *lines[9:]]) + "\n", encoding="utf-8")
         self._capture(data_dir, shorter)
-        merged = read_transcript_turns(data_dir / f"transcripts/{session_id}.jsonl")
+        merged = read_transcript_turns(transcript)
 
         contents = [turn.content for turn in merged]
         assert "first user turn" in contents  # earlier turns preserved
@@ -146,7 +147,7 @@ class TestWrapper:
         entries = self._log_lines()
         assert entries[-1]["category"] == "ok"
         assert entries[-1]["event"] == "agent-turn-complete"
-        assert (self.data / "transcripts/sess-comp.jsonl").exists()
+        assert list(self.data.glob("transcripts/*/sess-comp.jsonl"))
 
     def test_post_compact_event_captures(self) -> None:
         code = self._run(

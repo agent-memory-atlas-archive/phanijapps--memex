@@ -52,6 +52,7 @@ _LEGACY_BASE_SQL = """
 SELECT
     w.slug, w.file_path, w.title, w.node_type, w.importance,
     w.tags, w.created, w.updated, w.last_access, w.transcript_ref, w.status,
+    w.scope, w.project_id, w.project_label,
     bm25(wiki_fts) AS score,
     snippet(wiki_fts, 2, '<mark>', '</mark>', '...', 32) AS body_snippet,
     snippet(wiki_fts, 1, '<mark>', '</mark>', '...', 32) AS title_snippet
@@ -63,6 +64,7 @@ _WINNER_SELECT_SQL = """
 SELECT
     w.slug, w.file_path, w.title, w.node_type, w.importance,
     w.tags, w.created, w.updated, w.last_access, w.transcript_ref, w.status,
+    w.scope, w.project_id, w.project_label,
     bm25(wiki_fts, 1.0, 1.0, :body_weight, 1.0) AS score,
     snippet(wiki_fts, 2, '<mark>', '</mark>', '...', :snippet_tokens)
         AS body_snippet,
@@ -256,6 +258,8 @@ class BM25Retriever:
         tags: list[str] | None = None,
         include_expired: bool = False,
         include_inactive: bool = False,
+        scope: str = "global",
+        project_id: str | None = None,
     ) -> RecallResult:
         """Search the index and return ranked hits with metadata.
 
@@ -294,6 +298,8 @@ class BM25Retriever:
             tags=tags,
             include_expired=include_expired,
             include_inactive=include_inactive,
+            scope=scope,
+            project_id=project_id,
         )
         self.record_access(result.hits)
         return result
@@ -307,6 +313,8 @@ class BM25Retriever:
         tags: list[str] | None = None,
         include_expired: bool = False,
         include_inactive: bool = False,
+        scope: str = "global",
+        project_id: str | None = None,
     ) -> RecallResult:
         """Search the promoted ranker without mutating access statistics."""
         limit = self._validated_limit(top_k)
@@ -322,6 +330,8 @@ class BM25Retriever:
             tags=tags,
             include_expired=include_expired,
             include_inactive=include_inactive,
+            scope=scope,
+            project_id=project_id,
             extra_params={
                 "body_weight": _WINNER_BODY_WEIGHT,
                 "snippet_tokens": _WINNER_SNIPPET_TOKENS,
@@ -337,6 +347,8 @@ class BM25Retriever:
                 tags=tags,
                 include_expired=include_expired,
                 include_inactive=include_inactive,
+                scope=scope,
+                project_id=project_id,
                 extra_params={
                     "body_weight": _WINNER_BODY_WEIGHT,
                     "snippet_tokens": _WINNER_SNIPPET_TOKENS,
@@ -370,6 +382,8 @@ class BM25Retriever:
         tags: list[str] | None,
         include_expired: bool,
         include_inactive: bool,
+        scope: str = "global",
+        project_id: str | None = None,
         extra_params: dict[str, object] | None = None,
     ) -> tuple[list[sqlite3.Row], int]:
         clauses, params = self._eligibility_filters(
@@ -378,6 +392,8 @@ class BM25Retriever:
             tags=tags,
             include_expired=include_expired,
             include_inactive=include_inactive,
+            scope=scope,
+            project_id=project_id,
         )
         params.update(extra_params or {})
         params.update({"match": match, "top_k": limit})
@@ -392,9 +408,9 @@ class BM25Retriever:
         return self._dedupe_rows(rows), int(total["n"])
 
     def _hits_from_rows(self, rows: list[sqlite3.Row], limit: int) -> list[RecallHit]:
-        links = self._links([str(row["slug"]) for row in rows])
+        links = self._links(rows)
         return [
-            self._to_hit(row, rank, links.get(str(row["slug"]), []))
+            self._to_hit(row, rank, links.get(self._row_key(row), []))
             for rank, row in enumerate(rows[:limit], start=1)
         ]
 
@@ -406,12 +422,21 @@ class BM25Retriever:
         tags: list[str] | None,
         include_expired: bool,
         include_inactive: bool,
+        scope: str = "global",
+        project_id: str | None = None,
     ) -> tuple[list[str], dict[str, object]]:
         clauses: list[str] = []
         params: dict[str, object] = {}
         if node_type is not None:
             clauses.append("w.node_type = :node_type")
             params["node_type"] = node_type
+        if scope == "project":
+            if not project_id:
+                raise ValueError("project_id is required for project recall")
+            clauses.append("w.scope = 'project' AND w.project_id = :project_id")
+            params["project_id"] = project_id
+        elif scope != "global":
+            raise ValueError("scope must be 'global' or 'project'")
         if time_range is not None:
             clauses.append("w.updated >= :time_from AND w.updated <= :time_to")
             params["time_from"], params["time_to"] = time_range
@@ -431,12 +456,12 @@ class BM25Retriever:
     @staticmethod
     def _dedupe_rows(rows: list[sqlite3.Row]) -> list[sqlite3.Row]:
         deduped: list[sqlite3.Row] = []
-        seen: set[str] = set()
+        seen: set[tuple[str, str, str]] = set()
         for row in rows:
-            slug = str(row["slug"])
-            if slug in seen:
+            key = (str(row["scope"]), str(row["project_id"]), str(row["slug"]))
+            if key in seen:
                 continue
-            seen.add(slug)
+            seen.add(key)
             deduped.append(row)
         return deduped
 
@@ -449,24 +474,36 @@ class BM25Retriever:
         with self._lock, self._conn:
             self._conn.executemany(
                 "UPDATE wiki_index SET access_count = access_count + 1, last_access = ?"
-                " WHERE slug = ?",
-                [(now, hit.slug) for hit in hits],
+                " WHERE slug = ? AND scope = ? AND project_id = ?",
+                [(now, hit.slug, hit.scope, hit.project_id or "") for hit in hits],
             )
 
-    def _links(self, slugs: list[str]) -> dict[str, list[str]]:
-        if not slugs:
+    def _links(self, rows: list[sqlite3.Row]) -> dict[tuple[str, str, str], list[str]]:
+        if not rows:
             return {}
-        placeholders = ",".join("?" for _ in slugs)
+        keys = [self._row_key(row) for row in rows]
+        placeholders = ",".join("(?, ?, ?)" for _ in keys)
+        params = tuple(value for key in keys for value in key)
         sql = (
-            "SELECT source_slug, target_slug FROM wiki_links "  # noqa: S608
-            f"WHERE source_slug IN ({placeholders}) ORDER BY source_slug, target_slug"
+            "SELECT source_scope, source_project_id, source_slug, target_slug FROM wiki_links "  # noqa: S608
+            f"WHERE (source_scope, source_project_id, source_slug) IN ({placeholders}) "
+            "ORDER BY source_scope, source_project_id, source_slug, target_slug"
         )
         with self._lock:
-            rows = self._conn.execute(sql, tuple(slugs)).fetchall()
-        links: dict[str, list[str]] = {}
-        for row in rows:
-            links.setdefault(str(row["source_slug"]), []).append(str(row["target_slug"]))
+            link_rows = self._conn.execute(sql, params).fetchall()
+        links: dict[tuple[str, str, str], list[str]] = {}
+        for row in link_rows:
+            key = (
+                str(row["source_scope"]),
+                str(row["source_project_id"]),
+                str(row["source_slug"]),
+            )
+            links.setdefault(key, []).append(str(row["target_slug"]))
         return links
+
+    @staticmethod
+    def _row_key(row: sqlite3.Row) -> tuple[str, str, str]:
+        return (str(row["scope"]), str(row["project_id"]), str(row["slug"]))
 
     def _to_hit(self, row: sqlite3.Row, rank: int, links: list[str]) -> RecallHit:
         body_snippet = str(row["body_snippet"])
@@ -498,4 +535,7 @@ class BM25Retriever:
             last_access=row["last_access"],
             transcript_ref=row["transcript_ref"],
             links=links,
+            scope=str(row["scope"]),
+            project_id=str(row["project_id"]) or None,
+            project_label=str(row["project_label"]) if row["project_label"] else None,
         )

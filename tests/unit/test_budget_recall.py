@@ -126,8 +126,19 @@ class TestBudgetPacker:  # AC-0001
             tags: list[str] | None = None,
             include_expired: bool = False,
             include_inactive: bool = False,
+            scope: str = "global",
+            project_id: str | None = None,
         ) -> RecallResult:
-            del top_k, node_type, time_range, tags, include_expired, include_inactive
+            del (
+                top_k,
+                node_type,
+                time_range,
+                tags,
+                include_expired,
+                include_inactive,
+                scope,
+                project_id,
+            )
             return RecallResult(
                 query=query,
                 hits=list(hits),

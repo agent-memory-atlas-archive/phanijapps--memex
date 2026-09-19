@@ -169,7 +169,9 @@ class BackupRestore:
 
     @staticmethod
     def _count_files(directory: Path, pattern: str) -> int:
-        return len(list(directory.rglob(pattern))) if directory.is_dir() else 0
+        if not directory.is_dir():
+            return 0
+        return sum(1 for path in directory.rglob(pattern) if path.is_file())
 
     @staticmethod
     def _add_text(archive: tarfile.TarFile, name: str, text: str) -> None:

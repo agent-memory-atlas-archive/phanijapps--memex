@@ -279,8 +279,9 @@ def test_concurrent_retrieve_hydrates_links_consistently(data_dir: Path) -> None
     target = store.write(WikiNode(type="entity", title="Target Node", body="linked target", id=""))
     index.build([source, target])
     index.connection.execute(
-        "INSERT INTO wiki_links (source_slug, target_slug) VALUES (?, ?)",
-        (source.slug, target.slug),
+        "INSERT INTO wiki_links (source_scope, source_project_id, source_slug, target_slug)"
+        " VALUES (?, ?, ?, ?)",
+        (source.scope, source.project_id or "", source.slug, target.slug),
     )
     index.connection.commit()
 

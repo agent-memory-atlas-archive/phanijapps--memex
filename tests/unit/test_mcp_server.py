@@ -6,6 +6,7 @@ import pytest
 
 from memex import mcp_server
 from memex.infrastructure.bm25_retriever import MAX_QUERY_BYTES, MAX_QUERY_TOKENS
+from memex.infrastructure.workspace_context import ProjectContext
 from memex.mcp_server import (
     memex_export,
     memex_forget,
@@ -26,7 +27,7 @@ def isolated_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Pa
     mcp_server._reset()
 
 
-def test_all_eight_tools_registered() -> None:
+def test_all_memory_tools_registered() -> None:
     import asyncio
 
     server = mcp_server.build_server()
@@ -37,6 +38,7 @@ def test_all_eight_tools_registered() -> None:
         "memex_consolidate",
         "memex_forget",
         "memex_ingest_transcript",
+        "memex_clear_transcripts",
         "memex_provenance",
         "memex_export",
         "memex_import",
@@ -50,6 +52,7 @@ EXPECTED_HINTS = {
     "memex_consolidate": {"read_only": False, "destructive": False, "idempotent": False},
     "memex_forget": {"read_only": False, "destructive": True, "idempotent": False},
     "memex_ingest_transcript": {"read_only": False, "destructive": False, "idempotent": False},
+    "memex_clear_transcripts": {"read_only": False, "destructive": True, "idempotent": True},
     "memex_provenance": {"read_only": True, "destructive": False, "idempotent": True},
     "memex_export": {"read_only": True, "destructive": False, "idempotent": True},
     "memex_import": {"read_only": False, "destructive": False, "idempotent": True},
@@ -143,6 +146,45 @@ def test_write_recall_forget_flow() -> None:
 
     forgotten = memex_forget("mcp-entity")
     assert forgotten["forgotten"] is True
+
+
+def test_project_write_uses_derived_readable_locator(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        mcp_server,
+        "project_context",
+        lambda cwd: ProjectContext("a" * 24, "memex", "git-memex"),
+    )
+
+    written = memex_write(
+        type="preference",
+        title="MCP project",
+        body="via mcp tool",
+        scope="project",
+    )
+
+    assert str(written["file_path"]).endswith("docs/projects/git-memex/preferences/mcp-project.md")
+
+
+def test_project_write_with_explicit_id_uses_id_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        mcp_server,
+        "project_context",
+        lambda cwd: ProjectContext("a" * 24, "memex", "git-memex"),
+    )
+
+    written = memex_write(
+        type="preference",
+        title="MCP project",
+        body="via mcp tool",
+        scope="project",
+        project_id="b" * 24,
+    )
+
+    assert str(written["file_path"]).endswith(
+        f"docs/projects/{'b' * 24}/preferences/mcp-project.md"
+    )
 
 
 def test_errors_are_sanitized() -> None:
