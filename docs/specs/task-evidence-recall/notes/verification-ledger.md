@@ -29,3 +29,26 @@
   at either ceiling; extending either limit requires another explicit decision.
 - Keep the comparison runner reusable across coding-agent harnesses, including
   pi, without changing the existing Memex recall operation.
+
+## T2 comparison
+
+- 2026-09-20: A capped pi comparison completed 24 task plans after one
+  format-related interruption. Total observed model-run time was about 170.06
+  seconds and observed catalog-equivalent use was about $0.00165; the first
+  malformed response lacked retained usage, so that cost is a lower bound.
+  The model candidate completed 7/24 evidence sets, tied broad recall, and
+  trailed the linked-summary baseline's 11/24. The candidate stayed
+  unpromoted. The exact scores, accounting limits, and per-task model usage
+  are in `docs/research/2026-09-20-task-evidence-focused-candidate.md`.
+- 2026-09-20: Full suite: 695 passed, one skipped, 90.24% coverage in 236.27
+  seconds. The additional retry regression test passed. Ruff, mypy, and strict
+  MkDocs passed.
+
+## T3 documentation check
+
+- 2026-09-20: With `MEMEX_DATA_DIR` set to a fresh `/tmp/memex-guide-*`
+  directory, `uv run memex write --scope global --type entity --title "Ruff
+  linter" --body "Fast Python linter written in Rust." --tags tool,lint
+  --importance 0.8` wrote `ruff-linter`. `uv run memex recall "Ruff linter"
+  --top-k 5` returned that active page as its only hit. Strict MkDocs built
+  successfully after the guide and architecture updates.

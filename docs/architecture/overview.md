@@ -84,6 +84,15 @@ tie-break. The ranker is local SQLite FTS5 only: no embeddings, network service,
 runtime `rgapi`, subprocess search, or new required dependency is on the recall
 path.
 
+The task-evidence candidate lives in `eval/task_evidence_model.py`, outside the
+production recall path. It compares goal-based questions from a coding harness
+with the held-out baseline under wall-time and catalog-equivalent spend limits.
+One pi run completed 7 of 24 retrieval tasks, below the linked-summary
+baseline's 11 of 24. The promotion gate kept the candidate experimental; no
+question planner, summary assembly, or model call runs in ordinary recall or
+hook injection. See `docs/research/2026-09-20-task-evidence-focused-candidate.md`
+for the measured result and its limits.
+
 ### Retrieval evaluation security controls
 
 Retrieval evaluation uses independent offline workloads and treats every source

@@ -129,6 +129,15 @@ memex recall "linting" --type preference --tag tooling
 - Recall stays offline and dependency-light: no embeddings, hosted search,
   runtime `rgapi`, or `rg` executable is required.
 
+For a coding task, start with a concrete question about the facts you need and
+use the returned page links to check their source. The experimental
+task-evidence evaluation tested model-written questions on 24 held-out tasks:
+they completed 7 tasks, the same as one broad query, while a linked task
+summary completed 11. This result has not changed the CLI, MCP tools, or
+harness guidance. The measurements and limits are recorded in
+`docs/research/2026-09-20-task-evidence-focused-candidate.md` in the source
+repository.
+
 ### forget
 
 ```bash
