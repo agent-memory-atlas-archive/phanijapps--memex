@@ -161,6 +161,9 @@ class TestShellPage:
         code, body = _get(port, "/")
         assert code == 200
         assert "memex" in body
+        assert 'class="brand" href="/" aria-current="page" aria-label="Memex home"' in body
+        assert '<svg viewBox="0 0 64 64" aria-hidden="true"' in body
+        assert "<span>memex</span>" in body
         assert 'src="/htmx.js"' in body
         assert 'href="/style.css"' in body
         assert 'href="/view/memories"' in body

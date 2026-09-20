@@ -28,6 +28,8 @@ from memex.infrastructure.harness_installer import (
     SUPPORTED,
     default_marketplace,
     install_harness,
+    packaged_marketplace,
+    uninstall_harness,
 )
 from memex.infrastructure.harness_transcripts import (
     HARNESSES,
@@ -155,6 +157,11 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Skip MCP server registration (hooks/adapters only)",
     )
 
+    uninstall = sub.add_parser("uninstall", help="Remove a harness adapter; keep Memex data")
+    uninstall.add_argument("harness", choices=list(SUPPORTED))
+    uninstall.add_argument("--home", type=Path, default=None, help="Override HOME (testing)")
+    uninstall.add_argument("--from", dest="marketplace", type=Path, default=None)
+
     harness = sub.add_parser("harness", help="Harness integration management (alias of install)")
     harness_sub = harness.add_subparsers(dest="harness_command", required=True)
     harness_install = harness_sub.add_parser("install", help="Install a harness adapter")
@@ -169,6 +176,12 @@ def _build_parser() -> argparse.ArgumentParser:
     harness_install.add_argument(
         "--home", type=Path, default=None, help="Override HOME for install targets (testing)"
     )
+    harness_uninstall = harness_sub.add_parser("uninstall", help="Remove a harness adapter")
+    harness_uninstall.add_argument("name", choices=list(SUPPORTED))
+    harness_uninstall.add_argument(
+        "--home", type=Path, default=None, help="Override HOME (testing)"
+    )
+    harness_uninstall.add_argument("--from", dest="marketplace", type=Path, default=None)
 
     hook = sub.add_parser(
         "hook", help="Harness lifecycle hooks: context injection and transcript capture"
@@ -292,6 +305,30 @@ def _run_install(args: argparse.Namespace) -> int:
             "harness": report.harness,
             "files_written": report.files_written,
             "files_merged": report.files_merged,
+            "notes": report.notes,
+        }
+    )
+    return 0
+
+
+def _run_uninstall(args: argparse.Namespace) -> int:
+    name = args.harness if args.command == "uninstall" else args.name
+    marketplace = (
+        None
+        if name == "custom"
+        else args.marketplace or packaged_marketplace() or default_marketplace()
+    )
+    home = args.home if args.home is not None else Path.home()
+    try:
+        report = uninstall_harness(name, marketplace or Path("."), home=home, project=Path.cwd())
+    except FileNotFoundError as exc:
+        print(f"memex: {exc}", file=sys.stderr)
+        return 1
+    _emit(
+        {
+            "harness": report.harness,
+            "files_removed": report.files_removed,
+            "files_updated": report.files_updated,
             "notes": report.notes,
         }
     )
@@ -544,6 +581,11 @@ def _run(args: argparse.Namespace) -> int:
 
     if args.command == "hook":
         return _run_hook(args)
+
+    if args.command == "uninstall" or (
+        args.command == "harness" and args.harness_command == "uninstall"
+    ):
+        return _run_uninstall(args)
 
     if args.command in ("harness", "install"):
         return _run_install(args)

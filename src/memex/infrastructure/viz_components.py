@@ -58,7 +58,18 @@ PAGE_SHELL = """<!doctype html>
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>memex dashboard</title><link rel="stylesheet" href="/style.css"><script src="/htmx.js"></script></head>
-<body><div class="app-shell"><aside class="sidebar"><a class="brand" href="/">memex</a>
+<body><div class="app-shell"><aside class="sidebar"><a class="brand" href="/" aria-label="Memex home">
+<svg viewBox="0 0 64 64" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+<defs><linearGradient id="brand-gradient" x1="0" y1="0" x2="1" y2="1">
+<stop offset="0" stop-color="#0F766E"/><stop offset="1" stop-color="#134E4A"/>
+</linearGradient></defs>
+<rect width="64" height="64" rx="14" fill="url(#brand-gradient)"/>
+<path d="M 15 46 L 15 22 L 27 36 L 39 22 L 51 36 L 51 46" fill="none"
+stroke="#F0FDFA" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="15" cy="22" r="5" fill="#5EEAD4"/>
+<circle cx="39" cy="22" r="5" fill="#5EEAD4"/>
+<circle cx="51" cy="36" r="5" fill="#5EEAD4"/>
+</svg><span>memex</span></a>
 <nav aria-label="Dashboard">
 <a href="/" hx-get="/overview" hx-target="#main" hx-push-url="/">Overview</a>
 <a href="/view/memories" hx-get="/pages" hx-target="#main" hx-push-url="/view/memories">Memories</a>

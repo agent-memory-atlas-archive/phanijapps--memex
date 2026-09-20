@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -63,6 +64,17 @@ def default_marketplace(explicit: Path | None = None) -> Path:
     cwd_candidate = Path.cwd() / "marketplace"
     if cwd_candidate.is_dir():
         return cwd_candidate
+    packaged = packaged_marketplace()
+    if packaged is not None:
+        return packaged
+    raise FileNotFoundError(
+        "marketplace directory not found (not in ./marketplace, the package, "
+        "or the repository). Reinstall from source: uv tool install . --force"
+    )
+
+
+def packaged_marketplace() -> Path | None:
+    """Find assets shipped with a wheel or beside an editable install."""
     # __file__ is .../memex/infrastructure/: the wheel bundles marketplace
     # at .../memex/marketplace, and editable installs reach the repo root
     # three parents up from infrastructure/.
@@ -73,10 +85,7 @@ def default_marketplace(explicit: Path | None = None) -> Path:
     editable_repo = package_dir.parent.parent.parent / "marketplace"
     if editable_repo.is_dir():
         return editable_repo
-    raise FileNotFoundError(
-        "marketplace directory not found (not in ./marketplace, the package, "
-        "or the repository). Reinstall from source: uv tool install . --force"
-    )
+    return None
 
 
 def init_memex(data_dir: Path, *, consolidation_provider: str | None = None) -> InstallReport:
@@ -117,9 +126,19 @@ class InstallReport:
     with_mcp: bool = True
 
 
-def _backup(path: Path) -> None:
+@dataclass(slots=True)
+class UninstallReport:
+    """Memex adapter changes removed without deleting the memory store."""
+
+    harness: str
+    files_removed: list[str] = field(default_factory=list)
+    files_updated: list[str] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)
+
+
+def _backup(path: Path, *, suffix: str = ".memex-bak") -> None:
     if path.exists():
-        shutil.copy2(path, path.with_suffix(path.suffix + ".memex-bak"))
+        shutil.copy2(path, path.with_suffix(path.suffix + suffix))
 
 
 def _install_pi(marketplace: Path, home: Path, project: Path, report: InstallReport) -> None:
@@ -371,6 +390,332 @@ def install_harness(
         init = init_memex(_memex_data_dir(), consolidation_provider=_HARNESS_PROVIDERS[harness])
         report.files_written.extend(init.files_written)
         report.notes.extend(init.notes)
+    return report
+
+
+def _remove_owned_file(path: Path, source: Path, report: UninstallReport) -> None:
+    if not path.exists():
+        return
+    if path.is_symlink() or path.read_bytes() != source.read_bytes():
+        report.notes.append(f"{path} changed since install; left untouched")
+        return
+    path.unlink()
+    report.files_removed.append(str(path))
+
+
+def _remove_snippet(path: Path, snippets: tuple[str, ...], report: UninstallReport) -> None:
+    if not path.exists():
+        return
+    if path.is_symlink():
+        report.notes.append(f"{path} is a symlink; left untouched")
+        return
+    original = path.read_text(encoding="utf-8")
+    updated = original
+    for snippet in snippets:
+        if snippet in updated:
+            updated = (
+                updated.replace("\n\n" + snippet, "\n", 1)
+                if "\n\n" + snippet in updated
+                else updated.replace(snippet, "", 1)
+            )
+            break
+    if updated == original:
+        report.notes.append(f"{path} has no exact Memex snippet; left untouched")
+        return
+    _backup(path, suffix=".memex-uninstall-bak")
+    if updated.strip():
+        path.write_text(updated, encoding="utf-8")
+        report.files_updated.append(str(path))
+    else:
+        path.unlink()
+        report.files_removed.append(str(path))
+
+
+def _remove_claude_hooks(path: Path, report: UninstallReport) -> None:
+    if not path.exists():
+        return
+    if path.is_symlink():
+        report.notes.append(f"{path} is a symlink; left untouched")
+        return
+    try:
+        settings = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        report.notes.append(f"{path} is not valid JSON; left untouched")
+        return
+    if not isinstance(settings, dict) or not isinstance(settings.get("hooks"), dict):
+        return
+    hooks = settings["hooks"]
+    commands = {
+        "SessionStart": "memex hook session-start",
+        "UserPromptSubmit": "memex hook prompt",
+        "SessionEnd": "memex hook transcript --harness claude",
+    }
+    changed = False
+    for event, command in commands.items():
+        groups = hooks.get(event)
+        if not isinstance(groups, list):
+            continue
+        kept = []
+        for group in groups:
+            if not isinstance(group, dict) or not isinstance(group.get("hooks"), list):
+                kept.append(group)
+                continue
+            remaining = [
+                hook
+                for hook in group["hooks"]
+                if not (
+                    isinstance(hook, dict)
+                    and hook.get("type") == "command"
+                    and hook.get("command") == command
+                )
+            ]
+            if len(remaining) != len(group["hooks"]):
+                changed = True
+                if remaining or len(group) > 1:
+                    kept.append({**group, "hooks": remaining})
+            else:
+                kept.append(group)
+        if kept:
+            hooks[event] = kept
+        else:
+            hooks.pop(event, None)
+    if not changed:
+        return
+    if not hooks:
+        settings.pop("hooks")
+    _backup(path, suffix=".memex-uninstall-bak")
+    if settings:
+        path.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
+        report.files_updated.append(str(path))
+    else:
+        path.unlink()
+        report.files_removed.append(str(path))
+
+
+def _unregister_claude_mcp(home: Path, report: UninstallReport) -> None:
+    if home != Path.home():
+        report.notes.append(
+            "Claude MCP registration uses the real home; skipped for --home override"
+        )
+        return
+    claude_bin = shutil.which("claude")
+    if claude_bin is None:
+        report.notes.append(
+            "Claude CLI unavailable; remove user MCP entry with `claude mcp remove memex -s user`"
+        )
+        return
+    try:
+        listing = subprocess.run(  # noqa: S603 - executable resolved from PATH
+            [claude_bin, "mcp", "get", "memex"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        report.notes.append("Claude MCP lookup failed; user entry left untouched")
+        return
+    if listing.returncode != 0:
+        return
+    lines = {line.strip() for line in listing.stdout.splitlines()}
+    if (
+        not {
+            "Scope: User config (available in all your projects)",
+            "Command: memex",
+            "Args: serve-mcp",
+        }
+        <= lines
+    ):
+        report.notes.append("Claude MCP entry differs from Memex install; left untouched")
+        return
+    try:
+        removed = subprocess.run(  # noqa: S603 - executable resolved from PATH
+            [claude_bin, "mcp", "remove", "memex", "-s", "user"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        report.notes.append("Claude MCP removal failed; user entry remains")
+        return
+    if removed.returncode == 0:
+        report.notes.append("Claude user MCP entry removed")
+    else:
+        report.notes.append("Claude MCP removal failed; user entry remains")
+
+
+def _uninstall_claude(
+    marketplace: Path, home: Path, project: Path, report: UninstallReport
+) -> None:
+    _remove_claude_hooks(home / ".claude" / "settings.json", report)
+    snippet = (marketplace / "claude" / "CLAUDE-snippet.md").read_text(encoding="utf-8")
+    _remove_snippet(project / "CLAUDE.md", (snippet,), report)
+    _unregister_claude_mcp(home, report)
+
+
+def _remove_codex_config(path: Path, wrapper: Path, report: UninstallReport) -> bool:
+    if not path.exists():
+        return True
+    if path.is_symlink():
+        report.notes.append(f"{path} is a symlink; left untouched")
+        return False
+    original = path.read_text(encoding="utf-8")
+    try:
+        parsed = tomllib.loads(original)
+    except tomllib.TOMLDecodeError:
+        report.notes.append(f"{path} is not valid TOML; left untouched")
+        return False
+    lines = original.splitlines(keepends=True)
+    notify_line = f'notify = ["{wrapper}"]'
+    has_installed_notify = notify_line in {line.strip() for line in lines}
+    if str(wrapper) in original and not has_installed_notify:
+        report.notes.append(f"{path} still references the Memex notify wrapper; left untouched")
+        return False
+    if has_installed_notify:
+        lines = [line for line in lines if line.strip() != notify_line]
+    servers = parsed.get("mcp_servers")
+    server = servers.get("memex") if isinstance(servers, dict) else None
+    if server is not None and server != {"command": "memex", "args": ["serve-mcp"]}:
+        report.notes.append(f"{path} has a modified Memex MCP entry; left untouched")
+    elif server == {"command": "memex", "args": ["serve-mcp"]}:
+        start = next(
+            (i for i, line in enumerate(lines) if line.strip() == "[mcp_servers.memex]"), None
+        )
+        if start is not None:
+            end = next(
+                (i for i in range(start + 1, len(lines)) if lines[i].lstrip().startswith("[")),
+                len(lines),
+            )
+            del lines[start:end]
+    updated = "".join(lines)
+    if updated != original:
+        _backup(path, suffix=".memex-uninstall-bak")
+        if updated.strip():
+            path.write_text(updated, encoding="utf-8")
+            report.files_updated.append(str(path))
+        else:
+            path.unlink()
+            report.files_removed.append(str(path))
+    return str(wrapper) not in updated
+
+
+def _uninstall_codex(marketplace: Path, home: Path, project: Path, report: UninstallReport) -> None:
+    wrapper = home / ".codex" / "memex-codex-notify.py"
+    if _remove_codex_config(home / ".codex" / "config.toml", wrapper, report):
+        _remove_owned_file(wrapper, marketplace / "codex" / "memex-codex-notify.py", report)
+    snippet = (marketplace / "codex" / "AGENTS-snippet.md").read_text(encoding="utf-8")
+    _remove_snippet(project / "AGENTS.md", (snippet, _OLD_CODEX_SNIPPET), report)
+
+
+def _uninstall_pi(marketplace: Path, home: Path, project: Path, report: UninstallReport) -> None:
+    _remove_owned_file(
+        home / ".pi" / "agent" / "extensions" / "memex.ts",
+        marketplace / "pi" / "extensions" / "memex.ts",
+        report,
+    )
+
+
+def _uninstall_copilot(
+    marketplace: Path, home: Path, project: Path, report: UninstallReport
+) -> None:
+    _remove_owned_file(
+        project / ".github" / "workflows" / "memex-verify.yml",
+        marketplace / "copilot" / "memex-verify.yml",
+        report,
+    )
+    snippet = (marketplace / "copilot" / "copilot-instructions-snippet.md").read_text(
+        encoding="utf-8"
+    )
+    _remove_snippet(
+        project / ".github" / "copilot-instructions.md", (snippet, _OLD_COPILOT_SNIPPET), report
+    )
+    path = project / ".vscode" / "mcp.json"
+    if not path.exists():
+        return
+    if path.is_symlink():
+        report.notes.append(f"{path} is a symlink; left untouched")
+        return
+    try:
+        config = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        report.notes.append(f"{path} is not valid JSON; left untouched")
+        return
+    if not isinstance(config, dict) or not isinstance(config.get("servers"), dict):
+        return
+    servers = config["servers"]
+    if "memex" not in servers:
+        return
+    if servers["memex"] != {"command": "memex", "args": ["serve-mcp"]}:
+        report.notes.append(f"{path} has a modified Memex MCP entry; left untouched")
+        return
+    del servers["memex"]
+    if not servers:
+        del config["servers"]
+    _backup(path, suffix=".memex-uninstall-bak")
+    if config:
+        path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+        report.files_updated.append(str(path))
+    else:
+        path.unlink()
+        report.files_removed.append(str(path))
+
+
+_UNINSTALLERS = {
+    "pi": _uninstall_pi,
+    "claude": _uninstall_claude,
+    "codex": _uninstall_codex,
+    "copilot": _uninstall_copilot,
+}
+
+_UNINSTALL_ASSETS = {
+    "pi": ("pi/extensions/memex.ts",),
+    "claude": ("claude/CLAUDE-snippet.md",),
+    "codex": ("codex/memex-codex-notify.py", "codex/AGENTS-snippet.md"),
+    "copilot": ("copilot/memex-verify.yml", "copilot/copilot-instructions-snippet.md"),
+}
+
+_UNINSTALL_TARGETS = {
+    "pi": (("home", ".pi/agent/extensions/memex.ts"),),
+    "claude": (("home", ".claude/settings.json"), ("project", "CLAUDE.md")),
+    "codex": (
+        ("home", ".codex/config.toml"),
+        ("home", ".codex/memex-codex-notify.py"),
+        ("project", "AGENTS.md"),
+    ),
+    "copilot": (
+        ("project", ".github/workflows/memex-verify.yml"),
+        ("project", ".github/copilot-instructions.md"),
+        ("project", ".vscode/mcp.json"),
+    ),
+}
+
+
+def uninstall_harness(
+    harness: str, marketplace: Path, *, home: Path, project: Path
+) -> UninstallReport:
+    """Remove exact adapter entries; keep memories and modified files."""
+    if harness == "custom":
+        return UninstallReport(
+            harness="custom", notes=["No adapter to remove; Memex data retained"]
+        )
+    try:
+        uninstaller = _UNINSTALLERS[harness]
+    except KeyError:
+        raise ValueError(f"unknown harness {harness!r}; expected one of {SUPPORTED}") from None
+    if not marketplace.is_dir():
+        raise FileNotFoundError(f"marketplace directory not found: {marketplace}")
+    for relative in _UNINSTALL_ASSETS[harness]:
+        asset = marketplace / relative
+        if not asset.is_file():
+            raise FileNotFoundError(f"marketplace asset not found: {asset}")
+    for root_name, relative in _UNINSTALL_TARGETS[harness]:
+        root = home if root_name == "home" else project
+        path = root / relative
+        if not path.resolve(strict=False).is_relative_to(root.resolve(strict=False)):
+            raise ValueError(f"uninstall target leaves its root: {path}")
+    report = UninstallReport(harness=harness)
+    uninstaller(marketplace, home, project, report)
     return report
 
 
