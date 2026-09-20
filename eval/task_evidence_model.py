@@ -68,6 +68,15 @@ class ModelRunLimits:
     spend_limit_usd: float = MODEL_SPEND_LIMIT_USD
 
 
+def _finite_positive_number(value: object) -> bool:
+    return (
+        isinstance(value, int | float)
+        and not isinstance(value, bool)
+        and math.isfinite(value)
+        and value > 0
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class ModelUsage:
     prompt_tokens: int = 0
@@ -136,11 +145,24 @@ class HarnessQuestionPlanner:
     model_id: str | None = None
     price_per_1k_prompt_tokens_usd: float | None = None
     price_per_1k_completion_tokens_usd: float | None = None
+    max_prompt_tokens: int | None = None
     max_completion_tokens: int | None = None
     cost_source: str | None = None
     billing_mode: Literal["usd", "plan_credits"] = "usd"
 
     def plan(self, tasks: list[TaskQuestionInput], limits: ModelRunLimits) -> QuestionRun:
+        if (
+            not isinstance(limits.wall_seconds, int)
+            or isinstance(limits.wall_seconds, bool)
+            or limits.wall_seconds <= 0
+        ):
+            return _blocked_question_run(
+                self.harness, self, limits, "model run has no positive integer wall limit"
+            )
+        if not _finite_positive_number(limits.spend_limit_usd):
+            return _blocked_question_run(
+                self.harness, self, limits, "model run has no finite positive spend limit"
+            )
         executable = self.argv[0] if self.argv else ""
         if not executable or shutil.which(executable) is None:
             return _blocked_question_run(
@@ -164,11 +186,13 @@ class HarnessQuestionPlanner:
                 f"{self.harness} run has no verified billing source",
             )
         if (
-            self.price_per_1k_prompt_tokens_usd is None
-            or self.price_per_1k_prompt_tokens_usd <= 0
-            or self.price_per_1k_completion_tokens_usd is None
-            or self.price_per_1k_completion_tokens_usd <= 0
-            or self.max_completion_tokens is None
+            not _finite_positive_number(self.price_per_1k_prompt_tokens_usd)
+            or not _finite_positive_number(self.price_per_1k_completion_tokens_usd)
+            or not isinstance(self.max_prompt_tokens, int)
+            or isinstance(self.max_prompt_tokens, bool)
+            or self.max_prompt_tokens <= 0
+            or not isinstance(self.max_completion_tokens, int)
+            or isinstance(self.max_completion_tokens, bool)
             or self.max_completion_tokens <= 0
         ):
             return _blocked_question_run(
@@ -184,6 +208,7 @@ def pi_question_planner(
     *,
     price_per_1k_prompt_tokens_usd: float | None = None,
     price_per_1k_completion_tokens_usd: float | None = None,
+    max_prompt_tokens: int | None = None,
     max_completion_tokens: int | None = None,
     cost_source: str | None = None,
     billing_mode: Literal["usd", "plan_credits"] = "usd",
@@ -211,6 +236,7 @@ def pi_question_planner(
         model_id=model_id,
         price_per_1k_prompt_tokens_usd=price_per_1k_prompt_tokens_usd,
         price_per_1k_completion_tokens_usd=price_per_1k_completion_tokens_usd,
+        max_prompt_tokens=max_prompt_tokens,
         max_completion_tokens=max_completion_tokens,
         cost_source=cost_source,
         billing_mode=billing_mode,
@@ -407,11 +433,15 @@ def _run_harness_questions(
     started = time.monotonic()
     for task in tasks:
         prompt = planner.prompt_template.format(name=task["name"], goal=task["goal"])
+        if estimate_tokens(prompt) > (planner.max_prompt_tokens or 0):
+            return _incomplete_question_run(
+                planner.harness, planner, limits, started, usage, plans, "prompt bound"
+            )
         task_usage = ModelUsage()
         for attempt in range(2):
             remaining = limits.wall_seconds - (time.monotonic() - started)
-            reserve = _worst_case_call_spend(prompt, planner)
-            catalog_reserve = _worst_case_catalog_estimate(prompt, planner)
+            reserve = _worst_case_call_spend(planner)
+            catalog_reserve = _worst_case_catalog_estimate(planner)
             if remaining <= 0:
                 reason = "time"
                 break
@@ -444,8 +474,14 @@ def _run_harness_questions(
             if not _has_billable_usage(latest_usage):
                 reason = "missing usage"
                 break
-            usage = _add_usage(usage, latest_usage, planner)
-            task_usage = _add_usage(task_usage, latest_usage, planner)
+            usage_record = cast(ModelUsage, latest_usage)
+            usage = _add_usage(usage, usage_record, planner)
+            task_usage = _add_usage(task_usage, usage_record, planner)
+            if usage_record.prompt_tokens > (
+                planner.max_prompt_tokens or 0
+            ) or usage_record.completion_tokens > (planner.max_completion_tokens or 0):
+                reason = "usage bound"
+                break
             if (
                 usage.spend_usd > limits.spend_limit_usd
                 or usage.catalog_estimate_usd > limits.spend_limit_usd
@@ -550,6 +586,17 @@ def _usage_from_event(event: dict[str, object]) -> ModelUsage | None:
         return None
     token_usage = cast(dict[str, object], raw)
     prompt = _usage_int(token_usage, ("prompt_tokens", "input_tokens", "input"))
+    if (
+        "input" in token_usage
+        and "prompt_tokens" not in token_usage
+        and "input_tokens" not in token_usage
+    ):
+        cache_read = _usage_int(token_usage, ("cacheRead",))
+        cache_write = _usage_int(token_usage, ("cacheWrite",))
+        if min(prompt, cache_read, cache_write) < 0:
+            prompt = -1
+        else:
+            prompt += cache_read + cache_write
     completion = _usage_int(token_usage, ("completion_tokens", "output_tokens", "output"))
     spend = _usage_cost(token_usage)
     return ModelUsage(prompt_tokens=prompt, completion_tokens=completion, spend_usd=spend)
@@ -572,13 +619,12 @@ def _add_usage(
         return current
     prompt_tokens = current.prompt_tokens + latest.prompt_tokens
     completion_tokens = current.completion_tokens + latest.completion_tokens
+    observed_cost = max(latest.spend_usd, _estimated_spend(latest, planner))
     if planner.billing_mode == "plan_credits":
         spend = current.spend_usd
-        catalog_estimate = current.catalog_estimate_usd + (
-            latest.spend_usd or _estimated_spend(latest, planner)
-        )
+        catalog_estimate = current.catalog_estimate_usd + observed_cost
     else:
-        spend = current.spend_usd + (latest.spend_usd or _estimated_spend(latest, planner))
+        spend = current.spend_usd + observed_cost
         catalog_estimate = current.catalog_estimate_usd
     return ModelUsage(
         prompt_tokens=prompt_tokens,
@@ -639,15 +685,15 @@ def _estimated_spend(usage: ModelUsage, planner: HarnessQuestionPlanner) -> floa
     )
 
 
-def _worst_case_call_spend(prompt: str, planner: HarnessQuestionPlanner) -> float:
+def _worst_case_call_spend(planner: HarnessQuestionPlanner) -> float:
     if planner.billing_mode == "plan_credits":
         return 0.0
-    return _worst_case_catalog_estimate(prompt, planner)
+    return _worst_case_catalog_estimate(planner)
 
 
-def _worst_case_catalog_estimate(prompt: str, planner: HarnessQuestionPlanner) -> float:
+def _worst_case_catalog_estimate(planner: HarnessQuestionPlanner) -> float:
     usage = ModelUsage(
-        prompt_tokens=estimate_tokens(prompt),
+        prompt_tokens=planner.max_prompt_tokens or 0,
         completion_tokens=planner.max_completion_tokens or 0,
     )
     return _estimated_spend(usage, planner)

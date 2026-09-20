@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import math
 import subprocess
 import sys
 from pathlib import Path
@@ -328,6 +329,7 @@ def test_harness_run_reserves_worst_case_spend_before_subprocess(
         model_id="fake/model",
         price_per_1k_prompt_tokens_usd=1.0,
         price_per_1k_completion_tokens_usd=1.0,
+        max_prompt_tokens=100,
         max_completion_tokens=10_000,
         cost_source="test upper bound",
     )
@@ -338,6 +340,239 @@ def test_harness_run_reserves_worst_case_spend_before_subprocess(
 
     assert run.status == "incomplete"
     assert run.blocked_reason == "spend reserve"
+    assert run.plans == []
+
+
+def test_harness_requires_input_context_bound_before_subprocess(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_run(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        raise AssertionError("subprocess must not run without a model input bound")
+
+    monkeypatch.setattr(task_evidence_model, "_run_command", fail_run)
+    planner = HarnessQuestionPlanner(
+        harness="fake",
+        argv=(sys.executable,),
+        prompt_template="{goal}",
+        model_id="fake/model",
+        price_per_1k_prompt_tokens_usd=0.001,
+        price_per_1k_completion_tokens_usd=0.001,
+        max_completion_tokens=1,
+        cost_source="test rates and context",
+    )
+
+    run = planner.plan(
+        [{"name": "Task", "goal": "tiny goal"}],
+        ModelRunLimits(wall_seconds=300, spend_limit_usd=5.0),
+    )
+
+    assert run.status == "blocked"
+    assert run.plans == []
+
+
+def test_harness_reserves_full_input_context_before_subprocess(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_run(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        raise AssertionError("subprocess must not run without input spend reserve")
+
+    monkeypatch.setattr(task_evidence_model, "_run_command", fail_run)
+    planner = HarnessQuestionPlanner(
+        harness="fake",
+        argv=(sys.executable,),
+        prompt_template="{goal}",
+        model_id="fake/model",
+        price_per_1k_prompt_tokens_usd=0.001,
+        price_per_1k_completion_tokens_usd=0.001,
+        max_prompt_tokens=10_000,
+        max_completion_tokens=1,
+        cost_source="test rates and context",
+    )
+
+    run = planner.plan(
+        [{"name": "Task", "goal": "tiny goal"}],
+        ModelRunLimits(wall_seconds=300, spend_limit_usd=0.005),
+    )
+
+    assert run.status == "incomplete"
+    assert run.blocked_reason == "spend reserve"
+    assert run.plans == []
+
+
+@pytest.mark.parametrize("invalid_value", [math.nan, math.inf, -math.inf])
+def test_harness_rejects_nonfinite_spend_limits_before_subprocess(
+    monkeypatch: pytest.MonkeyPatch, invalid_value: float
+) -> None:
+    def fail_run(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        raise AssertionError("subprocess must not run with an invalid spend bound")
+
+    monkeypatch.setattr(task_evidence_model, "_run_command", fail_run)
+    planner = HarnessQuestionPlanner(
+        harness="fake",
+        argv=(sys.executable,),
+        prompt_template="{goal}",
+        model_id="fake/model",
+        price_per_1k_prompt_tokens_usd=0.001,
+        price_per_1k_completion_tokens_usd=0.001,
+        max_prompt_tokens=100,
+        max_completion_tokens=100,
+        cost_source="test rates",
+    )
+
+    run = planner.plan(
+        [{"name": "Task", "goal": "tiny goal"}],
+        ModelRunLimits(wall_seconds=300, spend_limit_usd=invalid_value),
+    )
+
+    assert run.status == "blocked"
+    assert run.plans == []
+
+
+@pytest.mark.parametrize("invalid_limit", [True, "5"])
+def test_harness_rejects_non_numeric_spend_limit_before_subprocess(
+    monkeypatch: pytest.MonkeyPatch, invalid_limit: object
+) -> None:
+    def fail_run(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        raise AssertionError("subprocess must not run with an invalid spend limit")
+
+    monkeypatch.setattr(task_evidence_model, "_run_command", fail_run)
+    planner = HarnessQuestionPlanner(
+        harness="fake",
+        argv=(sys.executable,),
+        prompt_template="{goal}",
+        model_id="fake/model",
+        price_per_1k_prompt_tokens_usd=0.001,
+        price_per_1k_completion_tokens_usd=0.001,
+        max_prompt_tokens=100,
+        max_completion_tokens=100,
+        cost_source="test rates",
+    )
+
+    run = planner.plan(
+        [{"name": "Task", "goal": "tiny goal"}],
+        ModelRunLimits(wall_seconds=300, spend_limit_usd=cast(float, invalid_limit)),
+    )
+
+    assert run.status == "blocked"
+    assert run.plans == []
+
+
+@pytest.mark.parametrize("invalid_limit", [math.nan, math.inf, -math.inf, 1.5, True, 0, -1])
+def test_harness_rejects_invalid_wall_limit_before_subprocess(
+    monkeypatch: pytest.MonkeyPatch, invalid_limit: float
+) -> None:
+    def fail_run(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        raise AssertionError("subprocess must not run with an invalid wall limit")
+
+    monkeypatch.setattr(task_evidence_model, "_run_command", fail_run)
+    planner = HarnessQuestionPlanner(
+        harness="fake",
+        argv=(sys.executable,),
+        prompt_template="{goal}",
+        model_id="fake/model",
+        price_per_1k_prompt_tokens_usd=0.001,
+        price_per_1k_completion_tokens_usd=0.001,
+        max_prompt_tokens=100,
+        max_completion_tokens=100,
+        cost_source="test rates",
+    )
+
+    run = planner.plan(
+        [{"name": "Task", "goal": "tiny goal"}],
+        ModelRunLimits(wall_seconds=cast(int, invalid_limit), spend_limit_usd=5.0),
+    )
+
+    assert run.status == "blocked"
+    assert run.plans == []
+
+
+@pytest.mark.parametrize("invalid_value", [math.nan, math.inf, -math.inf])
+def test_harness_rejects_nonfinite_catalog_rates_before_subprocess(
+    monkeypatch: pytest.MonkeyPatch, invalid_value: float
+) -> None:
+    def fail_run(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        raise AssertionError("subprocess must not run with an invalid catalog rate")
+
+    monkeypatch.setattr(task_evidence_model, "_run_command", fail_run)
+    planner = HarnessQuestionPlanner(
+        harness="fake",
+        argv=(sys.executable,),
+        prompt_template="{goal}",
+        model_id="fake/model",
+        price_per_1k_prompt_tokens_usd=invalid_value,
+        price_per_1k_completion_tokens_usd=0.001,
+        max_prompt_tokens=100,
+        max_completion_tokens=100,
+        cost_source="test rates",
+    )
+
+    run = planner.plan(
+        [{"name": "Task", "goal": "tiny goal"}],
+        ModelRunLimits(wall_seconds=300, spend_limit_usd=5.0),
+    )
+
+    assert run.status == "blocked"
+    assert run.plans == []
+
+
+@pytest.mark.parametrize(
+    ("prompt_rate", "completion_rate"),
+    [(True, 0.001), (0.001, True), ("0.001", 0.001)],
+)
+def test_harness_rejects_non_numeric_catalog_rates_before_subprocess(
+    monkeypatch: pytest.MonkeyPatch, prompt_rate: object, completion_rate: object
+) -> None:
+    def fail_run(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        raise AssertionError("subprocess must not run with an invalid catalog rate")
+
+    monkeypatch.setattr(task_evidence_model, "_run_command", fail_run)
+    planner = HarnessQuestionPlanner(
+        harness="fake",
+        argv=(sys.executable,),
+        prompt_template="{goal}",
+        model_id="fake/model",
+        price_per_1k_prompt_tokens_usd=cast(float, prompt_rate),
+        price_per_1k_completion_tokens_usd=cast(float, completion_rate),
+        max_prompt_tokens=100,
+        max_completion_tokens=100,
+        cost_source="test rates",
+    )
+
+    run = planner.plan(
+        [{"name": "Task", "goal": "tiny goal"}],
+        ModelRunLimits(wall_seconds=300, spend_limit_usd=5.0),
+    )
+
+    assert run.status == "blocked"
+    assert run.plans == []
+
+
+@pytest.mark.parametrize("invalid_ceiling", [math.nan, math.inf, 1.5, True, 0])
+def test_harness_rejects_invalid_completion_ceiling_before_subprocess(
+    monkeypatch: pytest.MonkeyPatch, invalid_ceiling: float
+) -> None:
+    def fail_run(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        raise AssertionError("subprocess must not run with an invalid token ceiling")
+
+    monkeypatch.setattr(task_evidence_model, "_run_command", fail_run)
+    planner = HarnessQuestionPlanner(
+        harness="fake",
+        argv=(sys.executable,),
+        prompt_template="{goal}",
+        model_id="fake/model",
+        price_per_1k_prompt_tokens_usd=0.001,
+        price_per_1k_completion_tokens_usd=0.001,
+        max_prompt_tokens=100,
+        max_completion_tokens=cast(int, invalid_ceiling),
+        cost_source="test rates",
+    )
+
+    run = planner.plan(
+        [{"name": "Task", "goal": "tiny goal"}],
+        ModelRunLimits(wall_seconds=300, spend_limit_usd=5.0),
+    )
+
+    assert run.status == "blocked"
     assert run.plans == []
 
 
@@ -394,6 +629,7 @@ def test_plan_credit_billing_mode_allows_zero_usd_dollar_reserve(
         billing_mode="plan_credits",
         price_per_1k_prompt_tokens_usd=0.001,
         price_per_1k_completion_tokens_usd=0.001,
+        max_prompt_tokens=100,
         max_completion_tokens=100,
     )
 
@@ -415,6 +651,53 @@ def test_plan_credit_billing_mode_allows_zero_usd_dollar_reserve(
     assert run.plans[0].usage.catalog_estimate_usd == 0.7
 
 
+@pytest.mark.parametrize("billing_mode", ["usd", "plan_credits"])
+def test_harness_reported_cost_cannot_understate_local_token_estimate(
+    monkeypatch: pytest.MonkeyPatch, billing_mode: Literal["usd", "plan_credits"]
+) -> None:
+    output = json.dumps(
+        {
+            "type": "message_end",
+            "message": {
+                "role": "assistant",
+                "content": [{"type": "text", "text": '{"queries": ["question"]}'}],
+                "usage": {"input": 10_000, "output": 1, "cost": {"total": 0.000001}},
+            },
+        }
+    )
+    calls = 0
+
+    def fake_run(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        nonlocal calls
+        calls += 1
+        return subprocess.CompletedProcess(args=["fake"], returncode=0, stdout=output, stderr="")
+
+    monkeypatch.setattr(task_evidence_model, "_run_command", fake_run)
+    planner = HarnessQuestionPlanner(
+        harness="fake",
+        argv=(sys.executable,),
+        prompt_template="{goal}",
+        model_id="fake/model",
+        price_per_1k_prompt_tokens_usd=0.001,
+        price_per_1k_completion_tokens_usd=0.001,
+        max_prompt_tokens=100,
+        max_completion_tokens=1,
+        cost_source="test rates",
+        billing_mode=billing_mode,
+    )
+
+    run = planner.plan(
+        [{"name": "Task", "goal": "tiny goal"}],
+        ModelRunLimits(wall_seconds=300, spend_limit_usd=0.005),
+    )
+
+    assert calls == 1
+    assert run.status == "incomplete"
+    assert run.blocked_reason == "usage bound"
+    assert max(run.usage.spend_usd, run.usage.catalog_estimate_usd) >= 0.010001
+    assert run.plans == []
+
+
 def test_plan_credit_billing_mode_still_enforces_catalog_equivalent_reserve(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -429,6 +712,7 @@ def test_plan_credit_billing_mode_still_enforces_catalog_equivalent_reserve(
         model_id="fake/model",
         price_per_1k_prompt_tokens_usd=1.0,
         price_per_1k_completion_tokens_usd=1.0,
+        max_prompt_tokens=100,
         max_completion_tokens=10_000,
         cost_source="verified coding-plan catalog estimate",
         billing_mode="plan_credits",
@@ -460,6 +744,7 @@ def test_harness_malformed_output_is_incomplete_without_promotion(
         model_id="fake/model",
         price_per_1k_prompt_tokens_usd=0.001,
         price_per_1k_completion_tokens_usd=0.001,
+        max_prompt_tokens=100,
         max_completion_tokens=1,
         cost_source="verified billing",
     )
@@ -503,6 +788,7 @@ def test_harness_retries_invalid_questions_and_counts_both_calls(
         model_id="fake/model",
         price_per_1k_prompt_tokens_usd=0.001,
         price_per_1k_completion_tokens_usd=0.001,
+        max_prompt_tokens=100,
         max_completion_tokens=100,
         cost_source="verified catalog estimate",
     )
@@ -558,6 +844,7 @@ def test_invalid_harness_usage_stops_before_next_call(
         model_id="fake/model",
         price_per_1k_prompt_tokens_usd=0.001,
         price_per_1k_completion_tokens_usd=0.001,
+        max_prompt_tokens=100,
         max_completion_tokens=100,
         cost_source="verified billing",
     )
@@ -602,6 +889,7 @@ def test_billing_modes_require_usage_telemetry_before_next_call(
         model_id="fake/model",
         price_per_1k_prompt_tokens_usd=0.001,
         price_per_1k_completion_tokens_usd=0.001,
+        max_prompt_tokens=100,
         max_completion_tokens=1,
         cost_source="verified billing",
         billing_mode=billing_mode,
@@ -695,6 +983,33 @@ def test_pi_style_json_output_yields_questions_and_usage() -> None:
     assert usage.prompt_tokens == 1200
     assert usage.completion_tokens == 300
     assert usage.spend_usd == 0.004
+
+
+def test_pi_cached_input_is_counted_in_prompt_tokens() -> None:
+    output = json.dumps(
+        {
+            "type": "message_end",
+            "message": {
+                "role": "assistant",
+                "content": [{"type": "text", "text": '{"queries": ["question"]}'}],
+                "usage": {
+                    "input": 28,
+                    "output": 186,
+                    "cacheRead": 448,
+                    "cacheWrite": 22,
+                    "totalTokens": 684,
+                    "cost": {"total": 0.004},
+                },
+            },
+        }
+    )
+
+    parsed = task_evidence_model._parse_harness_json(output)
+
+    usage = parsed["usage"]
+    assert isinstance(usage, ModelUsage)
+    assert usage.prompt_tokens == 498
+    assert usage.completion_tokens == 186
 
 
 def test_p95_latency_uses_nearest_rank_for_24_tasks() -> None:

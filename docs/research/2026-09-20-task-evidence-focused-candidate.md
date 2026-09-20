@@ -54,9 +54,19 @@ invoice dollar charge for these calls was not available. The runner's
 `spend_usd=0` means it did not attribute per-call invoice dollars, not that
 the provider consumed no quota. The first malformed response's usage was not
 captured by the original parser, so the all-attempt token and catalog totals
-are lower bounds. The ceiling remained conservative because the continuation
-used a reduced 260-second, $4.99 limit and reserved maximum output before
-each call.
+are lower bounds. The continuation used a reduced 260-second, $4.99 limit and
+reserved maximum output before each call, but its pre-call reserve estimated
+input from the visible prompt rather than bounding harness input and cache
+tokens. The historical run cannot prove a strict pre-call $5 ceiling, though
+its observed catalog-equivalent usage stayed far below it.
+
+The original parser also omitted pi's `cacheRead` and `cacheWrite` tokens from
+its prompt-token count. Later evaluator code counts them, requires a declared
+model input-context bound alongside time and spend limits before a harness
+call, and uses the greater of reported cost and the local token-based estimate
+for its spend gate. The historical per-task
+token table below cannot be corrected without rerunning the model, so it
+remains a lower bound; no additional model run was made for this correction.
 
 The successful continuation recorded model use for every task without
 retaining goals, prompts, generated questions, or memory contents:
@@ -103,12 +113,18 @@ this run's discarded plans.
 receives only task names and goals and returns one to three questions per task.
 The pi adapter disables tools, extensions, skills, prompt templates, context
 files, project-local approvals, startup network checks, and session storage.
-It requires a pinned model, a cost source, positive catalog rates, and maximum
-output tokens. It checks remaining wall time and worst-case catalog-equivalent
-spend before each model call, then records the observed usage. Another harness
+It requires a pinned model, a cost source, positive catalog rates, and declared
+maximum input and output tokens. It reserves the maximum input, including
+possible cache tokens, before each model call and checks remaining wall time.
+Another harness
 can implement the same planner contract without changing Memex recall.
 
-The evaluated configuration was:
+On 2026-09-20, `pi --list-models glm-5.3-flash` listed a 1M-token context and
+131.1K maximum output for the selected model. A new run can use those catalog
+bounds after verifying them again. The pre-call cost limit depends on the
+harness honoring that context bound; the runner stops after any call whose
+reported usage exceeds it, but cannot undo that call's cost. The corrected
+configuration is:
 
 ```python
 import json
@@ -128,6 +144,7 @@ report = run_model_comparison(
         cost_source="ZCode Coding Plan /api/coding/paas/v4",
         price_per_1k_prompt_tokens_usd=0.000075,
         price_per_1k_completion_tokens_usd=0.00025,
+        max_prompt_tokens=1_000_000,
         max_completion_tokens=131072,
     ),
     limits=ModelRunLimits(wall_seconds=300, spend_limit_usd=5.0),

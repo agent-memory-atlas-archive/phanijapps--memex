@@ -52,3 +52,8 @@ needs its own ceiling.
    approved time and spend limit, test completed coding behavior and a poisoned
    memory, and apply the task-evidence spec's recall, cost, latency, scope, and
    safety gates. Update installed guidance only if every gate passes.
+
+The evaluator's cache-token and cost-limit corrections are implemented on the
+`feat/task-evidence-continuity` branch. Automatic retention of per-task traces,
+fresh frozen task labels, task-directed retrieval, and promotion checks remain
+open.
