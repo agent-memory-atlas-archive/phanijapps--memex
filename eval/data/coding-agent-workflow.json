@@ -1,0 +1,271 @@
+{
+  "source_revision": "2f77664cdd1fc99f86abe97285d7c20d4e935f39",
+  "project_id": "aaaaaaaaaaaaaaaaaaaaaaaa",
+  "other_project_id": "bbbbbbbbbbbbbbbbbbbbbbbb",
+  "memories": [
+    {
+      "title": "Claude hooks",
+      "type": "procedure",
+      "body": "Claude Code SessionStart and UserPromptSubmit hooks inject context; SessionEnd ingests the session transcript. The installer also adds scope guidance to CLAUDE.md.",
+      "source": "docs/gitpages/guide.md",
+      "scope": "project",
+      "evidence": "SessionStart and UserPromptSubmit inject context"
+    },
+    {
+      "title": "Transcript episode",
+      "type": "entity",
+      "body": "The transcript hook normalizes harness turns, stores dated JSONL and metadata, and creates an episode page with a transcript_ref. Provenance can trace a node back to that session.",
+      "source": "docs/architecture/overview.md",
+      "scope": "project",
+      "evidence": "an episode page links back to the transcript"
+    },
+    {
+      "title": "Hook injection",
+      "type": "procedure",
+      "body": "The push layer runs at session start and on prompts to inject relevant memories without waiting for a model tool call.",
+      "source": "docs/gitpages/guide.md",
+      "scope": "project",
+      "evidence": "MCP tools alone depend on the model choosing to call them"
+    },
+    {
+      "title": "Write scope",
+      "type": "procedure",
+      "body": "MCP memory writes require an explicit global or project scope. Workspace architecture, conventions, and decisions belong to project scope; ambiguous facts default to project.",
+      "source": "docs/gitpages/guide.md",
+      "scope": "project",
+      "evidence": "MCP writes require an explicit `scope`"
+    },
+    {
+      "title": "Derived project identity",
+      "type": "entity",
+      "body": "When project scope is selected without an ID, the CLI or MCP server derives an opaque project identity from its working directory. The readable folder name is only a locator.",
+      "source": "docs/gitpages/guide.md",
+      "scope": "project",
+      "evidence": "working directory of the CLI or MCP server process"
+    },
+    {
+      "title": "Project recall filter",
+      "type": "procedure",
+      "body": "Project recall requires the same opaque project_id used for project writes; it searches that namespace. Unqualified recall searches across all memory.",
+      "source": "docs/gitpages/guide.md",
+      "scope": "project",
+      "evidence": "use the same scope and id to recall only that project"
+    },
+    {
+      "title": "Markdown source truth",
+      "type": "entity",
+      "body": "Markdown pages under the data directory are durable source of truth. SQLite FTS5 and run logs are derived state, so losing the index must not lose memory pages.",
+      "source": "docs/architecture/overview.md",
+      "scope": "project",
+      "evidence": "Markdown pages are the source of truth"
+    },
+    {
+      "title": "Index rebuild",
+      "type": "procedure",
+      "body": "IndexManager mirrors Markdown pages into SQLite. The rebuild-index command reconstructs derived SQLite state from the pages after an index failure.",
+      "source": "docs/architecture/overview.md",
+      "scope": "project",
+      "evidence": "`rebuild-index` reconstructs derived SQLite"
+    },
+    {
+      "title": "Verify checks",
+      "type": "procedure",
+      "body": "memex verify checks page parsing, index freshness, links, and optional recall and write activity evidence; CI can fail when evidence is missing.",
+      "source": "docs/architecture/overview.md",
+      "scope": "project",
+      "evidence": "`memex verify` checks page parsing"
+    },
+    {
+      "title": "Five MCP tools",
+      "type": "entity",
+      "body": "The stdio MCP server exposes write, recall, consolidate, forget, and provenance as model-facing tools with typed schemas.",
+      "source": "docs/gitpages/guide.md",
+      "scope": "project",
+      "evidence": "`memex serve-mcp` exposes five tools"
+    },
+    {
+      "title": "Operator CLI commands",
+      "type": "procedure",
+      "body": "Manual transcript ingestion, transcript cleanup, JSON import, and JSON export remain CLI operations outside the MCP agent tool list.",
+      "source": "docs/gitpages/guide.md",
+      "scope": "project",
+      "evidence": "manual ingestion, transcript cleanup, import, and export remain CLI commands"
+    },
+    {
+      "title": "Shared facade",
+      "type": "entity",
+      "body": "The Memex application facade orchestrates the store, index, retriever, links, transcript hook, archive, and import/export. CLI and MCP adapters use the same services and domain types.",
+      "source": "docs/architecture/overview.md",
+      "scope": "project",
+      "evidence": "`Memex` is both the public Python API and the composition root"
+    },
+    {
+      "title": "Consolidation request",
+      "type": "procedure",
+      "body": "Consolidation is the only LLM-calling operation and runs only when explicitly requested. Dry-run proposes changes without writing; full mode distills episodes into durable pages.",
+      "source": "docs/architecture/overview.md",
+      "scope": "project",
+      "evidence": "Consolidation is the only operation that needs an LLM"
+    },
+    {
+      "title": "Secret scrubbing",
+      "type": "procedure",
+      "body": "CLI, MCP, transcript ingestion, and consolidation redact credential-shaped values before storage; logs record redaction categories, never matched secret text.",
+      "source": "docs/gitpages/guide.md",
+      "scope": "project",
+      "evidence": "Every write boundary — CLI, MCP, transcript ingest, consolidation"
+    },
+    {
+      "title": "Pending approval",
+      "type": "procedure",
+      "body": "With manual governance approval, consolidation-created pages start pending and are invisible to recall until memex approve makes them active.",
+      "source": "docs/gitpages/guide.md",
+      "scope": "project",
+      "evidence": "consolidation-created pages land `pending`"
+    },
+    {
+      "title": "Production ranker",
+      "type": "entity",
+      "body": "Recall uses local SQLite FTS5 with safe bounded query tokens, strict AND first, OR fallback only after no strict result, and deterministic slug ties.",
+      "source": "docs/architecture/overview.md",
+      "scope": "project",
+      "evidence": "`semantic-and-fallback-fts5` ranker"
+    },
+    {
+      "title": "Token budget",
+      "type": "procedure",
+      "body": "Explicit recall and hook injection pack page text to a token budget. Hits that do not fit are skipped for smaller ones while the top hit is always kept whole.",
+      "source": "docs/gitpages/guide.md",
+      "scope": "project",
+      "evidence": "Recall and hook injection pack to a token budget"
+    },
+    {
+      "title": "Injection relevance floor",
+      "type": "procedure",
+      "body": "Hook injection suppresses weak matches rather than filling context with noise. Explicit recall can still return weak hits for inspection.",
+      "source": "docs/architecture/overview.md",
+      "scope": "project",
+      "evidence": "Hook injection applies a relevance floor"
+    },
+    {
+      "title": "Legacy global write default",
+      "type": "summary",
+      "body": "Older MCP writes used global scope by default when scope was omitted. This historical behavior was superseded by explicit scope selection.",
+      "source": "simulated prior-behavior distractor",
+      "scope": "project",
+      "archive": true
+    },
+    {
+      "title": "Legacy nine MCP tools",
+      "type": "summary",
+      "body": "An older MCP interface exposed import, export, transcript ingestion, and transcript cleanup alongside agent memory tools. This was replaced by the five-tool interface.",
+      "source": "simulated prior-behavior distractor",
+      "scope": "project",
+      "archive": true
+    },
+    {
+      "title": "Other project SQLite authority",
+      "type": "entity",
+      "body": "For an unrelated project, SQLite is the primary durable record and Markdown exports are disposable reports.",
+      "source": "simulated distractor",
+      "scope": "other_project"
+    },
+    {
+      "title": "Other project harness capture",
+      "type": "procedure",
+      "body": "For an unrelated project, the agent must call an MCP transcript tool at session end because no lifecycle hook is installed.",
+      "source": "simulated distractor",
+      "scope": "other_project"
+    }
+  ],
+  "tasks": [
+    {
+      "name": "Claude session handoff",
+      "goal": "Add reliable Claude Code session handoff so later agents get the context and can trace where it came from without asking the model to remember a tool call.",
+      "focused_queries": [
+        "Claude SessionEnd transcript hook",
+        "transcript episode provenance reference",
+        "session prompt memory injection"
+      ],
+      "required": [
+        "claude-hooks",
+        "transcript-episode",
+        "hook-injection"
+      ]
+    },
+    {
+      "name": "Project memory missing",
+      "goal": "Investigate why repo architecture notes went to global memory and cannot be found from the new workspace session.",
+      "focused_queries": [
+        "MCP write explicit project scope",
+        "derive opaque project identity working directory",
+        "project recall same project id namespace"
+      ],
+      "required": [
+        "write-scope",
+        "derived-project-identity",
+        "project-recall-filter"
+      ]
+    },
+    {
+      "name": "Index recovery",
+      "goal": "A coding agent reports that search stopped finding previously saved decisions after SQLite corruption. Restore them safely and prove the store is healthy.",
+      "focused_queries": [
+        "Markdown pages source truth SQLite derived",
+        "rebuild index from Markdown pages",
+        "verify index freshness links"
+      ],
+      "required": [
+        "markdown-source-truth",
+        "index-rebuild",
+        "verify-checks"
+      ]
+    },
+    {
+      "name": "MCP integration review",
+      "goal": "Extend a coding harness integration while keeping backup, migration and transcript maintenance away from model tools and reusing the existing application service.",
+      "focused_queries": [
+        "five MCP model facing tools",
+        "CLI transcript cleanup import export",
+        "shared Memex facade CLI MCP adapters"
+      ],
+      "required": [
+        "five-mcp-tools",
+        "operator-cli-commands",
+        "shared-facade"
+      ]
+    },
+    {
+      "name": "Safe distillation",
+      "goal": "Prepare an agent workflow that distills session history but lets a human review generated memories and avoids retaining credentials.",
+      "focused_queries": [
+        "consolidation explicit dry run episodes",
+        "credential redaction all write boundaries",
+        "manual approval pending consolidation pages"
+      ],
+      "required": [
+        "consolidation-request",
+        "secret-scrubbing",
+        "pending-approval"
+      ]
+    },
+    {
+      "name": "Prompt recall tuning",
+      "goal": "Improve what context a coding agent gets for a long task prompt without sending irrelevant memories or exceeding the context allowance.",
+      "focused_queries": [
+        "SQLite FTS5 bounded query AND OR fallback",
+        "recall token budget pack hits",
+        "hook relevance floor weak matches"
+      ],
+      "required": [
+        "production-ranker",
+        "token-budget",
+        "injection-relevance-floor"
+      ]
+    }
+  ],
+  "source_hashes": {
+    "docs/architecture/overview.md": "d878d33ac060a867bd4134229ed77fc237bdff99821daf794491aa204be6d18f",
+    "docs/gitpages/guide.md": "4d5391b4b2d4d0f0939cc12aa1868f9458a854679531af36ddcabdce5710c494"
+  }
+}
