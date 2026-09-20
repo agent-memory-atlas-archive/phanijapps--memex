@@ -16,6 +16,31 @@ from pathlib import Path
 SUPPORTED = ("pi", "claude", "codex", "copilot", "custom")
 
 _MEMEX_MARKER = "memex"
+_OLD_CODEX_SNIPPET = """# Memory contract (memex)
+
+- At task start, run `memex hook session-start` and treat its output as
+  project context: it lists durable memories relevant to this repository.
+- When the user states a durable fact, preference, or rule, record it:
+  `memex write --type <entity|preference|procedure|summary> --title "..." --body "..."`
+- The `memex_recall` MCP tool (or `memex recall "<query>"`) searches all
+  stored memories; prefer it over re-asking the user.
+- Transcripts are captured automatically at turn completion; you never
+  need to ingest sessions manually.
+"""
+_OLD_COPILOT_SNIPPET = """## Memory (memex)
+
+This project uses memex for durable memory. Respect the memory workflow:
+
+- Relevant project memories are surfaced automatically in CI feedback.
+  Before assuming user preferences, tooling choices, or project rules,
+  check the `memex MEMORY` blocks in this repository's memory exports.
+- When your change relies on a durable fact (a preference, a tooling
+  rule, a deployment constraint), record it in your PR description so a
+  maintainer can persist it with
+  `memex write --type <entity|preference|procedure> --title "..." --body "..."`.
+- The `memex-verify` workflow on this repository reports memory health
+  (index freshness, link integrity) for every PR.
+"""
 
 TOML_TEMPLATE = """# memex configuration — see the user guide (docs/guide.md)
 [llm]
@@ -140,6 +165,7 @@ def _register_claude_mcp(report: InstallReport) -> None:
 
 
 def _install_claude(marketplace: Path, home: Path, project: Path, report: InstallReport) -> None:
+    project.mkdir(parents=True, exist_ok=True)
     settings_path = home / ".claude" / "settings.json"
     settings_path.parent.mkdir(parents=True, exist_ok=True)
     settings: dict[str, object] = {}
@@ -189,6 +215,19 @@ def _install_claude(marketplace: Path, home: Path, project: Path, report: Instal
     if report.with_mcp:
         _register_claude_mcp(report)
 
+    rules_path = project / "CLAUDE.md"
+    snippet = (marketplace / "claude" / "CLAUDE-snippet.md").read_text(encoding="utf-8")
+    existing_rules = rules_path.read_text(encoding="utf-8") if rules_path.exists() else ""
+    if snippet in existing_rules:
+        report.notes.append("CLAUDE.md already contains the memory contract")
+    elif "## Memory (memex)" in existing_rules:
+        report.notes.append("CLAUDE.md has custom Memex guidance; left unchanged")
+    else:
+        _backup(rules_path)
+        separator = ("\n" if existing_rules.endswith("\n") else "\n\n") if existing_rules else ""
+        rules_path.write_text(existing_rules + separator + snippet, encoding="utf-8")
+        report.files_merged.append(str(rules_path))
+
 
 def _install_codex(marketplace: Path, home: Path, project: Path, report: InstallReport) -> None:
     project.mkdir(parents=True, exist_ok=True)
@@ -230,7 +269,12 @@ def _install_codex(marketplace: Path, home: Path, project: Path, report: Install
 
     agents = project / "AGENTS.md"
     snippet = (marketplace / "codex" / "AGENTS-snippet.md").read_text(encoding="utf-8")
-    if agents.exists() and "memex hook session-start" in agents.read_text(encoding="utf-8"):
+    existing_agents = agents.read_text(encoding="utf-8") if agents.exists() else ""
+    if _OLD_CODEX_SNIPPET in existing_agents:
+        _backup(agents)
+        agents.write_text(existing_agents.replace(_OLD_CODEX_SNIPPET, snippet, 1), encoding="utf-8")
+        report.files_merged.append(str(agents))
+    elif "memex hook session-start" in existing_agents:
         report.notes.append("AGENTS.md already contains the memory contract")
     else:
         with agents.open("a", encoding="utf-8") as handle:
@@ -246,7 +290,16 @@ def _install_copilot(marketplace: Path, home: Path, project: Path, report: Insta
     snippet = (marketplace / "copilot" / "copilot-instructions-snippet.md").read_text(
         encoding="utf-8"
     )
-    if instructions.exists() and "memex" in instructions.read_text(encoding="utf-8"):
+    existing_instructions = (
+        instructions.read_text(encoding="utf-8") if instructions.exists() else ""
+    )
+    if _OLD_COPILOT_SNIPPET in existing_instructions:
+        _backup(instructions)
+        instructions.write_text(
+            existing_instructions.replace(_OLD_COPILOT_SNIPPET, snippet, 1), encoding="utf-8"
+        )
+        report.files_merged.append(str(instructions))
+    elif "memex" in existing_instructions:
         report.notes.append("copilot-instructions.md already mentions memex")
     else:
         with instructions.open("a", encoding="utf-8") as handle:

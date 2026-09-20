@@ -202,6 +202,13 @@ such as `docs/projects/memex/preferences/example.md`.
 Project front matter remains the authority for the opaque `project_id` and safe
 display label. Use `--scope project --project-id <id> --project-label <name>`
 when writing, then use the same scope and id to recall only that project.
+For agent-initiated writes, choose project scope for workspace architecture,
+conventions, and decisions; choose global scope for facts intended across
+projects. If unclear, choose project. MCP writes require an explicit `scope`;
+the server rejects omitted or invalid values before saving a page. The CLI and
+MCP tool can derive a project identity when project scope is selected without
+an explicit ID, using the working directory of the CLI or MCP server process
+respectively.
 Omitting project selectors recalls across all memory. Explicit `project_id`
 values stay supported: if that project already has pages, writes continue in
 its existing directory; otherwise memex uses an ID-named directory unless the
@@ -322,12 +329,14 @@ billing via its CLI print mode, with no separate API key.
 
 **pi** — the reference adapter. A TypeScript extension injects repo-level
 memories on the first turn and prompt-relevant memories on every turn, and
+includes scoped-write guidance on the first turn even if recall is empty. It
 captures the session file on shutdown. Knobs: `MEMEX_BIN`, `MEMEX_TOP_K`,
 `MEMEX_DISABLE`.
 
 **Claude Code** — hooks in `settings.json`: SessionStart and
 UserPromptSubmit inject context (hook stdout becomes context); SessionEnd
-ingests the session transcript. MCP: `claude mcp add memex -- memex serve-mcp`.
+ingests the session transcript. The installer adds scoped-write guidance to the
+project's `CLAUDE.md`. MCP: `claude mcp add memex -- memex serve-mcp`.
 
 **Codex** — no native injection point, so: an AGENTS.md memory contract
 (recall at task start, write durable facts), MCP via `config.toml`, and a

@@ -1164,7 +1164,7 @@ responds on stdout.
 
 | Tool | Parameters | Returns |
 |---|---|---|
-| `memex_write` | `type`, `title`, `body`, `tags?`, `importance?`, `links?` | `{"slug": str, "file_path": str}` |
+| `memex_write` | `type`, `title`, `body`, `scope` (`global` or `project`), `tags?`, `importance?`, `links?`, `project_id?`, `project_label?` | `{"slug": str, "file_path": str}` |
 | `memex_recall` | `query`, `top_k?`, `node_type?` | `RecallResult` |
 | `memex_consolidate` | `mode?`, `max_episodes?` | `ConsolidationReport` |
 | `memex_forget` | `slug`, `mode?` | `{"slug": str, "forgotten": bool}` |

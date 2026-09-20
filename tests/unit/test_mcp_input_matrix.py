@@ -46,7 +46,7 @@ def server() -> Any:
     return mcp_server.build_server()
 
 
-VALID_WRITE = {"type": "entity", "title": "Matrix node", "body": "b"}
+VALID_WRITE = {"type": "entity", "title": "Matrix node", "body": "b", "scope": "global"}
 
 
 class TestSchemaChannel:
@@ -61,6 +61,8 @@ class TestSchemaChannel:
             ({"type": "entity", "title": "x", "body": "y", "importance": "high"}, "importance"),
             ({"type": "entity", "title": "x", "body": "y", "tags": "tool"}, "tags"),
             ({"type": "entity", "title": "x"}, "body"),
+            ({"type": "entity", "title": "x", "body": "y"}, "scope"),
+            ({"type": "entity", "title": "x", "body": "y", "scope": "other"}, "scope"),
         ],
     )
     def test_write_rejections_name_the_field(
@@ -112,6 +114,16 @@ class TestDomainChannel:
         channel, payload = call(server, "memex_write", VALID_WRITE)
         assert channel == "result"
         assert payload["slug"] == "matrix-node"
+
+    def test_project_write_derives_identity(self, server: Any, isolated_env: Path) -> None:
+        channel, payload = call(
+            server,
+            "memex_write",
+            {**VALID_WRITE, "title": "Workspace architecture", "scope": "project"},
+        )
+        assert channel == "result"
+        assert Path(payload["file_path"]).is_relative_to(isolated_env / "docs/projects")
+        assert not (isolated_env / "docs/global/entities/workspace-architecture.md").exists()
 
     def test_recall_empty_query(self, server: Any) -> None:
         channel, payload = call(server, "memex_recall", {"query": "???"})
@@ -179,7 +191,10 @@ class TestWireSchemas:
         }
 
     def test_write_input_schema(self, server: Any) -> None:
-        props = self.schemas(server)["memex_write"]["input"]["properties"]
+        schema = self.schemas(server)["memex_write"]["input"]
+        props = schema["properties"]
+        assert "scope" in schema["required"]
+        assert set(props["scope"]["enum"]) == {"global", "project"}
         assert props["type"]["enum"] == ["entity", "preference", "procedure", "summary", "episode"]
         assert props["importance"]["minimum"] == 0
         assert props["importance"]["maximum"] == 1

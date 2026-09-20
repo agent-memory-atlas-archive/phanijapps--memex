@@ -18,7 +18,7 @@ import logging
 import threading
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Annotated, Any, cast
+from typing import Annotated, Any, Literal, cast
 
 from mcp.types import ToolAnnotations
 from pydantic import Field
@@ -93,10 +93,10 @@ def memex_write(
     type: NodeType,
     title: str,
     body: str,
+    scope: Literal["global", "project"],
     tags: list[str] | None = None,
     importance: Annotated[float, Field(ge=0, le=1)] = 0.5,
     links: list[str] | None = None,
-    scope: str = "global",
     project_id: str | None = None,
     project_label: str | None = None,
 ) -> WriteResultDict:
@@ -111,6 +111,7 @@ def memex_write(
         title: Human-readable; the slug derives from it.
         body: Markdown; ``[[slug]]`` references become wiki links, merged
             with ``links``.
+        scope: Required namespace choice: global or project.
         tags: Lowercased and deduplicated on write.
         importance: Schema-enforced bounds [0, 1].
         links: Explicit outgoing slugs in addition to body links.
