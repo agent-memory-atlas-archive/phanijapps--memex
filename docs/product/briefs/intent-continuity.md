@@ -1,7 +1,7 @@
 # Brief: Intent continuity across coding sessions
 
 - **Slug:** `intent-continuity`
-- **Status:** Draft
+- **Status:** Ready
 - **Received:** 2026-09-20
 - **Owner:** Memex maintainers; delivery owner to be assigned.
 - **Initiative:** `ini-001`
@@ -174,7 +174,7 @@ planning candidates, not confirmed delivery slices.
   [`consolidator.py`](../../../src/memex/infrastructure/consolidator.py), and
   [`cli.py`](../../../src/memex/cli.py).
 
-## Ready gaps
+## Planning decisions before a spec
 
 - Assign a delivery owner and agree the evaluation's time and spending limit.
 - Decide the held-out task set, evidence labels, agent/query baseline, and
@@ -183,8 +183,6 @@ planning candidates, not confirmed delivery slices.
   including a safe rule when the project is unknown.
 - Confirm the task-level handoff to the retrieval and evidence brief for
   generic budget and consolidation changes.
-- Complete a Ready review before confirming delivery slices and writing specs
-  and implementation plans.
 
 ## Spec map
 
