@@ -3,7 +3,7 @@
 Notable user-visible changes are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Memex versions
 through 0.2.4 are reconstructed from the version-bump commits; later work remains
-unreleased because the repository has no release tag or newer package version.
+unreleased until a release tag is created.
 
 ## [Unreleased]
 
@@ -21,6 +21,9 @@ unreleased because the repository has no release tag or newer package version.
 
 ### Changed
 
+- MCP `memex_write` requires an explicit `global` or `project` scope. Omitted
+  and invalid scopes are rejected before writing. Project IDs are still derived
+  from the server workspace when omitted.
 - Stale SQLite schema versions rebuild automatically from Markdown pages.
 - Episode and capture metadata retain richer session, model, reasoning-effort,
   Git, and token-usage context when the harness provides it.

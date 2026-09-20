@@ -127,6 +127,7 @@ def test_registered_write_description_explains_scope_choice() -> None:
     assert "workspace architecture" in write.description
     assert 'scope="project"' in write.description
     assert 'scope="global"' in write.description
+    assert "MCP writes require scope" in write.description
     assert "derive the project identity" in write.description
     assert "server process's working directory" in write.description
 
@@ -161,7 +162,7 @@ def test_tool_docstrings_follow_pyguide() -> None:
 
 
 def test_write_recall_forget_flow() -> None:
-    written = memex_write(type="entity", title="MCP entity", body="via mcp tool")
+    written = memex_write(type="entity", title="MCP entity", body="via mcp tool", scope="global")
     assert written["slug"] == "mcp-entity"
 
     recalled = memex_recall("mcp")
@@ -216,7 +217,7 @@ def test_errors_are_sanitized() -> None:
     from memex.domain.models import NodeType
 
     assert memex_forget("totally-unknown-slug") == {"error": "memory node not found"}
-    assert memex_write(type=cast(NodeType, "bogus"), title="x", body="y") == {
+    assert memex_write(type=cast(NodeType, "bogus"), title="x", body="y", scope="global") == {
         "error": "invalid arguments for this operation"
     }
     assert memex_recall("???") == {"error": "invalid arguments for this operation"}
@@ -246,7 +247,7 @@ def test_transcript_and_provenance_tools() -> None:
 
 
 def test_export_import_tools() -> None:
-    memex_write(type="entity", title="Export", body="b")
+    memex_write(type="entity", title="Export", body="b", scope="global")
     exported = memex_export()
     assert exported["version"] == "1.0"
     assert len(exported["nodes"]) == 1

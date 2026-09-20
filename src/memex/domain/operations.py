@@ -24,7 +24,8 @@ When to use: the user states a durable fact, preference, rule, or
 summary worth recalling in later sessions. Choose the scope from the fact's
 reach: use scope="project" for workspace architecture, conventions, and
 decisions; use scope="global" for facts intended across projects. If the
-reach is unclear, choose project. Do not rely on the global default.
+reach is unclear, choose project. MCP writes require scope; an MCP write
+without it is rejected instead of silently going to global memory.
 
 Key constraints: type is one of "entity", "preference", "procedure",
 "summary", "episode"; importance within [0, 1]; body is Markdown and
