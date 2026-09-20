@@ -159,8 +159,7 @@ planning candidates, not confirmed delivery slices.
 
 - Direct user direction on 2026-09-20 to ground Memex improvements in its own
   behavior rather than treat the new intent-continuity research as product
-  requirements. This revision retains repository-origin authority and Draft
-  lifecycle status.
+  requirements. Repository-origin authority is retained.
 - [Coding-agent recall evaluation](../../research/2026-09-20-coding-agent-recall.md)
   records the six-task, 22-card result and its limits. The
   [broad-goal recall backlog item](../../backlog/001-broad-goal-recall.md)
@@ -188,3 +187,5 @@ planning candidates, not confirmed delivery slices.
 
 | Spec | Status |
 | --- | --- |
+| `task-evidence-recall` | |
+| `project-aware-injection` | |
