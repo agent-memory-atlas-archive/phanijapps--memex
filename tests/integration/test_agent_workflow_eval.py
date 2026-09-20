@@ -3,19 +3,32 @@
 import hashlib
 import json
 import subprocess
+import sys
 from pathlib import Path
-from typing import cast
+from typing import Literal, cast
 
 import pytest
 
-from eval import agent_workflow
+from eval import agent_workflow, task_evidence_model
 from eval.agent_workflow import (
     RENDERED_FILE_SLUG,
     BenchmarkReport,
+    RecallCost,
+    StrategyReport,
+    TaskStrategyResult,
     _summary_links,
     load_fixture,
     load_human_focused_queries,
     run_benchmark,
+)
+from eval.task_evidence_model import (
+    HarnessQuestionPlanner,
+    ModelRunLimits,
+    ModelUsage,
+    QuestionPlan,
+    QuestionRun,
+    pi_question_planner,
+    run_model_comparison,
 )
 from memex.application.memory import Memex
 from memex.domain.models import RecallHit
@@ -277,3 +290,364 @@ def test_linked_summary_result_credits_only_first_retrieved_summary(
     assert result.hits == ["needed"]
     assert result.missing == []
     assert result.cost.calls == 1
+
+
+def test_model_comparison_blocks_harness_without_cost_observable_path() -> None:
+    report = run_model_comparison(
+        HarnessQuestionPlanner(
+            harness="missing-harness",
+            argv=(sys.executable,),
+            prompt_template="{name}\n{goal}",
+            model_id="fake/model",
+        ),
+        ModelRunLimits(wall_seconds=300, spend_limit_usd=5.0),
+    )
+
+    assert report.question_run.status == "blocked"
+    assert report.question_run.wall_limit_seconds == 300
+    assert report.question_run.spend_limit_usd == 5.0
+    assert report.candidate is None
+    assert report.promotion_gate.promoted is False
+    assert report.promotion_gate.recall_gate_passed is False
+    assert report.promotion_gate.verdict.startswith("unpromoted:")
+
+
+def test_harness_run_reserves_worst_case_spend_before_subprocess(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_run(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        raise AssertionError("subprocess must not run without remaining spend reserve")
+
+    monkeypatch.setattr(task_evidence_model, "_run_command", fail_run)
+
+    planner = HarnessQuestionPlanner(
+        harness="fake",
+        argv=(sys.executable,),
+        prompt_template="{goal}",
+        model_id="fake/model",
+        price_per_1k_prompt_tokens_usd=1.0,
+        price_per_1k_completion_tokens_usd=1.0,
+        max_completion_tokens=10_000,
+        cost_source="test upper bound",
+    )
+    run = planner.plan(
+        [{"name": "Task", "goal": "tiny goal"}],
+        ModelRunLimits(wall_seconds=300, spend_limit_usd=5.0),
+    )
+
+    assert run.status == "incomplete"
+    assert run.blocked_reason == "spend reserve"
+    assert run.plans == []
+
+
+def test_pi_planner_isolated_question_selection_flags() -> None:
+    planner = pi_question_planner(
+        billing_mode="plan_credits",
+        cost_source="ZCode coding plan",
+        model_id="zai-coding-cn/glm-5.3-flash",
+    )
+
+    assert planner.argv == (
+        "pi",
+        "--mode",
+        "json",
+        "--print",
+        "--model",
+        "zai-coding-cn/glm-5.3-flash",
+        "--no-tools",
+        "--no-extensions",
+        "--no-skills",
+        "--no-prompt-templates",
+        "--no-context-files",
+        "--no-approve",
+        "--offline",
+        "--no-session",
+    )
+    assert planner.prompt_template.format(name="Task", goal="Goal").count('"queries"') == 1
+
+
+def test_plan_credit_billing_mode_allows_zero_usd_dollar_reserve(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output = json.dumps(
+        {
+            "type": "message_end",
+            "message": {
+                "role": "assistant",
+                "content": [{"type": "text", "text": json.dumps({"queries": ["first"]})}],
+                "usage": {"input": 5, "output": 3, "cost": {"total": 0.7}},
+            },
+        }
+    )
+
+    def fake_run(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(args=["fake"], returncode=0, stdout=output, stderr="")
+
+    monkeypatch.setattr(task_evidence_model, "_run_command", fake_run)
+    planner = HarnessQuestionPlanner(
+        harness="fake",
+        argv=(sys.executable,),
+        prompt_template="{goal}",
+        model_id="fake/model",
+        cost_source="verified coding-plan credit mode",
+        billing_mode="plan_credits",
+        price_per_1k_prompt_tokens_usd=0.001,
+        price_per_1k_completion_tokens_usd=0.001,
+        max_completion_tokens=100,
+    )
+
+    run = planner.plan(
+        [{"name": "Task", "goal": "tiny goal"}],
+        ModelRunLimits(wall_seconds=300, spend_limit_usd=5.0),
+    )
+
+    assert run.status == "complete"
+    assert run.model_id == "fake/model"
+    assert run.billing_mode == "plan_credits"
+    assert run.usage.spend_usd == 0
+    assert run.usage.catalog_estimate_usd == 0.7
+    assert len(run.plans) == 1
+    assert run.plans[0].task == "Task"
+    assert run.plans[0].queries == ["first"]
+    assert run.plans[0].usage.prompt_tokens == 5
+    assert run.plans[0].usage.completion_tokens == 3
+    assert run.plans[0].usage.catalog_estimate_usd == 0.7
+
+
+def test_plan_credit_billing_mode_still_enforces_catalog_equivalent_reserve(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_run(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        raise AssertionError("subprocess must not run beyond catalog-equivalent reserve")
+
+    monkeypatch.setattr(task_evidence_model, "_run_command", fail_run)
+    planner = HarnessQuestionPlanner(
+        harness="fake",
+        argv=(sys.executable,),
+        prompt_template="{goal}",
+        model_id="fake/model",
+        price_per_1k_prompt_tokens_usd=1.0,
+        price_per_1k_completion_tokens_usd=1.0,
+        max_completion_tokens=10_000,
+        cost_source="verified coding-plan catalog estimate",
+        billing_mode="plan_credits",
+    )
+
+    run = planner.plan(
+        [{"name": "Task", "goal": "tiny goal"}],
+        ModelRunLimits(wall_seconds=300, spend_limit_usd=5.0),
+    )
+
+    assert run.status == "incomplete"
+    assert run.blocked_reason == "spend reserve"
+    assert run.usage.spend_usd == 0
+
+
+def test_harness_malformed_output_is_incomplete_without_promotion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_run(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(
+            args=["fake"], returncode=0, stdout="not-json", stderr=""
+        )
+
+    monkeypatch.setattr(task_evidence_model, "_run_command", fake_run)
+    planner = HarnessQuestionPlanner(
+        harness="fake",
+        argv=(sys.executable,),
+        prompt_template="{goal}",
+        model_id="fake/model",
+        price_per_1k_prompt_tokens_usd=0.001,
+        price_per_1k_completion_tokens_usd=0.001,
+        max_completion_tokens=1,
+        cost_source="verified billing",
+    )
+
+    run = planner.plan(
+        [{"name": "Task", "goal": "tiny goal"}],
+        ModelRunLimits(wall_seconds=300, spend_limit_usd=5.0),
+    )
+
+    assert run.status == "incomplete"
+    assert run.blocked_reason == "harness output"
+    assert run.plans == []
+
+
+def test_harness_retries_invalid_questions_and_counts_both_calls(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = 0
+
+    def fake_run(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        nonlocal calls
+        calls += 1
+        answer = "not a question plan" if calls == 1 else json.dumps({"queries": ["first"]})
+        output = json.dumps(
+            {
+                "type": "message_end",
+                "message": {
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": answer}],
+                    "usage": {"input": 10, "output": 20, "cost": {"total": 0.01}},
+                },
+            }
+        )
+        return subprocess.CompletedProcess(args=["fake"], returncode=0, stdout=output, stderr="")
+
+    monkeypatch.setattr(task_evidence_model, "_run_command", fake_run)
+    planner = HarnessQuestionPlanner(
+        harness="fake",
+        argv=(sys.executable,),
+        prompt_template="{goal}",
+        model_id="fake/model",
+        price_per_1k_prompt_tokens_usd=0.001,
+        price_per_1k_completion_tokens_usd=0.001,
+        max_completion_tokens=100,
+        cost_source="verified catalog estimate",
+    )
+
+    run = planner.plan(
+        [{"name": "Task", "goal": "tiny goal"}],
+        ModelRunLimits(wall_seconds=300, spend_limit_usd=5.0),
+    )
+
+    assert calls == 2
+    assert run.status == "complete"
+    assert run.usage.prompt_tokens == 20
+    assert run.usage.completion_tokens == 40
+    assert run.usage.spend_usd == 0.02
+    assert run.plans[0].usage == run.usage
+
+
+@pytest.mark.parametrize("billing_mode", ["usd", "plan_credits"])
+def test_billing_modes_require_usage_telemetry_before_next_call(
+    monkeypatch: pytest.MonkeyPatch,
+    billing_mode: Literal["usd", "plan_credits"],
+) -> None:
+    output = json.dumps(
+        {
+            "type": "message_end",
+            "message": {
+                "role": "assistant",
+                "content": [{"type": "text", "text": json.dumps({"queries": ["first"]})}],
+            },
+        }
+    )
+
+    def fake_run(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(args=["fake"], returncode=0, stdout=output, stderr="")
+
+    monkeypatch.setattr(task_evidence_model, "_run_command", fake_run)
+    planner = HarnessQuestionPlanner(
+        harness="fake",
+        argv=(sys.executable,),
+        prompt_template="{goal}",
+        model_id="fake/model",
+        price_per_1k_prompt_tokens_usd=0.001,
+        price_per_1k_completion_tokens_usd=0.001,
+        max_completion_tokens=1,
+        cost_source="verified billing",
+        billing_mode=billing_mode,
+    )
+
+    run = planner.plan(
+        [{"name": "Task", "goal": "tiny goal"}],
+        ModelRunLimits(wall_seconds=300, spend_limit_usd=5.0),
+    )
+
+    assert run.status == "incomplete"
+    assert run.blocked_reason == "missing usage"
+    assert run.plans == []
+
+
+def test_model_comparison_passes_only_label_blind_task_inputs_to_planner() -> None:
+    human_queries = load_human_focused_queries()
+    seen_tasks: list[dict[str, str]] = []
+
+    class FakePlanner:
+        def plan(
+            self, tasks: list[task_evidence_model.TaskQuestionInput], limits: ModelRunLimits
+        ) -> QuestionRun:
+            del limits
+            seen_tasks.extend(cast(list[dict[str, str]], tasks))
+            return QuestionRun(
+                status="complete",
+                harness="fake",
+                model_id="fake/model",
+                billing_mode="usd",
+                cost_source="test",
+                wall_limit_seconds=300,
+                spend_limit_usd=5.0,
+                elapsed_seconds=1.0,
+                usage=ModelUsage(prompt_tokens=10, completion_tokens=5, spend_usd=0.01),
+                plans=[
+                    QuestionPlan(task=task["name"], queries=task["queries"])
+                    for task in human_queries["tasks"]
+                ],
+            )
+
+    report = run_model_comparison(FakePlanner())
+
+    assert seen_tasks
+    assert all(set(task) == {"name", "goal"} for task in seen_tasks)
+    assert report.candidate is not None
+    human_focused_complete = report.baseline.strategies["human_focused"].task_complete
+    assert report.candidate.task_complete == human_focused_complete
+    assert report.promotion_gate.promoted is False
+    assert "completed-code-check-not-run" in report.promotion_gate.failed_conditions
+    assert report.promotion_gate.candidate_task_complete == 12
+
+
+def test_pi_style_json_output_yields_questions_and_usage() -> None:
+    output = "\n".join(
+        [
+            json.dumps(
+                {
+                    "type": "message_end",
+                    "message": {
+                        "role": "assistant",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": json.dumps(
+                                    {"queries": ["first question", "second question"]}
+                                ),
+                            }
+                        ],
+                        "usage": {
+                            "input": 1200,
+                            "output": 300,
+                            "cost": {"total": 0.004},
+                        },
+                    },
+                }
+            ),
+        ]
+    )
+
+    parsed = task_evidence_model._parse_harness_json(output)
+
+    assert parsed["queries"] == ["first question", "second question"]
+    usage = parsed["usage"]
+    assert isinstance(usage, ModelUsage)
+    assert usage.prompt_tokens == 1200
+    assert usage.completion_tokens == 300
+    assert usage.spend_usd == 0.004
+
+
+def test_p95_latency_uses_nearest_rank_for_24_tasks() -> None:
+    latencies = [1.0] * 22 + [100.0, 200.0]
+    tasks = [
+        TaskStrategyResult(
+            name=str(index),
+            hits=[],
+            missing=[],
+            cost=RecallCost(calls=1, rendered_tokens=1, latency_ms=latency),
+            inactive_hits=[],
+            other_project_hits=[],
+        )
+        for index, latency in enumerate(latencies)
+    ]
+    strategy = StrategyReport(0, 0.0, 24, 24, 0.0, 0, 0, tasks)
+
+    assert task_evidence_model._strategy_p95_latency(strategy) == 100.0
