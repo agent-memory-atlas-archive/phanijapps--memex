@@ -1,0 +1,100 @@
+{
+  "summaries": [
+    {
+      "task": "Claude lifecycle provenance",
+      "body": "# Claude lifecycle provenance\n\nClaude Code SessionStart and UserPromptSubmit inject context through hook stdout; SessionEnd ingests the transcript. [[scope-claude-code-hooks-in-settingsjson-sessionstart-and-userpro]] The transcript hook normalizes turns and writes an episode that links back to the transcript. [[harness-harness-adapters-call-memex-hook-transcript-with-the-har]] The episode carries transcript_ref, and provenance reports whether a node has a direct, inferred, or absent transcript link. [[mcp-ingestion-writes-transcriptsyyyy-mm-ddsess-abcjsonl-metajson]]"
+    },
+    {
+      "task": "Scoped architecture recall",
+      "body": "# Scoped architecture recall\n\nRepository architecture and conventions belong in project scope; the task-start hook supplies relevant project context. [[scope-at-task-start-run-memex-hook-session-start-and-treat]] Project writes use the opaque project_id in front matter and a separate readable label. [[scope-project-front-matter-is-opaque-identity-authority]] Local recall searches one project ID, while global recall searches every namespace. [[scope-local-recall-selects-one-opaque-project-id]]"
+    },
+    {
+      "task": "SQLite corruption recovery",
+      "body": "# SQLite corruption recovery\n\nMarkdown pages under MEMEX_DATA_DIR are the durable memory boundary; SQLite is derived state. [[storage-the-filesystem-under-memex-data-dir-or-memex-is-the]] A page write justifies index mutations, and a failed index can be rebuilt from pages. [[storage-the-page-write-justifies-every-index-mutation-a-failed-o]] memex verify checks parsing, index freshness, and links; rebuild-index reconstructs SQLite. [[storage-memex-verify-checks-page-parsing-index-freshness-links-a]] The SQLite FTS5 index is disposable and never the source of truth. [[storage-the-index-is-disposable-memdb-mirrors-the-pages-for-fast]]"
+    },
+    {
+      "task": "MCP surface review",
+      "body": "# MCP surface review\n\nModel-facing operations are write, recall, consolidate, forget, and provenance; transcript ingestion, cleanup, import, and export remain CLI commands. [[ops-memex-write-memex-recall-memex-consolidate-memex-forget-meme]] The MCP server rejects schema violations with field-precise errors and sanitizes domain errors. [[gates-schema-violations-are-rejected-by-the-server-with-a-field]] Backup and restore are maintenance operations with archive validation and preservation of the prior store. [[storage-memex-verify-checks-page-parsing-index-freshness-links-a]]"
+    },
+    {
+      "task": "Safe session distillation",
+      "body": "# Safe session distillation\n\nConsolidation selects episodes, validates generated nodes, and uses the normal write/index/link path. [[storage-consolidation-is-the-only-operation-that-needs-an-llm-wi]] With manual approval, consolidation-created pages stay pending and ordinary recall sees active pages only. [[mcp-pages-carry-status-active-pending-superseded-archived-recall]] Every write boundary, including transcript ingestion and consolidation, redacts credential patterns before storage. [[harness-every-write-boundary-cli-mcp-transcript-ingest-consolida]] Stored memories and tool inputs are untrusted; consolidation output is schema-checked. [[safety-logs-never-contain-memory-contents-the-audit-trail-record]]"
+    },
+    {
+      "task": "Prompt injection budget",
+      "body": "# Prompt injection budget\n\nHook injection applies a relevance floor so weak matches do not fill task context; explicit recall can still inspect them. [[storage-1-bm25retriever-reduces-untrusted-query-text-to-safe-alp]] Recall and hooks pack page text within a default 4096-token budget, keep the top hit whole, and skip later oversized hits. [[harness-recall-and-hook-injection-pack-to-a-token-budget-max]] The offline FTS5 ranker filters before limiting and returns unique slugs in deterministic order. [[storage-production-recall-uses-the-semantic-and-fallback-fts5-ra]]"
+    },
+    {
+      "task": "Task evidence assembly",
+      "body": "# Task evidence assembly\n\nA coding agent asks up to three focused questions before editing and combines current project facts in one context budget. [[task-evidence-asks-focused-questions-within-one-context-budget]] Repeated hits appear once, retain source paths, and the combined context has at most eight distinct hits. [[task-evidence-duplicate-hits-appear-once-with-source-paths]] Local recall selects one opaque project ID. [[scope-local-recall-selects-one-opaque-project-id]]"
+    },
+    {
+      "task": "Thin adapter change",
+      "body": "# Thin adapter change\n\nMemex is the composition root for storage, indexing, retrieval, links, transcripts, and archive handling; adapters call the shared facade. [[storage-memex-is-both-the-public-python-api-and-the-composition]] Change shared operations in the facade first and keep CLI and MCP adapters thin and parity-tested. [[storage-change-a-page-field-in-the-domain-model-strict-front]] The MCP recall arguments and result shape are part of the typed tool contract. [[mcp-recall-arguments-and-forget-result-stay-in-typed-tool-contra]] RecallResult contains the query, hits, total indexed, and search engine. [[recallresult-returns-query-hits-total-indexed-and-search-engine]]"
+    },
+    {
+      "task": "Archived memory confusion",
+      "body": "# Archived memory confusion\n\nOrdinary recall sees active pages; archived, pending, and superseded pages require include_inactive for inspection. [[mcp-pages-carry-status-active-pending-superseded-archived-recall]] Local recall selects one opaque project ID, excluding memories in other project namespaces. [[scope-local-recall-selects-one-opaque-project-id]] Explicit recall may still return weak active hits while hook injection applies a relevance floor. [[storage-1-bm25retriever-reduces-untrusted-query-text-to-safe-alp]]"
+    },
+    {
+      "task": "Verify gate wiring",
+      "body": "# Verify gate wiring\n\nmemex verify checks parsing, index freshness, links, and optional recall/write activity evidence. [[storage-memex-verify-checks-page-parsing-index-freshness-links-a]] CI can use --since with require flags to fail when recent recall or write evidence is missing. [[gates-always-checked-every-page-parses-the-index-matches-content]] Tests use an isolated MEMEX_DATA_DIR rather than the developer store. [[harness-repository-content-cannot-enable-capture-or-injection-in]]"
+    },
+    {
+      "task": "Harness installer restraint",
+      "body": "# Harness installer restraint\n\nHarness installation changes user-owned configuration only after an explicit command. [[harness-repository-content-cannot-enable-capture-or-injection-in]] Uninstallation removes exact Memex snippets and adapter files while leaving unrelated settings and modified files in place. [[mcp-from-the-project-where-it-was-installed-remove-one-adapter]] The Claude Code installer adds scoped-write guidance to the project CLAUDE.md. [[scope-claude-code-hooks-in-settingsjson-sessionstart-and-userpro]]"
+    },
+    {
+      "task": "Copilot transport wording",
+      "body": "# Copilot transport wording\n\nHosted GitHub Copilot has no hooks or local stdio, so its deterministic path is guidance plus a memex verify PR workflow. [[gates-github-copilot-hosted-no-hooks-no-local-stdio-the-determin]] VS Code agent mode can register MCP through .vscode/mcp.json. [[mcp-installs-register-the-mcp-server-where-the-harness-supports-]] MCP use depends on the model choosing to call the tools. [[mcp-mcp-tools-alone-depend-on-the-model-choosing-to-call]]"
+    },
+    {
+      "task": "Dashboard read-only audit",
+      "body": "# Dashboard read-only audit\n\nThe dashboard is a read-only localhost projection; search uses a non-mutating path, so GET does not change access counters. [[storage-the-dashboard-keeps-vizpy-as-the-public-local-server-sea]] Memory browsing applies type and scope filters. [[scope-the-memories-view-shows-20-newest-first-cards-per-page]] Hand-edited Markdown is picked up by memex watch or rebuild-index. [[storage-the-memory-store-is-the-filesystem-every-memory-is-a]]"
+    },
+    {
+      "task": "Spec closeout report",
+      "body": "# Spec closeout report\n\nAfter plan approval, the spec and plan are pinned in substance; execution observations belong in notes/verification-ledger.md. [[safety-shipped-specs-above-means-the-whole-directory-specmd-and-]] Once plan Done and spec Shipped, the whole directory is frozen. [[safety-there-are-therefore-two-stages-not-one-at-plan-approval]] Living documents describe current behavior while frozen artifacts preserve decision history. [[docs-the-most-important-property-of-this-scheme-is-that-the]]"
+    },
+    {
+      "task": "Recall compatibility check",
+      "body": "# Recall compatibility check\n\nThe typed MCP contract preserves memex_recall query, optional top_k and node_type, and RecallResult output. [[mcp-recall-arguments-and-forget-result-stay-in-typed-tool-contra]] RecallHit identifies its source with a slug and file path. [[recallhit-exposes-slug-path-title-body-score-snippet-and-metadat]] RecallResult returns query, hits, total_indexed, and search_engine. [[recallresult-returns-query-hits-total-indexed-and-search-engine]] Shared operation changes start in the facade with thin, parity-tested CLI and MCP adapters. [[storage-change-a-page-field-in-the-domain-model-strict-front]]"
+    },
+    {
+      "task": "Token packing behavior",
+      "body": "# Token packing behavior\n\nThe top hit is returned whole; a later hit that exceeds the token budget is skipped in favor of smaller hits. [[harness-recall-and-hook-injection-pack-to-a-token-budget-max]] The default --max-tokens budget is 4096, and page text counts against it while metadata is free. [[harness-recall-and-hook-injection-pack-to-a-token-budget-max]]"
+    },
+    {
+      "task": "Transcript noise filter",
+      "body": "# Transcript noise filter\n\nTranscript ingestion redacts credential patterns before storage and logs only redaction categories, not matched text. [[harness-every-write-boundary-cli-mcp-transcript-ingest-consolida]] The shared write path scrubs secret-shaped text before atomically writing a Markdown page. [[storage-1-an-adapter-creates-a-validated-writeinput-2-the-facade]] Stored transcripts and memory content remain untrusted, and logs do not contain memory contents. [[safety-logs-never-contain-memory-contents-the-audit-trail-record]]"
+    },
+    {
+      "task": "Backup restore boundary",
+      "body": "# Backup restore boundary\n\nBackup and restore validate archive paths and links; restore preserves the previous store in a timestamped directory. [[storage-memex-verify-checks-page-parsing-index-freshness-links-a]] Archive extraction rejects path traversal and symlinks, and restore moves current data to pre-restore storage instead of deleting it. [[ops-archives-are-validated-against-path-traversal-and-symlinks-b]] Model-facing MCP tools omit backup and restore, leaving them as operator maintenance. [[ops-memex-write-memex-recall-memex-consolidate-memex-forget-meme]]"
+    },
+    {
+      "task": "Expired memory handling",
+      "body": "# Expired memory handling\n\nExpired or retired nodes are hidden by default; include_expired opts them back into recall. [[mcp-temporal-validity-every-node-optionally-carries-expires-at-v]] Status filtering separately limits ordinary recall to active pages unless include_inactive is set. [[mcp-pages-carry-status-active-pending-superseded-archived-recall]] The retriever searches active, non-expired pages by default. [[storage-1-bm25retriever-reduces-untrusted-query-text-to-safe-alp]]"
+    },
+    {
+      "task": "Hard forget safety",
+      "body": "# Hard forget safety\n\nHard forget deletes the page, its index row, and its links. [[forget-hard-deletes-page-index-row-and-links]] The scoped hard-forget path removes the selected page, index record, and namespace-owned outgoing links. [[forget-hard-removes-scoped-page-index-row-and-namespace-links]] Archive mode instead retires the page in place. [[mcp-pages-carry-status-active-pending-superseded-archived-recall]]"
+    },
+    {
+      "task": "Provenance investigation",
+      "body": "# Provenance investigation\n\nIngestion creates an episode with transcript_ref; get_provenance or memex_provenance classifies direct, inferred, or missing provenance. [[mcp-ingestion-writes-transcriptsyyyy-mm-ddsess-abcjsonl-metajson]] The session header records session identity, cwd, Git branch and commit, provider, and timestamps. [[mcp-the-first-transcript-line-is-an-optional-session-header-type]] The transcript hook normalizes turns and links its episode to the captured session. [[harness-harness-adapters-call-memex-hook-transcript-with-the-har]]"
+    },
+    {
+      "task": "Project identity explanation",
+      "body": "# Project identity explanation\n\nProject folder names are readable locators, not project identity; their names can follow a Git remote or workspace folder. [[scope-the-durable-layout-separates-global-pages-at-docsglobaltyp]] Front matter supplies the opaque project_id and a separate safe display label. [[scope-project-front-matter-is-opaque-identity-authority]] Local recall selects one opaque project ID rather than relying on the directory name. [[scope-local-recall-selects-one-opaque-project-id]] Runtime operations do not rename or merge legacy project folders. [[docs-legacy-id-named-project-folders-remain-readable-and-rebuild]]"
+    },
+    {
+      "task": "Evaluation promotion decision",
+      "body": "# Evaluation promotion decision\n\nPromotion requires held-out task-complete recall at least 10 percentage points above both broad-query and linked-summary baselines. [[task-evidence-promotion-compares-broad-and-linked-baselines]] The paired report compares injection, broad query, linked summary, unaided questions, and human questions under the same hit and context budgets. [[task-evidence-report-scores-paired-baselines-and-costs]] Focused task evidence comes from at most three questions before coding. [[task-evidence-asks-focused-questions-within-one-context-budget]]"
+    },
+    {
+      "task": "Task report privacy",
+      "body": "# Task report privacy\n\nThe paired report provides task-complete and fact-level recall while keeping each strategy under eight hits and 4096 rendered tokens. [[task-evidence-report-scores-paired-baselines-and-costs]] The audit trail records operations, slugs, and counts without memory contents. [[safety-logs-never-contain-memory-contents-the-audit-trail-record]] Evaluation and tests use an isolated MEMEX_DATA_DIR rather than the developer store. [[harness-repository-content-cannot-enable-capture-or-injection-in]]"
+    }
+  ]
+}

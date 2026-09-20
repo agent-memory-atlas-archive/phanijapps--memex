@@ -1,0 +1,196 @@
+{
+  "tasks": [
+    {
+      "name": "Claude lifecycle provenance",
+      "queries": [
+        "How do Claude Code hooks inject session context and capture the transcript?",
+        "Where does the transcript hook place its episode and transcript reference?",
+        "How does provenance report a memory source session?"
+      ]
+    },
+    {
+      "name": "Scoped architecture recall",
+      "queries": [
+        "Where should workspace architecture notes be written and recalled?",
+        "How do project_id and project_label differ?",
+        "Which namespace does local project recall search?"
+      ]
+    },
+    {
+      "name": "SQLite corruption recovery",
+      "queries": [
+        "Which files are the durable source of truth after SQLite corruption?",
+        "How can rebuild-index reconstruct derived SQLite state?",
+        "Which verify checks prove the pages and index agree?"
+      ]
+    },
+    {
+      "name": "MCP surface review",
+      "queries": [
+        "Which operations are model-facing MCP tools?",
+        "Which transcript and import or export operations stay on the CLI?",
+        "What safeguards apply to backup and restore?"
+      ]
+    },
+    {
+      "name": "Safe session distillation",
+      "queries": [
+        "How does consolidation turn episodes into validated memory pages?",
+        "When are consolidation-created pages pending rather than recallable?",
+        "Where are credentials redacted before storage?"
+      ]
+    },
+    {
+      "name": "Prompt injection budget",
+      "queries": [
+        "How does hook injection suppress weak memories?",
+        "How are hits packed to a 4096-token budget?",
+        "What happens when a later hit is too large to fit?"
+      ]
+    },
+    {
+      "name": "Task evidence assembly",
+      "queries": [
+        "How many focused questions can precede task editing?",
+        "How are duplicate hits, source paths, and the eight-hit cap handled?",
+        "How does local recall stay within the current project?"
+      ]
+    },
+    {
+      "name": "Thin adapter change",
+      "queries": [
+        "Which shared layer owns recall behavior across CLI and MCP?",
+        "How should adapters be kept thin and parity-tested?",
+        "What recall result shape must remain compatible?"
+      ]
+    },
+    {
+      "name": "Archived memory confusion",
+      "queries": [
+        "Which memory statuses are excluded from ordinary recall?",
+        "How does local recall exclude other project namespaces?",
+        "Can explicit recall inspect weak active hits?"
+      ]
+    },
+    {
+      "name": "Verify gate wiring",
+      "queries": [
+        "What does memex verify check for store health?",
+        "How do --since and require flags prove recent recall or write activity in CI?",
+        "How are tests isolated from the developer memory store?"
+      ]
+    },
+    {
+      "name": "Harness installer restraint",
+      "queries": [
+        "When may a harness installer change user-owned configuration?",
+        "How does uninstall preserve unrelated or modified guidance files?",
+        "Where does Claude Code scoped-write guidance go?"
+      ]
+    },
+    {
+      "name": "Copilot transport wording",
+      "queries": [
+        "What are hosted Copilot hook and local stdio limits?",
+        "What MCP registration exists in VS Code agent mode?",
+        "Why can model-initiated MCP calls not guarantee deterministic injection?"
+      ]
+    },
+    {
+      "name": "Dashboard read-only audit",
+      "queries": [
+        "Does dashboard browsing mutate pages or access counters?",
+        "How do dashboard scope and type filters work?",
+        "How do hand-edited Markdown pages refresh through watch mode?"
+      ]
+    },
+    {
+      "name": "Spec closeout report",
+      "queries": [
+        "Which approved spec and plan changes remain allowed?",
+        "Where should execution observations and verification results go?",
+        "How do living docs differ from frozen decision records?"
+      ]
+    },
+    {
+      "name": "Recall compatibility check",
+      "queries": [
+        "Which memex_recall arguments and RecallResult fields are public?",
+        "What fields does RecallHit expose?",
+        "How do CLI and MCP preserve parity after a shared change?"
+      ]
+    },
+    {
+      "name": "Token packing behavior",
+      "queries": [
+        "Why can a later large recall hit be skipped while smaller hits fit?",
+        "Which hit is always returned whole?",
+        "What counts against the default --max-tokens budget?"
+      ]
+    },
+    {
+      "name": "Transcript noise filter",
+      "queries": [
+        "Where are credential patterns redacted during transcript ingestion?",
+        "What does the shared write path scrub before storage?",
+        "What may logs record about redactions?"
+      ]
+    },
+    {
+      "name": "Backup restore boundary",
+      "queries": [
+        "How does restore protect the existing memory store?",
+        "How are archive paths and symlinks validated?",
+        "Which backup and restore operations belong to the operator?"
+      ]
+    },
+    {
+      "name": "Expired memory handling",
+      "queries": [
+        "How does include_expired change normal recall?",
+        "How does include_inactive differ from include_expired?",
+        "What page states does retriever search by default?"
+      ]
+    },
+    {
+      "name": "Hard forget safety",
+      "queries": [
+        "What does hard forget remove from the page store and index?",
+        "How are scoped namespace links removed?",
+        "How is archive forget different from hard forget?"
+      ]
+    },
+    {
+      "name": "Provenance investigation",
+      "queries": [
+        "How does transcript_ref connect an episode to its session?",
+        "What direct or inferred links does memex_provenance report?",
+        "Which session header fields help identify the source conversation?"
+      ]
+    },
+    {
+      "name": "Project identity explanation",
+      "queries": [
+        "Why is a project folder name only a readable locator?",
+        "Where is the opaque project_id recorded and used for recall?",
+        "What happens to legacy folders during normal runtime operations?"
+      ]
+    },
+    {
+      "name": "Evaluation promotion decision",
+      "queries": [
+        "What held-out improvement over broad and linked-summary baselines is required for promotion?",
+        "Which paired strategies and budgets must the report compare?",
+        "How many focused questions can task evidence ask?"
+      ]
+    },
+    {
+      "name": "Task report privacy",
+      "queries": [
+        "Which aggregate task and fact recall metrics does the paired report publish?",
+        "What can the audit trail retain without memory content?",
+        "How does evaluation isolate MEMEX_DATA_DIR from developer data?"
+      ]
+    }
+  ]
+}

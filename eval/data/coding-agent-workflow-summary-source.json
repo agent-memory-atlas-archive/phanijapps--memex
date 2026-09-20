@@ -1,1099 +1,725 @@
 {
-  "source_revision": "0f7813d0c4b1e3a6b2ddb46260ae6043aa2bc0cb",
-  "source_hashes": {
-    "AGENTS.md": "ee2c9d76a62e67fbd4dbc01baeb8307e823faeb1f1d2d966944ec7c83d48d6b5",
-    "README.md": "f9fb7f5b0ac7f6c74778347d6a51ce6598d54e528897dd5accf93ad470beb950",
-    "docs/CONVENTIONS.md": "9f00bed2b4a79cc2aeb4fc5330a2b9902e4d45a9ad7b93c247234d0e80aff9af",
-    "docs/architecture/overview.md": "d878d33ac060a867bd4134229ed77fc237bdff99821daf794491aa204be6d18f",
-    "docs/gitpages/guide.md": "c8cb6139f4f68512d611acbd9df95af617d84b80a5fdfb9647d0eb8ed6012ec4",
-    "docs/gitpages/spec.md": "5c6e88ede480d6e75ff0718d403817019821c755db9289534a8d9a5e8c1e0b40",
-    "docs/specs/task-evidence-recall/spec.md": "ce82b2c7a4ad08b922c489bb072b930222d50e1cce728c191841a9bf25e3a44c"
+  "schema": "Linked summary and focused-query contributors may read this file. It hides labels and answer-key fields.",
+  "linked_summary_fixture": {
+    "path": "eval/data/task-linked-summaries.json",
+    "shape": {
+      "summaries": [
+        {
+          "task": "<task name>",
+          "body": "<source-linked Markdown summary>"
+        }
+      ]
+    },
+    "source_link_formats": [
+      "[[memory-slug]]",
+      "memex://memory-slug"
+    ]
   },
-  "project_id": "aaaaaaaaaaaaaaaaaaaaaaaa",
-  "other_project_id": "bbbbbbbbbbbbbbbbbbbbbbbb",
-  "memories": [
-    {
-      "title": "Scope Install the CLI directly from GitHub then connect it to",
-      "type": "entity",
-      "body": "Install the CLI directly from GitHub, then connect it to a coding agent from your project directory:",
-      "source": "docs/gitpages/guide.md",
-      "scope": "project"
-    },
-    {
-      "title": "Scope The durable layout separates global pages at docsglobaltype from project",
-      "type": "entity",
-      "body": "The durable layout separates global pages at `docs/global/<type>/` from project pages at `docs/projects/<project-folder>/<type>/`. The project folder is a readable locator, not the project identity. When memex can read a usable Git origin, including an enterprise or self-hosted GitLab remote, it uses the repository basename with a `git-` prefix, such as `docs/projects/git-memex/preferences/example.md`. A local Git repository without a usable origin and a non-Git workspace use the workspace folder name, such as `docs/projects/memex/preferences/example.md`.",
-      "source": "docs/gitpages/guide.md",
-      "scope": "project"
-    },
-    {
-      "title": "Scope The Memories view shows 20 newest first cards per page",
-      "type": "entity",
-      "body": "The Memories view shows 20 newest-first cards per page and preserves type and scope in direct Previous/Next URLs. Selecting a new type or scope starts on page one. \u201cAll memory\u201d browses every namespace; \u201cGlobal only\u201d browses global pages; a project label browses that project. Dashboard search uses BM25 without updating access counters: \u201cBest match\u201d searches the chosen project first and falls back to all memory, while \u201cSearch everywhere\u201d searches all namespaces. The Sessions view groups captured sessions by date, project label when known, and harness. A session replay shows separate User, AI assistant, and Tool cards; tool input and output have bounded previews with expandable detail and a truncation notice for longer values.",
-      "source": "docs/gitpages/guide.md",
-      "scope": "project"
-    },
-    {
-      "title": "Scope Claude Code hooks in settingsjson SessionStart and UserPromptSubmit inject context",
-      "type": "entity",
-      "body": "**Claude Code** \u2014 hooks in `settings.json`: SessionStart and UserPromptSubmit inject context (hook stdout becomes context); SessionEnd ingests the session transcript. The installer adds scoped-write guidance to the project's `CLAUDE.md`. MCP: `claude mcp add memex -- memex serve-mcp`.",
-      "source": "docs/gitpages/guide.md",
-      "scope": "project"
-    },
-    {
-      "title": "Scope Mission One sentence What the project is in language anyone",
-      "type": "entity",
-      "body": "- **Mission.** One sentence. What the project is, in language anyone could understand. - **Scope.** What the project does, and \u2014 equally important \u2014 what it doesn't. The \"doesn't\" list is what tells contributors and agents when a request is out of bounds. - **Principles.** Five to seven values that resolve ties. Each principle has a one-sentence elaboration with a concrete example.",
-      "source": "docs/CONVENTIONS.md",
-      "scope": "project"
-    },
-    {
-      "title": "Scope Each pack declares its install scope repo project local user",
-      "type": "entity",
-      "body": "Each pack declares its install **scope** \u2014 `repo` (project-local), `user` (shared across every repo the adopter opens), or both \u2014 in `pack.toml`'s `[pack.install]` table. The pack author picks the dimension; adopters can override within the publisher's declared set via `--scope`. The default landing for every pack we ship today is `repo`; user-scope eligibility requires content portability \u2014 no hooks wired into a specific repo's surface, no seeds that name a particular project. The schema enforces `default-scope \u2208 allowed-scopes` so the rule holds outside the CLI. `agentbundle install` re-runs the contract-level user-scope rails (seeds / hooks / marker) against the resolved pack content at install time, closing the widen-after-publish gap.",
-      "source": "docs/CONVENTIONS.md",
-      "scope": "project"
-    },
-    {
-      "title": "Scope The keys live under metadata rather than at top level",
-      "type": "entity",
-      "body": "The keys live under `metadata:` rather than at top level because the [agentskills.io specification](https://agentskills.io/specification) pins the top-level frontmatter set to `name`, `description`, `license`, `compatibility`, `metadata`, `allowed-tools` and reserves `metadata:` as the project-specific escape hatch. `agentbundle catalogue verify` (step 11) refuses any top-level key outside that set; `agentbundle catalogue lint` (`_PackRules._check_credentialed_skills`) scopes its checks to skills with `metadata.credentialed: true`.",
-      "source": "docs/CONVENTIONS.md",
-      "scope": "project"
-    },
-    {
-      "title": "Scope At task start run memex hook session start and treat",
-      "type": "entity",
-      "body": "- At task start, run `memex hook session-start` and treat its output as project context: it lists durable memories relevant to this repository. - When the user states a durable fact, preference, or rule, or asks to memorize one, write it with `memex_write` (or `memex write`). Choose project scope for workspace architecture, conventions, and decisions; choose global scope for facts intended across projects. If unclear, choose project. Pass `scope=\"project\"` or `scope=\"global\"` to the tool, or the matching `--scope` to the CLI. Check the returned file path. - Prefer `memex recall \"<query>\"` (or the `memex_recall` MCP tool) over re-asking the user. - Transcripts are captured automatically by the installed harness hooks; never ingest sessions manually unless recovering a missed capture.",
-      "source": "AGENTS.md",
-      "scope": "project"
-    },
-    {
-      "title": "Storage The filesystem under MEMEX DATA DIR or memex is the",
-      "type": "entity",
-      "body": "The filesystem under `MEMEX_DATA_DIR` or `~/.memex/` is the durable boundary. Markdown pages are the source of truth. SQLite, run logs, transcript metadata, and rendered dashboard responses are derived or supporting state.",
-      "source": "docs/architecture/overview.md",
-      "scope": "project"
-    },
-    {
-      "title": "Storage Memex is both the public Python API and the composition",
-      "type": "entity",
-      "body": "`Memex` is both the public Python API and the composition root: it constructs the filesystem store, index, retriever, link manager, transcript hook, archive service, and import/export service. Infrastructure may implement application ports and use domain types. Adapters should call the facade or shared application services instead of reimplementing operations.",
-      "source": "docs/architecture/overview.md",
-      "scope": "project"
-    },
-    {
-      "title": "Storage The dashboard keeps vizpy as the public local server seam",
-      "type": "entity",
-      "body": "The dashboard keeps `viz.py` as the public local-server seam and route adapter. `viz_components.py` owns the shell and scope controls; `dashboard.css` owns the local visual system; `viz_explorer.py` owns selection and pagination; and `viz_sessions.py` owns grouped session and replay rendering. Routes compose server-rendered fragments from those parts. Dashboard search uses the retriever's non-mutating read path, so GET requests do not update index access counters. The dashboard is a read-only localhost projection. Its durable trust-boundary rules live in [dashboard security](security.md).",
-      "source": "docs/architecture/overview.md",
-      "scope": "project"
-    },
-    {
-      "title": "Storage 1 An adapter creates a validated WriteInput 2 The facade",
-      "type": "entity",
-      "body": "1. An adapter creates a validated `WriteInput`. 2. The facade rejects reserved provenance fields, scrubs secret-shaped text, and asks `WikiStore` to atomically write the Markdown page. 3. `IndexManager` mirrors the page into SQLite and `LinkManager` refreshes its outgoing links.",
-      "source": "docs/architecture/overview.md",
-      "scope": "project"
-    },
-    {
-      "title": "Storage The page write justifies every index mutation A failed or",
-      "type": "entity",
-      "body": "The page write justifies every index mutation. A failed or deleted index can be rebuilt from the pages.",
-      "source": "docs/architecture/overview.md",
-      "scope": "project"
-    },
-    {
-      "title": "Storage 1 BM25Retriever reduces untrusted query text to safe alphanumeric tokens",
-      "type": "entity",
-      "body": "1. `BM25Retriever` reduces untrusted query text to safe alphanumeric tokens, removes only known semantic scaffolding phrases, and searches active, non-expired pages by default. 2. Returned hits update access statistics in SQLite; reads do not rewrite Markdown pages. 3. Hook injection applies a relevance floor, packs hits to a token budget, and emits a bounded context block. Explicit recall can still return weak hits.",
-      "source": "docs/architecture/overview.md",
-      "scope": "project"
-    },
-    {
-      "title": "Storage Production recall uses the semantic and fallback fts5 ranker It",
-      "type": "entity",
-      "body": "Production recall uses the `semantic-and-fallback-fts5` ranker. It caps the safe-token query at 64 tokens and 1,024 UTF-8 bytes, then first runs a strict `AND` FTS5 query over the safe tokens with column weights `slug=1, title=1, body=2, tags=1`, then broadens to an `OR` query only when the strict query returns zero rows. Snippets are capped at 12 tokens. Filters are applied before each limit, returned slugs are unique, links and access statistics are loaded once after ranking, and ascending slug is the final tie-break. The ranker is local SQLite FTS5 only: no embeddings, network service, runtime `rgapi`, subprocess search, or new required dependency is on the recall path.",
-      "source": "docs/architecture/overview.md",
-      "scope": "project"
-    },
-    {
-      "title": "Storage Consolidation is the only operation that needs an LLM WikiConsolidator",
-      "type": "entity",
-      "body": "Consolidation is the only operation that needs an LLM. `WikiConsolidator` selects episode pages, calls the configured application `LLMClient` port, and validates each returned node before using the normal write/index/link path. Remote OpenAI-compatible providers and local harness CLI providers implement the same port. Failures return a partial report and do not block the harness hook.",
-      "source": "docs/architecture/overview.md",
-      "scope": "project"
-    },
-    {
-      "title": "Storage memex verify checks page parsing index freshness links and optional",
-      "type": "entity",
-      "body": "`memex verify` checks page parsing, index freshness, links, and optional recall/write activity evidence. `rebuild-index` reconstructs derived SQLite state. Backup and restore validate archive paths and links; restore preserves the previous store in a timestamped directory before replacement.",
-      "source": "docs/architecture/overview.md",
-      "scope": "project"
-    },
-    {
-      "title": "Storage Change a page field in the domain model strict front",
-      "type": "entity",
-      "body": "- Change a page field in the domain model, strict front-matter codec, persistence mapping, index schema, import/export path, and adapter schemas together. - Change a shared operation in the facade first, then keep CLI and MCP adapters thin and parity-tested. - Change harness behavior behind the `memex hook` contract unless the shared contract itself must change. - Treat a persistent schema change as rebuildable when all information exists in Markdown; otherwise provide an explicit migration and backward-compatibility plan.",
-      "source": "docs/architecture/overview.md",
-      "scope": "project"
-    },
-    {
-      "title": "Storage The memory store is the filesystem Every memory is a",
-      "type": "entity",
-      "body": "**The memory store is the filesystem.** Every memory is a Markdown page under `~/.memex/docs/`, with YAML front matter and a Markdown body. Pages are human-readable, git-able, and editable by hand in any editor. If you edit a page externally, `memex rebuild-index` (or `memex watch`) picks it up.",
-      "source": "docs/gitpages/guide.md",
-      "scope": "project"
-    },
-    {
-      "title": "Storage Links Reference other pages in any body with slug links",
-      "type": "entity",
-      "body": "**Links.** Reference other pages in any body with `[[slug]]` links (`[[Ruff Linter]]` normalizes to `[[ruff-linter]]`). Links are indexed both directions \u2014 backlinks answer \"what mentions this?\".",
-      "source": "docs/gitpages/guide.md",
-      "scope": "project"
-    },
-    {
-      "title": "Storage The index is disposable memdb mirrors the pages for fast",
-      "type": "entity",
-      "body": "**The index is disposable.** `mem.db` mirrors the pages for fast SQLite FTS5 search and freshness tracking. It is never the source of truth:",
-      "source": "docs/gitpages/guide.md",
-      "scope": "project"
-    },
-    {
-      "title": "Harness Memex is an installable Python package and CLI It has",
-      "type": "procedure",
-      "body": "Memex is an installable Python package and CLI. It has no required service process: commands and coding-agent hooks open a local store, perform one operation, and exit. The optional `memex viz` server exists only for the life of that command.",
-      "source": "docs/architecture/overview.md",
-      "scope": "project"
-    },
-    {
-      "title": "Harness The CLI has two deliberate infrastructure facing seams harness installation",
-      "type": "procedure",
-      "body": "The CLI has two deliberate infrastructure-facing seams: harness installation and harness-native transcript parsing. They adapt external files and processes before handing normalized data to the shared application contract.",
-      "source": "docs/architecture/overview.md",
-      "scope": "project"
-    },
-    {
-      "title": "Harness Harness adapters call memex hook transcript with the harness native",
-      "type": "procedure",
-      "body": "Harness adapters call `memex hook transcript` with the harness-native session file. The parser normalizes turns and a session header, `TranscriptHook` writes JSONL plus metadata, and an episode page links back to the transcript. Repeated Codex captures merge by stable session identity so compaction and shutdown events remain idempotent.",
-      "source": "docs/architecture/overview.md",
-      "scope": "project"
-    },
-    {
-      "title": "Harness Repository content cannot enable capture or injection Installation modifies user",
-      "type": "procedure",
-      "body": "Repository content cannot enable capture or injection. Installation modifies user-owned harness configuration only after an explicit command, and tests use an isolated `MEMEX_DATA_DIR` rather than the developer's real store.",
-      "source": "docs/architecture/overview.md",
-      "scope": "project"
-    },
-    {
-      "title": "Harness Concepts concepts Getting started getting started Operations operations Transcripts and",
-      "type": "procedure",
-      "body": "- [Concepts](#concepts) - [Getting started](#getting-started) - [Operations](#operations) - [Transcripts and provenance](#transcripts-and-provenance) - [Harness integration](#harness-integration) - [Deterministic checks (CI)](#deterministic-checks-ci) - [Data portability](#data-portability) - [Configuration reference](#configuration-reference) - [Data safety](#data-safety)",
-      "source": "docs/gitpages/guide.md",
-      "scope": "project"
-    },
-    {
-      "title": "Harness Run memex install without a name to choose a harness",
-      "type": "procedure",
-      "body": "Run `memex install` without a name to choose a harness interactively. For source development, clone the repository and run `uv sync --all-groups`; `uv tool install . --force` installs that checkout as the CLI. If you rebuild at the same version after changing source files, add `--no-cache` because uv may reuse the earlier wheel.",
-      "source": "docs/gitpages/guide.md",
-      "scope": "project"
-    },
-    {
-      "title": "Harness Recall and hook injection pack to a token budget max",
-      "type": "procedure",
-      "body": "Recall and hook injection pack to a token budget (`--max-tokens`, default 4096): page text counts against the budget, metadata is free, a hit that does not fit is skipped in favor of smaller ones, and the top hit is always returned whole. Hook injection also stays silent when the best match ranks below the floor \u2014 weak matches inject nothing rather than noise. Every injected block opens with the three-line memory constitution.",
-      "source": "docs/gitpages/guide.md",
-      "scope": "project"
-    },
-    {
-      "title": "Harness Every write boundary CLI MCP transcript ingest consolidation redacts a",
-      "type": "procedure",
-      "body": "Every write boundary \u2014 CLI, MCP, transcript ingest, consolidation \u2014 redacts a catalog of credential patterns (API keys, tokens, private keys, database URLs, JWTs) before anything is stored, replacing matches with typed `[REDACTED:<kind>]` markers. Redaction categories are logged; matched text never is.",
-      "source": "docs/gitpages/guide.md",
-      "scope": "project"
-    },
-    {
-      "title": "Harness memex viz starts a localhost only read only dashboard It",
-      "type": "procedure",
-      "body": "`memex viz` starts a localhost-only, read-only dashboard. It provides direct links and HTMX-enhanced navigation for global and project memory, health, sessions, and token use. The dashboard does not write pages or transcript data.",
-      "source": "docs/gitpages/guide.md",
-      "scope": "project"
-    },
-    {
-      "title": "Harness Store a session transcript and memex links it to an",
-      "type": "procedure",
-      "body": "Store a session transcript and memex links it to an episode node \u2014 the foundation for tracing any memory back to the conversation that produced it.",
-      "source": "docs/gitpages/guide.md",
-      "scope": "project"
-    },
-    {
-      "title": "Harness Transcript JSONL and metadata use dated directories under memextranscriptsYYYY MM",
-      "type": "procedure",
-      "body": "Transcript JSONL and metadata use dated directories under `~/.memex/transcripts/YYYY-MM-DD/`. `memex clear-transcripts --confirm` removes raw transcript files and retires their episode transcript links; it is an explicit lifecycle operation, not part of dashboard browsing.",
-      "source": "docs/gitpages/guide.md",
-      "scope": "project"
-    },
-    {
-      "title": "Mcp Temporal validity Every node optionally carries expires at valid from",
-      "type": "procedure",
-      "body": "**Temporal validity.** Every node optionally carries `expires_at`, `valid_from`, and `valid_to`. Expired or retired nodes are hidden from recall by default (`--include-expired` / `include_expired=True` opts back in).",
-      "source": "docs/gitpages/guide.md",
-      "scope": "project"
-    },
-    {
-      "title": "Mcp Local SQLite FTS5 over slug title body and tags Recall",
-      "type": "procedure",
-      "body": "- Local SQLite FTS5 over slug, title, body, and tags. Recall reduces the query to safe alphanumeric tokens, removes known scaffolding phrases, then runs the production `semantic-and-fallback-fts5` ranker: strict `AND` matching first, body weighted 2x, and broad `OR` fallback only when strict matching has no hits. - Results are deterministic and ranked best-first with short `<mark>`-highlighted snippets. Filters apply before limiting, returned slugs are unique, and ascending slug is the final tie-break. - Filters: `--type`, `--tag` (AND semantics), `--top-k` (1\u2013100), `--include-expired`. - Every hit bumps its access counter \u2014 recall telemetry feeds [recency decay](#configuration-reference) and `verify` evidence. - Recall stays offline and dependency-light: no embeddings, hosted search, runtime `rgapi`, or `rg` executable is required.",
-      "source": "docs/gitpages/guide.md",
-      "scope": "project"
-    },
-    {
-      "title": "Mcp Requires LLM credentials MEMEX API KEY or llm in memextoml",
-      "type": "procedure",
-      "body": "Requires LLM credentials (`MEMEX_API_KEY` or `[llm]` in `memex.toml`). Works with any OpenAI-compatible endpoint \u2014 OpenAI, Ollama, LM Studio, OpenRouter \u2014 via one `openai`-SDK client pointed at the configured base URL.",
-      "source": "docs/gitpages/guide.md",
-      "scope": "project"
-    },
-    {
-      "title": "Mcp Pages carry status active pending superseded archived Recall and injection",
-      "type": "procedure",
-      "body": "Pages carry `status: active | pending | superseded | archived`. Recall and injection see `active` pages only (pass `--include-inactive` / `include_inactive` to see the rest). `memex forget <slug> --mode archive` retires in place instead of deleting. `memex merge <target> <source>` appends the source body into the target and marks the source superseded with a backlink. With `[governance] approval = \"manual\"` in `memex.toml`, consolidation-created pages land `pending`; `memex approve <slug>` makes them recallable. `memex status` reports index freshness, last capture per harness, pending/archived counts, and consecutive zero-yield consolidations (memex verify warns on a streak of three).",
-      "source": "docs/gitpages/guide.md",
-      "scope": "project"
-    },
-    {
-      "title": "Mcp The first transcript line is an optional session header type",
-      "type": "procedure",
-      "body": "The first transcript line is an optional session header (`type: memex_session_header`) carrying identity \u2014 session id, CLI version, provider, cwd, git branch/commit, models and reasoning efforts used, timestamps, duration. Token counts are metadata, not transcript content: the `{session_id}.meta.json` sidecar carries session totals (`token_usage`) and per-turn usage (`turn_token_usage`), always the latest reported values and never summed across cumulative records. Older turn-only transcripts remain readable; repeated captures rewrite the sidecar with current totals.",
-      "source": "docs/gitpages/guide.md",
-      "scope": "project"
-    },
-    {
-      "title": "Mcp Ingestion writes transcriptsYYYY MM DDsess abcjsonl metajson creates docsglobalepisodessess abcmd",
-      "type": "procedure",
-      "body": "Ingestion writes `transcripts/YYYY-MM-DD/sess-abc.jsonl` + `.meta.json`, creates `docs/global/episodes/sess-abc.md` with a `transcript_ref`, and indexes it. From Python or MCP, `get_provenance(slug)` / `memex_provenance` reports how a node traces back: **direct** (it has a transcript), **inferred** (an episode links to it), or **none**.",
-      "source": "docs/gitpages/guide.md",
-      "scope": "project"
-    },
-    {
-      "title": "Mcp MCP tools alone depend on the model choosing to call",
-      "type": "procedure",
-      "body": "MCP tools alone depend on the model choosing to call them. Memex adds a deterministic push layer and a verifiable proof layer:",
-      "source": "docs/gitpages/guide.md",
-      "scope": "project"
-    },
-    {
-      "title": "Mcp Installs register the MCP server where the harness supports it",
-      "type": "procedure",
-      "body": "Installs register the MCP server where the harness supports it: Claude Code via `claude mcp add --scope user` (when the CLI is available \u2014 the note tells you the exact command otherwise), Codex via `[mcp_servers]` in `config.toml`, and Copilot via `.vscode/mcp.json` for VS Code agent mode. pi intentionally has no built-in MCP; its extension is the integration. `--no-mcp` skips registration everywhere.",
-      "source": "docs/gitpages/guide.md",
-      "scope": "project"
-    },
-    {
-      "title": "Mcp From the project where it was installed remove one adapter",
-      "type": "procedure",
-      "body": "From the project where it was installed, remove one adapter with `memex uninstall <name>` (or `memex harness uninstall <name>`). This removes Memex's hooks, MCP registration, copied adapter files, and exact guidance snippets for that harness. Unrelated settings and modified adapter files are left in place and reported. The command keeps `~/.memex` memories, transcripts, and configuration; run it once per installed harness. After removing adapters, `uv tool uninstall memex` removes the CLI. Your `~/.memex/` data remains until you remove it separately.",
-      "source": "docs/gitpages/guide.md",
-      "scope": "project"
-    },
-    {
-      "title": "Mcp Installing claude codex or pi also provisions memextoml absent one",
-      "type": "procedure",
-      "body": "Installing `claude`, `codex`, or `pi` also provisions `memex.toml` (absent one) with `[consolidation] provider = \"<harness>\"` \u2014 so distillation rides the coding harness's own model, credentials, and billing via its CLI print mode, with no separate API key.",
-      "source": "docs/gitpages/guide.md",
-      "scope": "project"
-    },
-    {
-      "title": "Mcp pi the reference adapter A TypeScript extension injects repo level",
-      "type": "procedure",
-      "body": "**pi** \u2014 the reference adapter. A TypeScript extension injects repo-level memories on the first turn and prompt-relevant memories on every turn, and includes scoped-write guidance on the first turn even if recall is empty. It captures the session file on shutdown. Knobs: `MEMEX_BIN`, `MEMEX_TOP_K`, `MEMEX_DISABLE`.",
-      "source": "docs/gitpages/guide.md",
-      "scope": "project"
-    },
-    {
-      "title": "Mcp Codex no native injection point so an AGENTSmd memory contract",
-      "type": "procedure",
-      "body": "**Codex** \u2014 no native injection point, so: an AGENTS.md memory contract (recall at task start, write durable facts), MCP via `config.toml`, and a `notify` wrapper that ingests each rollout on `agent-turn-complete`.",
-      "source": "docs/gitpages/guide.md",
-      "scope": "project"
-    },
-    {
-      "title": "Safety Retrieval evaluation uses independent offline workloads and treats every source",
-      "type": "entity",
-      "body": "Retrieval evaluation uses independent offline workloads and treats every source as untrusted. Salesforce coverage is represented by concise, independently authored offline Salesforce facts with official URLs as provenance; tests and evaluations never scrape or fetch Salesforce pages. Gutenberg coverage comes from a maintainer-supplied local Project Gutenberg catalog import, not from HTML crawling or book text.",
-      "source": "docs/architecture/overview.md",
-      "scope": "project"
-    },
-    {
-      "title": "Safety Capture and distillation can be one step Any harness hook",
-      "type": "entity",
-      "body": "Capture and distillation can be one step. Any harness hook that ingests a transcript can distill the fresh episode immediately \u2014 enabled per call with `--consolidate`, or globally with `MEMEX_AUTO_CONSOLIDATE=1` (works for the pi, Claude Code, and Codex adapters unchanged, since they all invoke the same hook). Off by default: it spends tokens and needs credentials. Point `[consolidation]` at a low-effort model \u2014 a local Ollama model, a mini-tier endpoint, or a coding harness itself (`provider = \"codex\"`) so distillation rides the same model your agent already uses. Failure never blocks the hook \u2014 a missing key reports the reason, an unreachable model returns an empty consolidation result.",
-      "source": "docs/gitpages/guide.md",
-      "scope": "project"
-    },
-    {
-      "title": "Safety Logs never contain memory contents The audit trail records operations",
-      "type": "entity",
-      "body": "- **Logs never contain memory contents.** The audit trail records operations, slugs, and counts \u2014 nothing else. - **Stored memories and tool inputs are untrusted by design.** Front matter, transcripts, archives, and LLM output are validated at every boundary; consolidation output is schema-checked before any write. - **MCP tool errors are sanitized** \u2014 no paths, memory text, or provider details cross the stdio boundary. - **API keys** belong in `MEMEX_API_KEY`, not in `memex.toml`. - **Nothing leaves the machine.** The only network call memex ever makes is the explicit `consolidate` operation, against the endpoint you configure.",
-      "source": "docs/gitpages/guide.md",
-      "scope": "project"
-    },
-    {
-      "title": "Safety Audience Internal contributors agents working on the code vs external",
-      "type": "entity",
-      "body": "- **Audience.** Internal (contributors, agents working on the code) vs. external (users of the product). - **Lifecycle.** *Living* (must match current reality), *frozen* (immutable history), or *governance* (in-flight proposals).",
-      "source": "docs/CONVENTIONS.md",
-      "scope": "project"
-    },
-    {
-      "title": "Safety shipped specs above means the whole directory specmd and planmd",
-      "type": "entity",
-      "body": "`shipped specs/*` above means the whole directory \u2014 `spec.md` **and** `plan.md`. This needs saying because the plan template's own contract line reads \"Unlike the spec, this document is allowed to change as you learn\", which sounds like a standing exemption and is not one. That licence is **phase-scoped**: it holds only while the plan is `Drafting`, and ends when the plan is approved. From approval, both `spec.md` and `plan.md` are pinned in substance. Only lifecycle bookkeeping \u2014 the preamble status token and task-progress checkboxes \u2014 may still be written. An observation produced by execution belongs in the sibling `notes/verification-ledger.md`, never in either approved artifact.",
-      "source": "docs/CONVENTIONS.md",
-      "scope": "project"
-    },
-    {
-      "title": "Safety There are therefore two stages not one At plan approval",
-      "type": "entity",
-      "body": "There are therefore **two stages, not one.** At plan approval the pair is *pinned in substance*: the contract stops moving so implementation cannot drift it, while lifecycle bookkeeping is still written. Once the plan is `Done` and the spec is `Shipped`, the work is over, both documents are history, and the whole directory is *frozen* \u2014 the retention rule the `Frozen` class above names. Pinned protects the contract during the build; frozen protects the record afterwards.",
-      "source": "docs/CONVENTIONS.md",
-      "scope": "project"
-    },
-    {
-      "title": "Safety A plan that stayed substantively editable after approval would be",
-      "type": "entity",
-      "body": "A plan that stayed substantively editable after approval would be a second, unversioned account of what we did, competing with the ADR that records why. A genuine error in either approved artifact follows the controlled-amendment path.",
-      "source": "docs/CONVENTIONS.md",
-      "scope": "project"
-    },
-    {
-      "title": "Safety What one page Mission scope and principles The foundational document",
-      "type": "entity",
-      "body": "**What:** one page. Mission, scope, and principles. The foundational document. Modeled on the [CNCF charter pattern](https://contribute.cncf.io/maintainers/governance/charter/).",
-      "source": "docs/CONVENTIONS.md",
-      "scope": "project"
-    },
-    {
-      "title": "Safety Decision history ADRs Current product state product Roles voting decision",
-      "type": "entity",
-      "body": "- Decision history \u2192 ADRs. - Current product state \u2192 `product/`. - Roles, voting, decision-making \u2192 `GOVERNANCE.md`, *if* the project is large enough to need one. - A glossary \u2192 `guides/reference/`. Vocabulary is reference material.",
-      "source": "docs/CONVENTIONS.md",
-      "scope": "project"
-    },
-    {
-      "title": "Safety On governance docs small and medium projects dont need a",
-      "type": "entity",
-      "body": "**On governance docs:** small and medium projects don't need a separate `GOVERNANCE.md`. A maintainer or small group operating by consensus is fine. Add governance documentation when there are roles, decision procedures, or election processes worth writing down \u2014 typically when the project has external contributors who need clarity on how to gain authority. Forcing governance ceremony on a project that doesn't need it produces theater, not clarity.",
-      "source": "docs/CONVENTIONS.md",
-      "scope": "project"
-    },
-    {
-      "title": "Safety What a proposal to change something significant a new feature",
-      "type": "entity",
-      "body": "**What:** a proposal to change something significant \u2014 a new feature area, a new convention, a deprecation, a breaking change to a public interface. RFCs are *forward-looking governance*; ADRs are *backward-looking record*.",
-      "source": "docs/CONVENTIONS.md",
-      "scope": "project"
-    },
-    {
-      "title": "Safety Optional Experimental status An RFC that proposes running an experiment",
-      "type": "entity",
-      "body": "**Optional `Experimental` status.** An RFC that proposes running an experiment \u2014 using an optional `Experiment / validation` section of the RFC template \u2014 may sit in `Experimental` while the trial runs and results are pending, instead of being forced to a premature Accept or Reject. Results live in a linked spike note (or a follow-up RFC / superseding ADR), not the RFC body; when they land, the RFC moves to `Accepted | Rejected | Withdrawn`. An `Experimental` RFC is still in-flight (Governance class, not Frozen). Use it only when an experiment is genuinely running.",
-      "source": "docs/CONVENTIONS.md",
-      "scope": "project"
-    },
-    {
-      "title": "Docs The normal gates are uv run ruff check uv run",
-      "type": "entity",
-      "body": "The normal gates are `uv run ruff check .`, `uv run ruff format --check .`, `uv run mypy src tests`, `uv run pytest`, and `uv run mkdocs build --strict`.",
-      "source": "docs/architecture/overview.md",
-      "scope": "project"
-    },
-    {
-      "title": "Docs The only LLM calling operation and only on explicit request",
-      "type": "entity",
-      "body": "The only LLM-calling operation, and only on explicit request. It reads recent episode nodes and proposes durable entity/preference/procedure/summary nodes (the prompt and rules live in the specification, \u00a711).",
-      "source": "docs/gitpages/guide.md",
-      "scope": "project"
-    },
-    {
-      "title": "Docs Legacy ID named project folders remain readable and rebuildable Normal",
-      "type": "entity",
-      "body": "Legacy ID-named project folders remain readable and rebuildable. Normal runtime operations do not rename, move, or merge them; an existing store move is a separate maintenance procedure with preview, backup, collision review, and an operation-specific confirmation. If two folders contain the same `project_id`, node type, and slug, lookup and force rebuild fail closed instead of choosing one page.",
-      "source": "docs/gitpages/guide.md",
-      "scope": "project"
-    },
-    {
-      "title": "Docs The most important property of this scheme is that the",
-      "type": "entity",
-      "body": "**The most important property of this scheme** is that the frozen layer gives you decision history *without* the burden of keeping it in sync. Living docs can be honest about the present because they don't have to also be a record of how we got here. That's what ADRs are for.",
-      "source": "docs/CONVENTIONS.md",
-      "scope": "project"
-    },
-    {
-      "title": "Docs 1 Say in part and say which part A bare",
-      "type": "entity",
-      "body": "1. **Say \"in part\" and say which part.** A bare \"superseded\" invites a reader to discard a document that is mostly still correct. 2. **Point at the ADR, not at the spec that implemented it.** The ADR is the decision record and is where the reasoning lives. 3. **Annotate both ends \u2014 between ADRs.** The superseding ADR names what it supersedes; the superseded ADR points forward. A one-way pointer only helps readers who already arrived from the right side.",
-      "source": "docs/CONVENTIONS.md",
-      "scope": "project"
-    },
-    {
-      "title": "Docs The spec end is deliberately one way ADRs do not",
-      "type": "entity",
-      "body": "The **spec end is deliberately one-way**: ADRs do not cite specs (see \u00a7 *Cite upward*), so a superseded spec points at the ADR and the ADR does not point back. That is the intended asymmetry, not a gap to close. 4. **Do not change the body's meaning \u2014 including \"just adding a line\".** An append is a body edit. The residue is real and accepted: someone who greps mid-file still lands on the old rule with no pointer in view. The mitigation is that the *operative* instruction lives in a Living file at the point of use (a config header, a linter's message), not that the frozen record is patched.",
-      "source": "docs/CONVENTIONS.md",
-      "scope": "project"
-    },
-    {
-      "title": "Docs Carve out meaning preserving mechanical rewrites are allowed a path",
-      "type": "entity",
-      "body": "**Carve-out: meaning-preserving mechanical rewrites are allowed** \u2014 a path or link rename, a moved file's reference, a repo-wide identifier change. `84d79223` (\"lift `docs/guides/` to `guides/`\") rewrote references across 156 files under `docs/specs/`, shipped specs included, and was right to. What freezes is the *record of the decision*, not the spelling of a path that has since moved; a frozen document with dangling links is a worse record, not a purer one. The test is whether a reader's understanding of what was decided changes. If it does, it is not mechanical.",
-      "source": "docs/CONVENTIONS.md",
-      "scope": "project"
-    },
-    {
-      "title": "Docs Link the closing spec the way the supersession form links",
-      "type": "entity",
-      "body": "Link the closing spec, the way the supersession form links its ADR; the placeholder above is unlinked only so the repo's own link check does not chase it.",
-      "source": "docs/CONVENTIONS.md",
-      "scope": "project"
-    },
-    {
-      "title": "Docs Not Constrained by It is the better semantic fit it",
-      "type": "entity",
-      "body": "**Not `Constrained by:`.** It is the better semantic fit \u2014 it is the field that cites governing decisions \u2014 but it is a record of what governed the spec *at ship time*, and that record is still accurate. Editing it would rewrite history rather than annotate it, and would extend mutability to a second field for no gain. (`Constrained by:` *can* carry a supersession clause \u2014 `docs/specs/copilot-full-parity/spec.md` does exactly that \u2014 so the argument is that `Status` is the shorter carrier already licensed here, not that it is the only one capable of it.)",
-      "source": "docs/CONVENTIONS.md",
-      "scope": "project"
-    },
-    {
-      "title": "Gates Slugs derive from titles Ruff linter ruff linter collisions get",
-      "type": "procedure",
-      "body": "- Slugs derive from titles (`Ruff linter` \u2192 `ruff-linter`), collisions get `-2`, `-3` suffixes. - Writing an existing slug **updates** it, preserving `id`, `created`, and access counters. - `importance` \u2208 [0, 1]; `[[slug]]` links in the body are indexed as edges.",
-      "source": "docs/gitpages/guide.md",
-      "scope": "project"
-    },
-    {
-      "title": "Gates GitHub Copilot hosted no hooks no local stdio the deterministic",
-      "type": "procedure",
-      "body": "**GitHub Copilot (hosted)** \u2014 no hooks, no local stdio: the deterministic layer carries it. The adapter installs a memory contract into `.github/copilot-instructions.md` and a `memex verify` workflow on every PR.",
-      "source": "docs/gitpages/guide.md",
-      "scope": "project"
-    },
-    {
-      "title": "Gates Schema violations are rejected by the server with a field",
-      "type": "procedure",
-      "body": "Schema violations are rejected by the server with a field-precise error; domain rejections return sanitized error data. Tool descriptions are call-time contracts authored in `memex.domain.operations` \u2014 the same registry the CLI help uses.",
-      "source": "docs/gitpages/guide.md",
-      "scope": "project"
-    },
-    {
-      "title": "Gates Always checked every page parses the index matches content hashes",
-      "type": "procedure",
-      "body": "Always checked: every page parses; the index matches content hashes; every link resolves. With `--since`, memex additionally reports recall activity (access telemetry) and write activity (updated timestamps) since the cutoff; `--require-*` turns missing evidence into exit code 1. The Copilot adapter ships a ready-made workflow (`marketplace/copilot/ memex-verify.yml`).",
-      "source": "docs/gitpages/guide.md",
-      "scope": "project"
-    },
-    {
-      "title": "Gates ARCHITECTUREmd when present is the concise descriptive system model responsibilities",
-      "type": "procedure",
-      "body": "`/ARCHITECTURE.md`, when present, is the concise descriptive system model: responsibilities, allowed dependency edges, state ownership, flows, extension points, enforced invariants, and deeper current-state links. It is optional; add it when a repo has more than one subsystem or a boundary the directory tree cannot make clear.",
-      "source": "docs/CONVENTIONS.md",
-      "scope": "project"
-    },
-    {
-      "title": "Gates Architecture documents have three roles overviewmd is descriptive the map",
-      "type": "procedure",
-      "body": "Architecture documents have three roles. `overview.md` is **descriptive** \u2014 the map of how the code is organized today, read to find things. `reference.md` is **normative** \u2014 the golden path (stack, building blocks, component stereotypes, cross-cutting standards) that new work conforms to, the target a feature's low-level design steers by. The system model explains the system, the map tells you where things are, and the golden path tells you how new things should be shaped. A thin repo has only the map; the golden path appears once there are real architecture decisions to hold work to.",
-      "source": "docs/CONVENTIONS.md",
-      "scope": "project"
-    },
-    {
-      "title": "Gates The bottom layers cite the upper layers upper layers do",
-      "type": "procedure",
-      "body": "The bottom layers cite the upper layers; upper layers do not know about lower layers. That's the whole point of the hierarchy.",
-      "source": "docs/CONVENTIONS.md",
-      "scope": "project"
-    },
-    {
-      "title": "Gates A later decision often reverses part of an earlier one",
-      "type": "procedure",
-      "body": "A later decision often reverses part of an earlier one. The earlier document still describes what was true when it shipped, so it is not wrong \u2014 but a reader who starts there must not be left following a rule we no longer keep.",
-      "source": "docs/CONVENTIONS.md",
-      "scope": "project"
-    },
-    {
-      "title": "Gates Lifecycle living but rarely changed Mission scope and foundational principle",
-      "type": "procedure",
-      "body": "**Lifecycle:** living, but rarely changed. Mission, scope, and foundational-principle changes are reserved; wording, clarification, examples, typos, broken links, and accepted decisions are normal PRs regardless of pathname.",
-      "source": "docs/CONVENTIONS.md",
-      "scope": "project"
-    },
-    {
-      "title": "Gates What an immutable record of a decision and the context",
-      "type": "procedure",
-      "body": "**What:** an immutable record of a decision and the context that produced it. \"We chose Postgres over DynamoDB because <reasons>, accepting <tradeoffs>.\"",
-      "source": "docs/CONVENTIONS.md",
-      "scope": "project"
-    },
-    {
-      "title": "Gates The key property of an ADR is that it is",
-      "type": "procedure",
-      "body": "**The key property of an ADR is that it is never edited after acceptance.** If a decision is reversed or revised, you write a new ADR that supersedes the old one and update the old one's status to `Superseded by ADR-NNNN`. The old text stays. This is the difference between an ADR and documentation: ADRs are history.",
-      "source": "docs/CONVENTIONS.md",
-      "scope": "project"
-    },
-    {
-      "title": "Ops memex write memex recall memex consolidate memex forget memex provenance",
-      "type": "procedure",
-      "body": "`memex_write`, `memex_recall`, `memex_consolidate`, `memex_forget`, `memex_provenance`. Transcript capture uses harness hooks; manual ingestion, transcript cleanup, import, and export remain CLI commands.",
-      "source": "docs/gitpages/guide.md",
-      "scope": "project"
-    },
-    {
-      "title": "Ops Archives are validated against path traversal and symlinks before extraction",
-      "type": "procedure",
-      "body": "Archives are validated against path traversal and symlinks before extraction; restores never delete your current data (moved to `pre-restore-<timestamp>/`).",
-      "source": "docs/gitpages/guide.md",
-      "scope": "project"
-    },
-    {
-      "title": "Ops When a page carries a Last verified against commit marker",
-      "type": "procedure",
-      "body": "When a page carries a `Last verified against commit` marker, it records a deliberate whole-page re-verification against that commit, not merely an edit. Update it only after re-reading the whole page against the tree at the recorded commit. An unchanged marker means the page has not received that full audit; it is provenance, not a freshness requirement.",
-      "source": "docs/CONVENTIONS.md",
-      "scope": "project"
-    },
-    {
-      "title": "Ops Workspace prose stays terse and present tense A generated or",
-      "type": "procedure",
-      "body": "Workspace prose stays terse and present-tense. A generated or materially updated entry carries minimal provenance, one short summary of the current outcome or next-needed condition, and hard dependencies only. It must not carry history, rationale, procedure, review transcript, raw finding, copied source text, soft priority, or suggested order in comments or adjacent fields. When that context matters, write it to the resolved canonical artifact first and index only the pointer. Settled live coordination is removed or compacted; it is not replaced with a workspace history.",
-      "source": "docs/CONVENTIONS.md",
-      "scope": "project"
-    },
-    {
-      "title": "Ops Supported legacy workspace entries remain visible but non dispatchable during",
-      "type": "procedure",
-      "body": "Supported legacy workspace entries remain visible but non-dispatchable during the compatibility window. Migration planning consumes a reviewed, human-authored selection and remains read-only. Apply and rollback each consume a fresh, single-use, human-authored confirmation permitted by repository `[authorization.migration]` policy. Agents and migration tooling must never create, edit, prefill, or choose substantive route or authorization values in those files. Ledger-backed rollback restores the exact legacy workspace representation and never deletes the canonical artifact.",
-      "source": "docs/CONVENTIONS.md",
-      "scope": "project"
-    },
-    {
-      "title": "Ops Bundled fixes must be listed under Bundled fixes and fail",
-      "type": "procedure",
-      "body": "Bundled fixes must be listed under `Bundled fixes:` and fail closed on design calls or behavior changes. Tier 1 is reproducible: state the command and show a zero diff on re-run; it may span the repository. Tier 2 is provably inert: show no remaining references and green tests for bounded dead-code or unused-import removal. Tier 3 is hand-made: same-area, same-concern, visibly smaller mechanical work. Tier 1 and Tier 2 require their command or evidence.",
-      "source": "docs/CONVENTIONS.md",
-      "scope": "project"
-    },
-    {
-      "title": "Ops Known limitation The procedure has been validated by prose walk",
-      "type": "procedure",
-      "body": "**Known limitation.** The procedure has been validated by prose walk-through, not by an executed end-to-end dry-run. Any change to **pre-flight (procedure step 0)**, **worktree creation (step 1)**, **report persistence ordering (step 3)**, **merge order (step 5)**, **cleanup recovery (step 6)**, or the **`state.json` `worktrees` schema** must perform an actual `git worktree add` + parallel-dispatch round against a throwaway spec before merging \u2014 read-only walk-through is not sufficient for those surfaces. Step numbers refer to the procedure at `references/supervisor-mode.md` in the `work-loop` skill.",
-      "source": "docs/CONVENTIONS.md",
-      "scope": "project"
-    },
-    {
-      "title": "Ops The broker agnostic invariants below apply to every credentialed primitive",
-      "type": "procedure",
-      "body": "The broker-agnostic invariants below apply to every credentialed primitive regardless of broker. Broker-specific lint extensions layer on top (`auth: creds` requires a credential-resolver import in `scripts/` \u2014 `from credbroker import \u2026`, or the legacy `from .credentials_shim \u2026`; `auth: env` requires each declared `<NAMESPACE>_<KEY>` to be read at least once; `auth: sso-cookie` requires either a credbroker SSO import (`from credbroker import load_sso_cookies`) or subprocess-invocation of the canonical `Path.home() / \".agentbundle\" / \"bin\" / \"sso-broker.py\"` path; `auth: cli` falls through to broker-agnostic checks only).",
-      "source": "docs/CONVENTIONS.md",
-      "scope": "project"
-    },
-    {
-      "title": "Ops 1 If the requested addition is not genuinely needed skip",
-      "type": "procedure",
-      "body": "1. If the requested addition is not genuinely needed, skip it and say so once. 2. Search once, within the current decision boundary, for an adequate existing repository solution; reuse a hit or move on after a decisive empty result. 3. Prefer the standard library when it satisfies the outcome. 4. Prefer a native platform capability when it satisfies the outcome. 5. Prefer an already-installed dependency when it satisfies the outcome; an import absent from the owning manifest is a new dependency. 6. Use one obvious line when it is the complete, maintainable solution. 7. Otherwise write the minimum correct solution in the fewest statements and files that preserve ownership and tests.",
-      "source": "AGENTS.md",
-      "scope": "project"
-    },
-    {
-      "title": "Ops Security considerations trigger SECURITYmd rules govern hook and archive boundaries",
-      "type": "procedure",
-      "body": "- `Security considerations` \u2014 trigger: SECURITY.md rules govern hook and archive boundaries (already linked from the site guide). - `Scoped instructions` \u2014 trigger: `docs/AGENTS.md` (documentation subtree) exists and carries deltas. -->",
-      "source": "AGENTS.md",
-      "scope": "project"
-    },
-    {
-      "title": "Ops Agents forget your stack rules and past decisions Memex keeps",
-      "type": "procedure",
-      "body": "Agents forget your stack, rules, and past decisions. Memex keeps that knowledge in local files and brings relevant memories into coding sessions.",
-      "source": "README.md",
-      "scope": "project"
-    },
-    {
-      "title": "Ops Markdown is the memory Each page under memexdocs is readable",
-      "type": "procedure",
-      "body": "- **Markdown is the memory.** Each page under `~/.memex/docs/` is readable, editable, portable, and suitable for version control. - **Search is rebuildable.** SQLite FTS5 provides BM25 search; `memex rebuild-index` restores the index from the pages. - **Sessions are traceable.** Captured transcripts link to episode memories, so you can find the conversation behind a memory.",
-      "source": "README.md",
-      "scope": "project"
-    },
-    {
-      "title": "Archived Legacy Distractor 1",
-      "type": "summary",
-      "body": "Archived legacy behavior 1 is explicitly not current evidence.",
-      "source": "simulated prior-behavior distractor",
-      "scope": "project",
-      "archive": true
-    },
-    {
-      "title": "Archived Legacy Distractor 2",
-      "type": "summary",
-      "body": "Archived legacy behavior 2 is explicitly not current evidence.",
-      "source": "simulated prior-behavior distractor",
-      "scope": "project",
-      "archive": true
-    },
-    {
-      "title": "Archived Legacy Distractor 3",
-      "type": "summary",
-      "body": "Archived legacy behavior 3 is explicitly not current evidence.",
-      "source": "simulated prior-behavior distractor",
-      "scope": "project",
-      "archive": true
-    },
-    {
-      "title": "Archived Legacy Distractor 4",
-      "type": "summary",
-      "body": "Archived legacy behavior 4 is explicitly not current evidence.",
-      "source": "simulated prior-behavior distractor",
-      "scope": "project",
-      "archive": true
-    },
-    {
-      "title": "Archived Legacy Distractor 5",
-      "type": "summary",
-      "body": "Archived legacy behavior 5 is explicitly not current evidence.",
-      "source": "simulated prior-behavior distractor",
-      "scope": "project",
-      "archive": true
-    },
-    {
-      "title": "Archived Legacy Distractor 6",
-      "type": "summary",
-      "body": "Archived legacy behavior 6 is explicitly not current evidence.",
-      "source": "simulated prior-behavior distractor",
-      "scope": "project",
-      "archive": true
-    },
-    {
-      "title": "Archived Legacy Distractor 7",
-      "type": "summary",
-      "body": "Archived legacy behavior 7 is explicitly not current evidence.",
-      "source": "simulated prior-behavior distractor",
-      "scope": "project",
-      "archive": true
-    },
-    {
-      "title": "Archived Legacy Distractor 8",
-      "type": "summary",
-      "body": "Archived legacy behavior 8 is explicitly not current evidence.",
-      "source": "simulated prior-behavior distractor",
-      "scope": "project",
-      "archive": true
-    },
-    {
-      "title": "Archived Legacy Distractor 9",
-      "type": "summary",
-      "body": "Archived legacy behavior 9 is explicitly not current evidence.",
-      "source": "simulated prior-behavior distractor",
-      "scope": "project",
-      "archive": true
-    },
-    {
-      "title": "Archived Legacy Distractor 10",
-      "type": "summary",
-      "body": "Archived legacy behavior 10 is explicitly not current evidence.",
-      "source": "simulated prior-behavior distractor",
-      "scope": "project",
-      "archive": true
-    },
-    {
-      "title": "Archived Legacy Distractor 11",
-      "type": "summary",
-      "body": "Archived legacy behavior 11 is explicitly not current evidence.",
-      "source": "simulated prior-behavior distractor",
-      "scope": "project",
-      "archive": true
-    },
-    {
-      "title": "Archived Legacy Distractor 12",
-      "type": "summary",
-      "body": "Archived legacy behavior 12 is explicitly not current evidence.",
-      "source": "simulated prior-behavior distractor",
-      "scope": "project",
-      "archive": true
-    },
-    {
-      "title": "Other Project Distractor 1",
-      "type": "summary",
-      "body": "Other project memory 1 belongs to a different workspace.",
-      "source": "simulated distractor",
-      "scope": "other_project"
-    },
-    {
-      "title": "Other Project Distractor 2",
-      "type": "summary",
-      "body": "Other project memory 2 belongs to a different workspace.",
-      "source": "simulated distractor",
-      "scope": "other_project"
-    },
-    {
-      "title": "Other Project Distractor 3",
-      "type": "summary",
-      "body": "Other project memory 3 belongs to a different workspace.",
-      "source": "simulated distractor",
-      "scope": "other_project"
-    },
-    {
-      "title": "Other Project Distractor 4",
-      "type": "summary",
-      "body": "Other project memory 4 belongs to a different workspace.",
-      "source": "simulated distractor",
-      "scope": "other_project"
-    },
-    {
-      "title": "Other Project Distractor 5",
-      "type": "summary",
-      "body": "Other project memory 5 belongs to a different workspace.",
-      "source": "simulated distractor",
-      "scope": "other_project"
-    },
-    {
-      "title": "Other Project Distractor 6",
-      "type": "summary",
-      "body": "Other project memory 6 belongs to a different workspace.",
-      "source": "simulated distractor",
-      "scope": "other_project"
-    },
-    {
-      "title": "Other Project Distractor 7",
-      "type": "summary",
-      "body": "Other project memory 7 belongs to a different workspace.",
-      "source": "simulated distractor",
-      "scope": "other_project"
-    },
-    {
-      "title": "Other Project Distractor 8",
-      "type": "summary",
-      "body": "Other project memory 8 belongs to a different workspace.",
-      "source": "simulated distractor",
-      "scope": "other_project"
-    },
-    {
-      "title": "Other Project Distractor 9",
-      "type": "summary",
-      "body": "Other project memory 9 belongs to a different workspace.",
-      "source": "simulated distractor",
-      "scope": "other_project"
-    },
-    {
-      "title": "Other Project Distractor 10",
-      "type": "summary",
-      "body": "Other project memory 10 belongs to a different workspace.",
-      "source": "simulated distractor",
-      "scope": "other_project"
-    },
-    {
-      "title": "Other Project Distractor 11",
-      "type": "summary",
-      "body": "Other project memory 11 belongs to a different workspace.",
-      "source": "simulated distractor",
-      "scope": "other_project"
-    },
-    {
-      "title": "Other Project Distractor 12",
-      "type": "summary",
-      "body": "Other project memory 12 belongs to a different workspace.",
-      "source": "simulated distractor",
-      "scope": "other_project"
-    },
-    {
-      "title": "Scope project front matter is opaque identity authority",
-      "type": "entity",
-      "body": "Project front matter remains the authority for the opaque `project_id` and safe display label. Use `--scope project --project-id <id> --project-label <name>` when writing, then use the same scope and id to recall only that project.",
-      "source": "docs/gitpages/guide.md",
-      "scope": "project"
-    },
-    {
-      "title": "Scope local recall selects one opaque project id",
-      "type": "entity",
-      "body": "Global recall searches every namespace. Local recall selects one project ID. Project IDs are opaque hashes derived from the Git remote when available, or the local folder identity otherwise; front matter and SQLite use that `project_id` as the namespace authority, not the directory name.",
-      "source": "docs/gitpages/spec.md",
-      "scope": "project"
-    },
-    {
-      "title": "Task evidence asks focused questions within one context budget",
-      "type": "entity",
-      "body": "A coding agent working from a broad goal gathers the distinct, current project facts it needs before editing code. It asks up to three focused questions through the existing recall operation, combines source-linked answers within one context budget, and says when evidence is missing.",
-      "source": "docs/specs/task-evidence-recall/spec.md",
-      "scope": "project"
-    },
-    {
-      "title": "Task evidence duplicate hits appear once with source paths",
-      "type": "entity",
-      "body": "For at most three focused questions, duplicate hits appear once, retain their source paths, and the combined set has at most eight distinct hits.",
-      "source": "docs/specs/task-evidence-recall/spec.md",
-      "scope": "project"
-    },
-    {
-      "title": "Task evidence promotion compares broad and linked baselines",
-      "type": "entity",
-      "body": "Focused-question guidance is promoted only if held-out task-complete recall exceeds both the broad-query and linked-summary baselines by at least 10 percentage points.",
-      "source": "docs/specs/task-evidence-recall/spec.md",
-      "scope": "project"
-    },
-    {
-      "title": "Task evidence report scores paired baselines and costs",
-      "type": "entity",
-      "body": "A paired report gives task-complete and fact-level recall for current Memex injection, one broad query, an ordinary linked task summary, unaided focused questions, and human-written focused questions. Each uses at most eight distinct hits and a 4,096-token complete rendered context budget.",
-      "source": "docs/specs/task-evidence-recall/spec.md",
-      "scope": "project"
-    },
-    {
-      "title": "MCP recall arguments and forget result stay in typed tool contract",
-      "type": "entity",
-      "body": "| `memex_write` | `type`, `title`, `body`, `scope` (`global` or `project`), `tags?`, `importance?`, `links?`, `project_id?`, `project_label?` | `{\"slug\": str, \"file_path\": str}` |\n| `memex_recall` | `query`, `top_k?`, `node_type?` | `RecallResult` |\n| `memex_consolidate` | `mode?`, `max_episodes?` | `ConsolidationReport` |\n| `memex_forget` | `slug`, `mode?` | `{\"slug\": str, \"forgotten\": bool}` |\n| `memex_provenance` | `slug` | `ProvenanceReport` |",
-      "source": "docs/gitpages/spec.md",
-      "scope": "project"
-    },
-    {
-      "title": "RecallHit exposes slug path title body score snippet and metadata fields",
-      "type": "entity",
-      "body": "RecallHit = {\n    \"slug\": str,                             # Wiki file slug (filename without .md)\n    \"file_path\": str,                        # Absolute path to the .md file",
-      "source": "docs/gitpages/spec.md",
-      "scope": "project"
-    },
-    {
-      "title": "RecallResult returns query hits total indexed and search engine",
-      "type": "entity",
-      "body": "RecallResult = {\n    \"query\": str,\n    \"hits\": list[RecallHit],\n    \"total_indexed\": int,                    # Total nodes in index\n    \"search_engine\": Literal[\"semantic-and-fallback-fts5\"],  # Current default",
-      "source": "docs/gitpages/spec.md",
-      "scope": "project"
-    },
-    {
-      "title": "Forget hard deletes page index row and links",
-      "type": "entity",
-      "body": "| `hard` | Deletes the page, its index row, and its links \u2014 irreversible |",
-      "source": "docs/gitpages/guide.md",
-      "scope": "project"
-    },
-    {
-      "title": "Forget hard removes scoped page index row and namespace links",
-      "type": "entity",
-      "body": "- `hard`: Deletes the selected scoped page under `~/.memex/docs/`; removes its index row and namespace-owned outgoing links.",
-      "source": "docs/gitpages/spec.md",
-      "scope": "project"
+  "human_focused_queries_fixture": {
+    "path": "eval/data/human-focused-queries.json",
+    "shape": {
+      "tasks": [
+        {
+          "name": "<task name>",
+          "queries": [
+            "<query>"
+          ]
+        }
+      ]
     }
-  ],
+  },
   "tasks": [
     {
       "name": "Claude lifecycle provenance",
-      "goal": "Add Claude Code handoff so a later agent receives session context and can trace the transcript source.",
-      "required": [
-        "scope-claude-code-hooks-in-settingsjson-sessionstart-and-userpro",
-        "harness-harness-adapters-call-memex-hook-transcript-with-the-har",
-        "mcp-ingestion-writes-transcriptsyyyy-mm-ddsess-abcjsonl-metajson"
-      ]
+      "goal": "Add Claude Code handoff so a later agent receives session context and can trace the transcript source."
     },
     {
       "name": "Scoped architecture recall",
-      "goal": "Fix a workflow where repository architecture notes were saved but the new workspace session cannot find them.",
-      "required": [
-        "scope-the-durable-layout-separates-global-pages-at-docsglobaltyp",
-        "scope-at-task-start-run-memex-hook-session-start-and-treat",
-        "storage-memex-is-both-the-public-python-api-and-the-composition"
-      ]
+      "goal": "Fix a workflow where repository architecture notes were saved but the new workspace session cannot find them."
     },
     {
       "name": "SQLite corruption recovery",
-      "goal": "Recover memories after SQLite corruption and prove no durable decisions were lost.",
-      "required": [
-        "storage-the-filesystem-under-memex-data-dir-or-memex-is-the",
-        "storage-the-page-write-justifies-every-index-mutation-a-failed-o",
-        "storage-the-index-is-disposable-memdb-mirrors-the-pages-for-fast"
-      ]
+      "goal": "Recover memories after SQLite corruption and prove no durable decisions were lost."
     },
     {
       "name": "MCP surface review",
-      "goal": "Review a harness integration so maintenance commands stay away from model tools while normal memory tools remain available.",
-      "required": [
-        "mcp-mcp-tools-alone-depend-on-the-model-choosing-to-call",
-        "ops-memex-write-memex-recall-memex-consolidate-memex-forget-meme",
-        "storage-memex-is-both-the-public-python-api-and-the-composition"
-      ]
+      "goal": "Review a harness integration so maintenance commands stay away from model tools while normal memory tools remain available."
     },
     {
       "name": "Safe session distillation",
-      "goal": "Design an agent workflow that distills session history while preventing unreviewed or secret-bearing memory from entering recall.",
-      "required": [
-        "storage-consolidation-is-the-only-operation-that-needs-an-llm-wi",
-        "safety-capture-and-distillation-can-be-one-step-any-harness-hook",
-        "harness-every-write-boundary-cli-mcp-transcript-ingest-consolida"
-      ]
+      "goal": "Design an agent workflow that distills session history while preventing unreviewed or secret-bearing memory from entering recall."
     },
     {
       "name": "Prompt injection budget",
-      "goal": "Improve task prompt context without filling the prompt with weak memories or exceeding the context allowance.",
-      "required": [
-        "harness-recall-and-hook-injection-pack-to-a-token-budget-max",
-        "storage-1-bm25retriever-reduces-untrusted-query-text-to-safe-alp"
-      ]
+      "goal": "Improve task prompt context without filling the prompt with weak memories or exceeding the context allowance."
     },
     {
       "name": "Task evidence assembly",
-      "goal": "Build task evidence assembly that asks a few subquestions and deduplicates memories before presenting them.",
-      "required": [
-        "task-evidence-asks-focused-questions-within-one-context-budget",
-        "task-evidence-duplicate-hits-appear-once-with-source-paths"
-      ]
+      "goal": "Build task evidence assembly that asks a few subquestions and deduplicates memories before presenting them."
     },
     {
       "name": "Thin adapter change",
-      "goal": "Move shared recall behavior out of a harness adapter so CLI and MCP stay consistent.",
-      "required": [
-        "storage-memex-is-both-the-public-python-api-and-the-composition",
-        "storage-1-an-adapter-creates-a-validated-writeinput-2-the-facade",
-        "harness-the-cli-has-two-deliberate-infrastructure-facing-seams-h"
-      ]
+      "goal": "Move shared recall behavior out of a harness adapter so CLI and MCP stay consistent."
     },
     {
       "name": "Archived memory confusion",
-      "goal": "Update recall troubleshooting code so archived and other-project memories are excluded from ordinary task evidence while weak current hits remain inspectable.",
-      "required": [
-        "mcp-pages-carry-status-active-pending-superseded-archived-recall",
-        "scope-project-front-matter-is-opaque-identity-authority",
-        "storage-1-bm25retriever-reduces-untrusted-query-text-to-safe-alp"
-      ]
+      "goal": "Update recall troubleshooting code so archived and other-project memories are excluded from ordinary task evidence while weak current hits remain inspectable."
     },
     {
       "name": "Verify gate wiring",
-      "goal": "Add CI proof that the memory store is healthy and that recent activity happened when required.",
-      "required": [
-        "storage-memex-verify-checks-page-parsing-index-freshness-links-a",
-        "gates-always-checked-every-page-parses-the-index-matches-content",
-        "docs-the-normal-gates-are-uv-run-ruff-check-uv-run"
-      ]
+      "goal": "Add CI proof that the memory store is healthy and that recent activity happened when required."
     },
     {
       "name": "Harness installer restraint",
-      "goal": "Update harness install behavior while preserving user-owned local guidance edits.",
-      "required": [
-        "harness-run-memex-install-without-a-name-to-choose-a-harness",
-        "harness-repository-content-cannot-enable-capture-or-injection-in",
-        "mcp-installs-register-the-mcp-server-where-the-harness-supports-"
-      ]
+      "goal": "Update harness install behavior while preserving user-owned local guidance edits."
     },
     {
       "name": "Copilot transport wording",
-      "goal": "Document why one harness cannot promise the same live task recall workflow as local MCP harnesses.",
-      "required": [
-        "gates-github-copilot-hosted-no-hooks-no-local-stdio-the-determin",
-        "mcp-installs-register-the-mcp-server-where-the-harness-supports-"
-      ]
+      "goal": "Document why one harness cannot promise the same live task recall workflow as local MCP harnesses."
     },
     {
       "name": "Dashboard read-only audit",
-      "goal": "Add a dashboard regression check that memory browsing filters stay read-only while hand-edited Markdown continues to refresh through watch mode.",
-      "required": [
-        "harness-memex-viz-starts-a-localhost-only-read-only-dashboard-it",
-        "storage-the-dashboard-keeps-vizpy-as-the-public-local-server-sea",
-        "scope-the-memories-view-shows-20-newest-first-cards-per-page"
-      ]
+      "goal": "Add a dashboard regression check that memory browsing filters stay read-only while hand-edited Markdown continues to refresh through watch mode."
     },
     {
       "name": "Spec closeout report",
-      "goal": "Record an implementation result without rewriting the approved spec body.",
-      "required": [
-        "safety-shipped-specs-above-means-the-whole-directory-specmd-and-",
-        "safety-there-are-therefore-two-stages-not-one-at-plan-approval",
-        "docs-the-most-important-property-of-this-scheme-is-that-the"
-      ]
+      "goal": "Record an implementation result without rewriting the approved spec body."
     },
     {
       "name": "Recall compatibility check",
-      "goal": "Change evaluation code while proving existing recall arguments and result fields still behave.",
-      "required": [
-        "mcp-recall-arguments-and-forget-result-stay-in-typed-tool-contra",
-        "recallhit-exposes-slug-path-title-body-score-snippet-and-metadat",
-        "recallresult-returns-query-hits-total-indexed-and-search-engine"
-      ]
+      "goal": "Change evaluation code while proving existing recall arguments and result fields still behave."
     },
     {
       "name": "Token packing behavior",
-      "goal": "Investigate why a large memory did not appear although smaller later memories did fit.",
-      "required": [
-        "harness-recall-and-hook-injection-pack-to-a-token-budget-max"
-      ]
+      "goal": "Investigate why a large memory did not appear although smaller later memories did fit."
     },
     {
       "name": "Transcript noise filter",
-      "goal": "Prevent credential-bearing transcript content from becoming durable memory during transcript capture.",
-      "required": [
-        "harness-every-write-boundary-cli-mcp-transcript-ingest-consolida",
-        "harness-harness-adapters-call-memex-hook-transcript-with-the-har"
-      ]
+      "goal": "Prevent credential-bearing transcript content from becoming durable memory during transcript capture."
     },
     {
       "name": "Backup restore boundary",
-      "goal": "Keep backup and restore operator-owned while still documenting how recovery works.",
-      "required": [
-        "storage-memex-verify-checks-page-parsing-index-freshness-links-a",
-        "ops-archives-are-validated-against-path-traversal-and-symlinks-b",
-        "ops-memex-write-memex-recall-memex-consolidate-memex-forget-meme"
-      ]
+      "goal": "Keep backup and restore operator-owned while still documenting how recovery works."
     },
     {
       "name": "Expired memory handling",
-      "goal": "Debug why an expired decision is absent from normal recall but visible in a special inspection run.",
-      "required": [
-        "mcp-temporal-validity-every-node-optionally-carries-expires-at-v",
-        "mcp-pages-carry-status-active-pending-superseded-archived-recall",
-        "storage-production-recall-uses-the-semantic-and-fallback-fts5-ra"
-      ]
+      "goal": "Debug why an expired decision is absent from normal recall but visible in a special inspection run."
     },
     {
       "name": "Hard forget safety",
-      "goal": "Verify that deleting a memory removes both the page and searchable index record.",
-      "required": [
-        "forget-hard-deletes-page-index-row-and-links",
-        "forget-hard-removes-scoped-page-index-row-and-namespace-links"
-      ]
+      "goal": "Verify that deleting a memory removes both the page and searchable index record."
     },
     {
       "name": "Provenance investigation",
-      "goal": "Find the session that produced a suspicious memory before trusting it in a coding task.",
-      "required": [
-        "harness-store-a-session-transcript-and-memex-links-it-to-an",
-        "mcp-ingestion-writes-transcriptsyyyy-mm-ddsess-abcjsonl-metajson",
-        "harness-harness-adapters-call-memex-hook-transcript-with-the-har"
-      ]
+      "goal": "Find the session that produced a suspicious memory before trusting it in a coding task."
     },
     {
       "name": "Project identity explanation",
-      "goal": "Fix project identity handling so a renamed folder keeps readable locator metadata separate from the opaque namespace used for project recall.",
-      "required": [
-        "scope-the-durable-layout-separates-global-pages-at-docsglobaltyp",
-        "scope-project-front-matter-is-opaque-identity-authority",
-        "scope-local-recall-selects-one-opaque-project-id"
-      ]
+      "goal": "Fix project identity handling so a renamed folder keeps readable locator metadata separate from the opaque namespace used for project recall."
     },
     {
       "name": "Evaluation promotion decision",
-      "goal": "Implement evaluator gate calculation that compares held-out task evidence baselines before any task-recall guidance can be promoted.",
-      "required": [
-        "task-evidence-promotion-compares-broad-and-linked-baselines",
-        "task-evidence-report-scores-paired-baselines-and-costs"
-      ]
+      "goal": "Implement evaluator gate calculation that compares held-out task evidence baselines before any task-recall guidance can be promoted."
     },
     {
       "name": "Task report privacy",
-      "goal": "Add benchmark report generation that publishes aggregate task-evidence metrics without retaining raw goals, memory bodies, or tool inputs.",
-      "required": [
-        "safety-logs-never-contain-memory-contents-the-audit-trail-record",
-        "safety-retrieval-evaluation-uses-independent-offline-workloads-a",
-        "harness-every-write-boundary-cli-mcp-transcript-ingest-consolida"
-      ]
+      "goal": "Add benchmark report generation that publishes aggregate task-evidence metrics without retaining raw goals, memory bodies, or tool inputs."
+    }
+  ],
+  "eligible_pages": [
+    {
+      "slug": "scope-install-the-cli-directly-from-github-then-connect-it-to",
+      "title": "Scope Install the CLI directly from GitHub then connect it to",
+      "body": "Install the CLI directly from GitHub, then connect it to a coding agent from your project directory:",
+      "source": "docs/gitpages/guide.md"
+    },
+    {
+      "slug": "scope-the-durable-layout-separates-global-pages-at-docsglobaltyp",
+      "title": "Scope The durable layout separates global pages at docsglobaltype from project",
+      "body": "The durable layout separates global pages at `docs/global/<type>/` from project pages at `docs/projects/<project-folder>/<type>/`. The project folder is a readable locator, not the project identity. When memex can read a usable Git origin, including an enterprise or self-hosted GitLab remote, it uses the repository basename with a `git-` prefix, such as `docs/projects/git-memex/preferences/example.md`. A local Git repository without a usable origin and a non-Git workspace use the workspace folder name, such as `docs/projects/memex/preferences/example.md`.",
+      "source": "docs/gitpages/guide.md"
+    },
+    {
+      "slug": "scope-the-memories-view-shows-20-newest-first-cards-per-page",
+      "title": "Scope The Memories view shows 20 newest first cards per page",
+      "body": "The Memories view shows 20 newest-first cards per page and preserves type and scope in direct Previous/Next URLs. Selecting a new type or scope starts on page one. \u201cAll memory\u201d browses every namespace; \u201cGlobal only\u201d browses global pages; a project label browses that project. Dashboard search uses BM25 without updating access counters: \u201cBest match\u201d searches the chosen project first and falls back to all memory, while \u201cSearch everywhere\u201d searches all namespaces. The Sessions view groups captured sessions by date, project label when known, and harness. A session replay shows separate User, AI assistant, and Tool cards; tool input and output have bounded previews with expandable detail and a truncation notice for longer values.",
+      "source": "docs/gitpages/guide.md"
+    },
+    {
+      "slug": "scope-claude-code-hooks-in-settingsjson-sessionstart-and-userpro",
+      "title": "Scope Claude Code hooks in settingsjson SessionStart and UserPromptSubmit inject context",
+      "body": "**Claude Code** \u2014 hooks in `settings.json`: SessionStart and UserPromptSubmit inject context (hook stdout becomes context); SessionEnd ingests the session transcript. The installer adds scoped-write guidance to the project's `CLAUDE.md`. MCP: `claude mcp add memex -- memex serve-mcp`.",
+      "source": "docs/gitpages/guide.md"
+    },
+    {
+      "slug": "scope-mission-one-sentence-what-the-project-is-in-language-anyon",
+      "title": "Scope Mission One sentence What the project is in language anyone",
+      "body": "- **Mission.** One sentence. What the project is, in language anyone could understand. - **Scope.** What the project does, and \u2014 equally important \u2014 what it doesn't. The \"doesn't\" list is what tells contributors and agents when a request is out of bounds. - **Principles.** Five to seven values that resolve ties. Each principle has a one-sentence elaboration with a concrete example.",
+      "source": "docs/CONVENTIONS.md"
+    },
+    {
+      "slug": "scope-each-pack-declares-its-install-scope-repo-project-local-us",
+      "title": "Scope Each pack declares its install scope repo project local user",
+      "body": "Each pack declares its install **scope** \u2014 `repo` (project-local), `user` (shared across every repo the adopter opens), or both \u2014 in `pack.toml`'s `[pack.install]` table. The pack author picks the dimension; adopters can override within the publisher's declared set via `--scope`. The default landing for every pack we ship today is `repo`; user-scope eligibility requires content portability \u2014 no hooks wired into a specific repo's surface, no seeds that name a particular project. The schema enforces `default-scope \u2208 allowed-scopes` so the rule holds outside the CLI. `agentbundle install` re-runs the contract-level user-scope rails (seeds / hooks / marker) against the resolved pack content at install time, closing the widen-after-publish gap.",
+      "source": "docs/CONVENTIONS.md"
+    },
+    {
+      "slug": "scope-the-keys-live-under-metadata-rather-than-at-top-level",
+      "title": "Scope The keys live under metadata rather than at top level",
+      "body": "The keys live under `metadata:` rather than at top level because the [agentskills.io specification](https://agentskills.io/specification) pins the top-level frontmatter set to `name`, `description`, `license`, `compatibility`, `metadata`, `allowed-tools` and reserves `metadata:` as the project-specific escape hatch. `agentbundle catalogue verify` (step 11) refuses any top-level key outside that set; `agentbundle catalogue lint` (`_PackRules._check_credentialed_skills`) scopes its checks to skills with `metadata.credentialed: true`.",
+      "source": "docs/CONVENTIONS.md"
+    },
+    {
+      "slug": "scope-at-task-start-run-memex-hook-session-start-and-treat",
+      "title": "Scope At task start run memex hook session start and treat",
+      "body": "- At task start, run `memex hook session-start` and treat its output as project context: it lists durable memories relevant to this repository. - When the user states a durable fact, preference, or rule, or asks to memorize one, write it with `memex_write` (or `memex write`). Choose project scope for workspace architecture, conventions, and decisions; choose global scope for facts intended across projects. If unclear, choose project. Pass `scope=\"project\"` or `scope=\"global\"` to the tool, or the matching `--scope` to the CLI. Check the returned file path. - Prefer `memex recall \"<query>\"` (or the `memex_recall` MCP tool) over re-asking the user. - Transcripts are captured automatically by the installed harness hooks; never ingest sessions manually unless recovering a missed capture.",
+      "source": "AGENTS.md"
+    },
+    {
+      "slug": "storage-the-filesystem-under-memex-data-dir-or-memex-is-the",
+      "title": "Storage The filesystem under MEMEX DATA DIR or memex is the",
+      "body": "The filesystem under `MEMEX_DATA_DIR` or `~/.memex/` is the durable boundary. Markdown pages are the source of truth. SQLite, run logs, transcript metadata, and rendered dashboard responses are derived or supporting state.",
+      "source": "docs/architecture/overview.md"
+    },
+    {
+      "slug": "storage-memex-is-both-the-public-python-api-and-the-composition",
+      "title": "Storage Memex is both the public Python API and the composition",
+      "body": "`Memex` is both the public Python API and the composition root: it constructs the filesystem store, index, retriever, link manager, transcript hook, archive service, and import/export service. Infrastructure may implement application ports and use domain types. Adapters should call the facade or shared application services instead of reimplementing operations.",
+      "source": "docs/architecture/overview.md"
+    },
+    {
+      "slug": "storage-the-dashboard-keeps-vizpy-as-the-public-local-server-sea",
+      "title": "Storage The dashboard keeps vizpy as the public local server seam",
+      "body": "The dashboard keeps `viz.py` as the public local-server seam and route adapter. `viz_components.py` owns the shell and scope controls; `dashboard.css` owns the local visual system; `viz_explorer.py` owns selection and pagination; and `viz_sessions.py` owns grouped session and replay rendering. Routes compose server-rendered fragments from those parts. Dashboard search uses the retriever's non-mutating read path, so GET requests do not update index access counters. The dashboard is a read-only localhost projection. Its durable trust-boundary rules live in [dashboard security](security.md).",
+      "source": "docs/architecture/overview.md"
+    },
+    {
+      "slug": "storage-1-an-adapter-creates-a-validated-writeinput-2-the-facade",
+      "title": "Storage 1 An adapter creates a validated WriteInput 2 The facade",
+      "body": "1. An adapter creates a validated `WriteInput`. 2. The facade rejects reserved provenance fields, scrubs secret-shaped text, and asks `WikiStore` to atomically write the Markdown page. 3. `IndexManager` mirrors the page into SQLite and `LinkManager` refreshes its outgoing links.",
+      "source": "docs/architecture/overview.md"
+    },
+    {
+      "slug": "storage-the-page-write-justifies-every-index-mutation-a-failed-o",
+      "title": "Storage The page write justifies every index mutation A failed or",
+      "body": "The page write justifies every index mutation. A failed or deleted index can be rebuilt from the pages.",
+      "source": "docs/architecture/overview.md"
+    },
+    {
+      "slug": "storage-1-bm25retriever-reduces-untrusted-query-text-to-safe-alp",
+      "title": "Storage 1 BM25Retriever reduces untrusted query text to safe alphanumeric tokens",
+      "body": "1. `BM25Retriever` reduces untrusted query text to safe alphanumeric tokens, removes only known semantic scaffolding phrases, and searches active, non-expired pages by default. 2. Returned hits update access statistics in SQLite; reads do not rewrite Markdown pages. 3. Hook injection applies a relevance floor, packs hits to a token budget, and emits a bounded context block. Explicit recall can still return weak hits.",
+      "source": "docs/architecture/overview.md"
+    },
+    {
+      "slug": "storage-production-recall-uses-the-semantic-and-fallback-fts5-ra",
+      "title": "Storage Production recall uses the semantic and fallback fts5 ranker It",
+      "body": "Production recall uses the `semantic-and-fallback-fts5` ranker. It caps the safe-token query at 64 tokens and 1,024 UTF-8 bytes, then first runs a strict `AND` FTS5 query over the safe tokens with column weights `slug=1, title=1, body=2, tags=1`, then broadens to an `OR` query only when the strict query returns zero rows. Snippets are capped at 12 tokens. Filters are applied before each limit, returned slugs are unique, links and access statistics are loaded once after ranking, and ascending slug is the final tie-break. The ranker is local SQLite FTS5 only: no embeddings, network service, runtime `rgapi`, subprocess search, or new required dependency is on the recall path.",
+      "source": "docs/architecture/overview.md"
+    },
+    {
+      "slug": "storage-consolidation-is-the-only-operation-that-needs-an-llm-wi",
+      "title": "Storage Consolidation is the only operation that needs an LLM WikiConsolidator",
+      "body": "Consolidation is the only operation that needs an LLM. `WikiConsolidator` selects episode pages, calls the configured application `LLMClient` port, and validates each returned node before using the normal write/index/link path. Remote OpenAI-compatible providers and local harness CLI providers implement the same port. Failures return a partial report and do not block the harness hook.",
+      "source": "docs/architecture/overview.md"
+    },
+    {
+      "slug": "storage-memex-verify-checks-page-parsing-index-freshness-links-a",
+      "title": "Storage memex verify checks page parsing index freshness links and optional",
+      "body": "`memex verify` checks page parsing, index freshness, links, and optional recall/write activity evidence. `rebuild-index` reconstructs derived SQLite state. Backup and restore validate archive paths and links; restore preserves the previous store in a timestamped directory before replacement.",
+      "source": "docs/architecture/overview.md"
+    },
+    {
+      "slug": "storage-change-a-page-field-in-the-domain-model-strict-front",
+      "title": "Storage Change a page field in the domain model strict front",
+      "body": "- Change a page field in the domain model, strict front-matter codec, persistence mapping, index schema, import/export path, and adapter schemas together. - Change a shared operation in the facade first, then keep CLI and MCP adapters thin and parity-tested. - Change harness behavior behind the `memex hook` contract unless the shared contract itself must change. - Treat a persistent schema change as rebuildable when all information exists in Markdown; otherwise provide an explicit migration and backward-compatibility plan.",
+      "source": "docs/architecture/overview.md"
+    },
+    {
+      "slug": "storage-the-memory-store-is-the-filesystem-every-memory-is-a",
+      "title": "Storage The memory store is the filesystem Every memory is a",
+      "body": "**The memory store is the filesystem.** Every memory is a Markdown page under `~/.memex/docs/`, with YAML front matter and a Markdown body. Pages are human-readable, git-able, and editable by hand in any editor. If you edit a page externally, `memex rebuild-index` (or `memex watch`) picks it up.",
+      "source": "docs/gitpages/guide.md"
+    },
+    {
+      "slug": "storage-links-reference-other-pages-in-any-body-with-slug-links",
+      "title": "Storage Links Reference other pages in any body with slug links",
+      "body": "**Links.** Reference other pages in any body with `[[slug]]` links (`[[Ruff Linter]]` normalizes to `[[ruff-linter]]`). Links are indexed both directions \u2014 backlinks answer \"what mentions this?\".",
+      "source": "docs/gitpages/guide.md"
+    },
+    {
+      "slug": "storage-the-index-is-disposable-memdb-mirrors-the-pages-for-fast",
+      "title": "Storage The index is disposable memdb mirrors the pages for fast",
+      "body": "**The index is disposable.** `mem.db` mirrors the pages for fast SQLite FTS5 search and freshness tracking. It is never the source of truth:",
+      "source": "docs/gitpages/guide.md"
+    },
+    {
+      "slug": "harness-memex-is-an-installable-python-package-and-cli-it-has",
+      "title": "Harness Memex is an installable Python package and CLI It has",
+      "body": "Memex is an installable Python package and CLI. It has no required service process: commands and coding-agent hooks open a local store, perform one operation, and exit. The optional `memex viz` server exists only for the life of that command.",
+      "source": "docs/architecture/overview.md"
+    },
+    {
+      "slug": "harness-the-cli-has-two-deliberate-infrastructure-facing-seams-h",
+      "title": "Harness The CLI has two deliberate infrastructure facing seams harness installation",
+      "body": "The CLI has two deliberate infrastructure-facing seams: harness installation and harness-native transcript parsing. They adapt external files and processes before handing normalized data to the shared application contract.",
+      "source": "docs/architecture/overview.md"
+    },
+    {
+      "slug": "harness-harness-adapters-call-memex-hook-transcript-with-the-har",
+      "title": "Harness Harness adapters call memex hook transcript with the harness native",
+      "body": "Harness adapters call `memex hook transcript` with the harness-native session file. The parser normalizes turns and a session header, `TranscriptHook` writes JSONL plus metadata, and an episode page links back to the transcript. Repeated Codex captures merge by stable session identity so compaction and shutdown events remain idempotent.",
+      "source": "docs/architecture/overview.md"
+    },
+    {
+      "slug": "harness-repository-content-cannot-enable-capture-or-injection-in",
+      "title": "Harness Repository content cannot enable capture or injection Installation modifies user",
+      "body": "Repository content cannot enable capture or injection. Installation modifies user-owned harness configuration only after an explicit command, and tests use an isolated `MEMEX_DATA_DIR` rather than the developer's real store.",
+      "source": "docs/architecture/overview.md"
+    },
+    {
+      "slug": "harness-concepts-concepts-getting-started-getting-started-operat",
+      "title": "Harness Concepts concepts Getting started getting started Operations operations Transcripts and",
+      "body": "- [Concepts](#concepts) - [Getting started](#getting-started) - [Operations](#operations) - [Transcripts and provenance](#transcripts-and-provenance) - [Harness integration](#harness-integration) - [Deterministic checks (CI)](#deterministic-checks-ci) - [Data portability](#data-portability) - [Configuration reference](#configuration-reference) - [Data safety](#data-safety)",
+      "source": "docs/gitpages/guide.md"
+    },
+    {
+      "slug": "harness-run-memex-install-without-a-name-to-choose-a-harness",
+      "title": "Harness Run memex install without a name to choose a harness",
+      "body": "Run `memex install` without a name to choose a harness interactively. For source development, clone the repository and run `uv sync --all-groups`; `uv tool install . --force` installs that checkout as the CLI. If you rebuild at the same version after changing source files, add `--no-cache` because uv may reuse the earlier wheel.",
+      "source": "docs/gitpages/guide.md"
+    },
+    {
+      "slug": "harness-recall-and-hook-injection-pack-to-a-token-budget-max",
+      "title": "Harness Recall and hook injection pack to a token budget max",
+      "body": "Recall and hook injection pack to a token budget (`--max-tokens`, default 4096): page text counts against the budget, metadata is free, a hit that does not fit is skipped in favor of smaller ones, and the top hit is always returned whole. Hook injection also stays silent when the best match ranks below the floor \u2014 weak matches inject nothing rather than noise. Every injected block opens with the three-line memory constitution.",
+      "source": "docs/gitpages/guide.md"
+    },
+    {
+      "slug": "harness-every-write-boundary-cli-mcp-transcript-ingest-consolida",
+      "title": "Harness Every write boundary CLI MCP transcript ingest consolidation redacts a",
+      "body": "Every write boundary \u2014 CLI, MCP, transcript ingest, consolidation \u2014 redacts a catalog of credential patterns (API keys, tokens, private keys, database URLs, JWTs) before anything is stored, replacing matches with typed `[REDACTED:<kind>]` markers. Redaction categories are logged; matched text never is.",
+      "source": "docs/gitpages/guide.md"
+    },
+    {
+      "slug": "harness-memex-viz-starts-a-localhost-only-read-only-dashboard-it",
+      "title": "Harness memex viz starts a localhost only read only dashboard It",
+      "body": "`memex viz` starts a localhost-only, read-only dashboard. It provides direct links and HTMX-enhanced navigation for global and project memory, health, sessions, and token use. The dashboard does not write pages or transcript data.",
+      "source": "docs/gitpages/guide.md"
+    },
+    {
+      "slug": "harness-store-a-session-transcript-and-memex-links-it-to-an",
+      "title": "Harness Store a session transcript and memex links it to an",
+      "body": "Store a session transcript and memex links it to an episode node \u2014 the foundation for tracing any memory back to the conversation that produced it.",
+      "source": "docs/gitpages/guide.md"
+    },
+    {
+      "slug": "harness-transcript-jsonl-and-metadata-use-dated-directories-unde",
+      "title": "Harness Transcript JSONL and metadata use dated directories under memextranscriptsYYYY MM",
+      "body": "Transcript JSONL and metadata use dated directories under `~/.memex/transcripts/YYYY-MM-DD/`. `memex clear-transcripts --confirm` removes raw transcript files and retires their episode transcript links; it is an explicit lifecycle operation, not part of dashboard browsing.",
+      "source": "docs/gitpages/guide.md"
+    },
+    {
+      "slug": "mcp-temporal-validity-every-node-optionally-carries-expires-at-v",
+      "title": "Mcp Temporal validity Every node optionally carries expires at valid from",
+      "body": "**Temporal validity.** Every node optionally carries `expires_at`, `valid_from`, and `valid_to`. Expired or retired nodes are hidden from recall by default (`--include-expired` / `include_expired=True` opts back in).",
+      "source": "docs/gitpages/guide.md"
+    },
+    {
+      "slug": "mcp-local-sqlite-fts5-over-slug-title-body-and-tags-recall",
+      "title": "Mcp Local SQLite FTS5 over slug title body and tags Recall",
+      "body": "- Local SQLite FTS5 over slug, title, body, and tags. Recall reduces the query to safe alphanumeric tokens, removes known scaffolding phrases, then runs the production `semantic-and-fallback-fts5` ranker: strict `AND` matching first, body weighted 2x, and broad `OR` fallback only when strict matching has no hits. - Results are deterministic and ranked best-first with short `<mark>`-highlighted snippets. Filters apply before limiting, returned slugs are unique, and ascending slug is the final tie-break. - Filters: `--type`, `--tag` (AND semantics), `--top-k` (1\u2013100), `--include-expired`. - Every hit bumps its access counter \u2014 recall telemetry feeds [recency decay](#configuration-reference) and `verify` evidence. - Recall stays offline and dependency-light: no embeddings, hosted search, runtime `rgapi`, or `rg` executable is required.",
+      "source": "docs/gitpages/guide.md"
+    },
+    {
+      "slug": "mcp-requires-llm-credentials-memex-api-key-or-llm-in-memextoml",
+      "title": "Mcp Requires LLM credentials MEMEX API KEY or llm in memextoml",
+      "body": "Requires LLM credentials (`MEMEX_API_KEY` or `[llm]` in `memex.toml`). Works with any OpenAI-compatible endpoint \u2014 OpenAI, Ollama, LM Studio, OpenRouter \u2014 via one `openai`-SDK client pointed at the configured base URL.",
+      "source": "docs/gitpages/guide.md"
+    },
+    {
+      "slug": "mcp-pages-carry-status-active-pending-superseded-archived-recall",
+      "title": "Mcp Pages carry status active pending superseded archived Recall and injection",
+      "body": "Pages carry `status: active | pending | superseded | archived`. Recall and injection see `active` pages only (pass `--include-inactive` / `include_inactive` to see the rest). `memex forget <slug> --mode archive` retires in place instead of deleting. `memex merge <target> <source>` appends the source body into the target and marks the source superseded with a backlink. With `[governance] approval = \"manual\"` in `memex.toml`, consolidation-created pages land `pending`; `memex approve <slug>` makes them recallable. `memex status` reports index freshness, last capture per harness, pending/archived counts, and consecutive zero-yield consolidations (memex verify warns on a streak of three).",
+      "source": "docs/gitpages/guide.md"
+    },
+    {
+      "slug": "mcp-the-first-transcript-line-is-an-optional-session-header-type",
+      "title": "Mcp The first transcript line is an optional session header type",
+      "body": "The first transcript line is an optional session header (`type: memex_session_header`) carrying identity \u2014 session id, CLI version, provider, cwd, git branch/commit, models and reasoning efforts used, timestamps, duration. Token counts are metadata, not transcript content: the `{session_id}.meta.json` sidecar carries session totals (`token_usage`) and per-turn usage (`turn_token_usage`), always the latest reported values and never summed across cumulative records. Older turn-only transcripts remain readable; repeated captures rewrite the sidecar with current totals.",
+      "source": "docs/gitpages/guide.md"
+    },
+    {
+      "slug": "mcp-ingestion-writes-transcriptsyyyy-mm-ddsess-abcjsonl-metajson",
+      "title": "Mcp Ingestion writes transcriptsYYYY MM DDsess abcjsonl metajson creates docsglobalepisodessess abcmd",
+      "body": "Ingestion writes `transcripts/YYYY-MM-DD/sess-abc.jsonl` + `.meta.json`, creates `docs/global/episodes/sess-abc.md` with a `transcript_ref`, and indexes it. From Python or MCP, `get_provenance(slug)` / `memex_provenance` reports how a node traces back: **direct** (it has a transcript), **inferred** (an episode links to it), or **none**.",
+      "source": "docs/gitpages/guide.md"
+    },
+    {
+      "slug": "mcp-mcp-tools-alone-depend-on-the-model-choosing-to-call",
+      "title": "Mcp MCP tools alone depend on the model choosing to call",
+      "body": "MCP tools alone depend on the model choosing to call them. Memex adds a deterministic push layer and a verifiable proof layer:",
+      "source": "docs/gitpages/guide.md"
+    },
+    {
+      "slug": "mcp-installs-register-the-mcp-server-where-the-harness-supports-",
+      "title": "Mcp Installs register the MCP server where the harness supports it",
+      "body": "Installs register the MCP server where the harness supports it: Claude Code via `claude mcp add --scope user` (when the CLI is available \u2014 the note tells you the exact command otherwise), Codex via `[mcp_servers]` in `config.toml`, and Copilot via `.vscode/mcp.json` for VS Code agent mode. pi intentionally has no built-in MCP; its extension is the integration. `--no-mcp` skips registration everywhere.",
+      "source": "docs/gitpages/guide.md"
+    },
+    {
+      "slug": "mcp-from-the-project-where-it-was-installed-remove-one-adapter",
+      "title": "Mcp From the project where it was installed remove one adapter",
+      "body": "From the project where it was installed, remove one adapter with `memex uninstall <name>` (or `memex harness uninstall <name>`). This removes Memex's hooks, MCP registration, copied adapter files, and exact guidance snippets for that harness. Unrelated settings and modified adapter files are left in place and reported. The command keeps `~/.memex` memories, transcripts, and configuration; run it once per installed harness. After removing adapters, `uv tool uninstall memex` removes the CLI. Your `~/.memex/` data remains until you remove it separately.",
+      "source": "docs/gitpages/guide.md"
+    },
+    {
+      "slug": "mcp-installing-claude-codex-or-pi-also-provisions-memextoml-abse",
+      "title": "Mcp Installing claude codex or pi also provisions memextoml absent one",
+      "body": "Installing `claude`, `codex`, or `pi` also provisions `memex.toml` (absent one) with `[consolidation] provider = \"<harness>\"` \u2014 so distillation rides the coding harness's own model, credentials, and billing via its CLI print mode, with no separate API key.",
+      "source": "docs/gitpages/guide.md"
+    },
+    {
+      "slug": "mcp-pi-the-reference-adapter-a-typescript-extension-injects-repo",
+      "title": "Mcp pi the reference adapter A TypeScript extension injects repo level",
+      "body": "**pi** \u2014 the reference adapter. A TypeScript extension injects repo-level memories on the first turn and prompt-relevant memories on every turn, and includes scoped-write guidance on the first turn even if recall is empty. It captures the session file on shutdown. Knobs: `MEMEX_BIN`, `MEMEX_TOP_K`, `MEMEX_DISABLE`.",
+      "source": "docs/gitpages/guide.md"
+    },
+    {
+      "slug": "mcp-codex-no-native-injection-point-so-an-agentsmd-memory-contra",
+      "title": "Mcp Codex no native injection point so an AGENTSmd memory contract",
+      "body": "**Codex** \u2014 no native injection point, so: an AGENTS.md memory contract (recall at task start, write durable facts), MCP via `config.toml`, and a `notify` wrapper that ingests each rollout on `agent-turn-complete`.",
+      "source": "docs/gitpages/guide.md"
+    },
+    {
+      "slug": "safety-retrieval-evaluation-uses-independent-offline-workloads-a",
+      "title": "Safety Retrieval evaluation uses independent offline workloads and treats every source",
+      "body": "Retrieval evaluation uses independent offline workloads and treats every source as untrusted. Salesforce coverage is represented by concise, independently authored offline Salesforce facts with official URLs as provenance; tests and evaluations never scrape or fetch Salesforce pages. Gutenberg coverage comes from a maintainer-supplied local Project Gutenberg catalog import, not from HTML crawling or book text.",
+      "source": "docs/architecture/overview.md"
+    },
+    {
+      "slug": "safety-capture-and-distillation-can-be-one-step-any-harness-hook",
+      "title": "Safety Capture and distillation can be one step Any harness hook",
+      "body": "Capture and distillation can be one step. Any harness hook that ingests a transcript can distill the fresh episode immediately \u2014 enabled per call with `--consolidate`, or globally with `MEMEX_AUTO_CONSOLIDATE=1` (works for the pi, Claude Code, and Codex adapters unchanged, since they all invoke the same hook). Off by default: it spends tokens and needs credentials. Point `[consolidation]` at a low-effort model \u2014 a local Ollama model, a mini-tier endpoint, or a coding harness itself (`provider = \"codex\"`) so distillation rides the same model your agent already uses. Failure never blocks the hook \u2014 a missing key reports the reason, an unreachable model returns an empty consolidation result.",
+      "source": "docs/gitpages/guide.md"
+    },
+    {
+      "slug": "safety-logs-never-contain-memory-contents-the-audit-trail-record",
+      "title": "Safety Logs never contain memory contents The audit trail records operations",
+      "body": "- **Logs never contain memory contents.** The audit trail records operations, slugs, and counts \u2014 nothing else. - **Stored memories and tool inputs are untrusted by design.** Front matter, transcripts, archives, and LLM output are validated at every boundary; consolidation output is schema-checked before any write. - **MCP tool errors are sanitized** \u2014 no paths, memory text, or provider details cross the stdio boundary. - **API keys** belong in `MEMEX_API_KEY`, not in `memex.toml`. - **Nothing leaves the machine.** The only network call memex ever makes is the explicit `consolidate` operation, against the endpoint you configure.",
+      "source": "docs/gitpages/guide.md"
+    },
+    {
+      "slug": "safety-audience-internal-contributors-agents-working-on-the-code",
+      "title": "Safety Audience Internal contributors agents working on the code vs external",
+      "body": "- **Audience.** Internal (contributors, agents working on the code) vs. external (users of the product). - **Lifecycle.** *Living* (must match current reality), *frozen* (immutable history), or *governance* (in-flight proposals).",
+      "source": "docs/CONVENTIONS.md"
+    },
+    {
+      "slug": "safety-shipped-specs-above-means-the-whole-directory-specmd-and-",
+      "title": "Safety shipped specs above means the whole directory specmd and planmd",
+      "body": "`shipped specs/*` above means the whole directory \u2014 `spec.md` **and** `plan.md`. This needs saying because the plan template's own contract line reads \"Unlike the spec, this document is allowed to change as you learn\", which sounds like a standing exemption and is not one. That licence is **phase-scoped**: it holds only while the plan is `Drafting`, and ends when the plan is approved. From approval, both `spec.md` and `plan.md` are pinned in substance. Only lifecycle bookkeeping \u2014 the preamble status token and task-progress checkboxes \u2014 may still be written. An observation produced by execution belongs in the sibling `notes/verification-ledger.md`, never in either approved artifact.",
+      "source": "docs/CONVENTIONS.md"
+    },
+    {
+      "slug": "safety-there-are-therefore-two-stages-not-one-at-plan-approval",
+      "title": "Safety There are therefore two stages not one At plan approval",
+      "body": "There are therefore **two stages, not one.** At plan approval the pair is *pinned in substance*: the contract stops moving so implementation cannot drift it, while lifecycle bookkeeping is still written. Once the plan is `Done` and the spec is `Shipped`, the work is over, both documents are history, and the whole directory is *frozen* \u2014 the retention rule the `Frozen` class above names. Pinned protects the contract during the build; frozen protects the record afterwards.",
+      "source": "docs/CONVENTIONS.md"
+    },
+    {
+      "slug": "safety-a-plan-that-stayed-substantively-editable-after-approval-",
+      "title": "Safety A plan that stayed substantively editable after approval would be",
+      "body": "A plan that stayed substantively editable after approval would be a second, unversioned account of what we did, competing with the ADR that records why. A genuine error in either approved artifact follows the controlled-amendment path.",
+      "source": "docs/CONVENTIONS.md"
+    },
+    {
+      "slug": "safety-what-one-page-mission-scope-and-principles-the-foundation",
+      "title": "Safety What one page Mission scope and principles The foundational document",
+      "body": "**What:** one page. Mission, scope, and principles. The foundational document. Modeled on the [CNCF charter pattern](https://contribute.cncf.io/maintainers/governance/charter/).",
+      "source": "docs/CONVENTIONS.md"
+    },
+    {
+      "slug": "safety-decision-history-adrs-current-product-state-product-roles",
+      "title": "Safety Decision history ADRs Current product state product Roles voting decision",
+      "body": "- Decision history \u2192 ADRs. - Current product state \u2192 `product/`. - Roles, voting, decision-making \u2192 `GOVERNANCE.md`, *if* the project is large enough to need one. - A glossary \u2192 `guides/reference/`. Vocabulary is reference material.",
+      "source": "docs/CONVENTIONS.md"
+    },
+    {
+      "slug": "safety-on-governance-docs-small-and-medium-projects-dont-need-a",
+      "title": "Safety On governance docs small and medium projects dont need a",
+      "body": "**On governance docs:** small and medium projects don't need a separate `GOVERNANCE.md`. A maintainer or small group operating by consensus is fine. Add governance documentation when there are roles, decision procedures, or election processes worth writing down \u2014 typically when the project has external contributors who need clarity on how to gain authority. Forcing governance ceremony on a project that doesn't need it produces theater, not clarity.",
+      "source": "docs/CONVENTIONS.md"
+    },
+    {
+      "slug": "safety-what-a-proposal-to-change-something-significant-a-new-fea",
+      "title": "Safety What a proposal to change something significant a new feature",
+      "body": "**What:** a proposal to change something significant \u2014 a new feature area, a new convention, a deprecation, a breaking change to a public interface. RFCs are *forward-looking governance*; ADRs are *backward-looking record*.",
+      "source": "docs/CONVENTIONS.md"
+    },
+    {
+      "slug": "safety-optional-experimental-status-an-rfc-that-proposes-running",
+      "title": "Safety Optional Experimental status An RFC that proposes running an experiment",
+      "body": "**Optional `Experimental` status.** An RFC that proposes running an experiment \u2014 using an optional `Experiment / validation` section of the RFC template \u2014 may sit in `Experimental` while the trial runs and results are pending, instead of being forced to a premature Accept or Reject. Results live in a linked spike note (or a follow-up RFC / superseding ADR), not the RFC body; when they land, the RFC moves to `Accepted | Rejected | Withdrawn`. An `Experimental` RFC is still in-flight (Governance class, not Frozen). Use it only when an experiment is genuinely running.",
+      "source": "docs/CONVENTIONS.md"
+    },
+    {
+      "slug": "docs-the-normal-gates-are-uv-run-ruff-check-uv-run",
+      "title": "Docs The normal gates are uv run ruff check uv run",
+      "body": "The normal gates are `uv run ruff check .`, `uv run ruff format --check .`, `uv run mypy src tests`, `uv run pytest`, and `uv run mkdocs build --strict`.",
+      "source": "docs/architecture/overview.md"
+    },
+    {
+      "slug": "docs-the-only-llm-calling-operation-and-only-on-explicit-request",
+      "title": "Docs The only LLM calling operation and only on explicit request",
+      "body": "The only LLM-calling operation, and only on explicit request. It reads recent episode nodes and proposes durable entity/preference/procedure/summary nodes (the prompt and rules live in the specification, \u00a711).",
+      "source": "docs/gitpages/guide.md"
+    },
+    {
+      "slug": "docs-legacy-id-named-project-folders-remain-readable-and-rebuild",
+      "title": "Docs Legacy ID named project folders remain readable and rebuildable Normal",
+      "body": "Legacy ID-named project folders remain readable and rebuildable. Normal runtime operations do not rename, move, or merge them; an existing store move is a separate maintenance procedure with preview, backup, collision review, and an operation-specific confirmation. If two folders contain the same `project_id`, node type, and slug, lookup and force rebuild fail closed instead of choosing one page.",
+      "source": "docs/gitpages/guide.md"
+    },
+    {
+      "slug": "docs-the-most-important-property-of-this-scheme-is-that-the",
+      "title": "Docs The most important property of this scheme is that the",
+      "body": "**The most important property of this scheme** is that the frozen layer gives you decision history *without* the burden of keeping it in sync. Living docs can be honest about the present because they don't have to also be a record of how we got here. That's what ADRs are for.",
+      "source": "docs/CONVENTIONS.md"
+    },
+    {
+      "slug": "docs-1-say-in-part-and-say-which-part-a-bare",
+      "title": "Docs 1 Say in part and say which part A bare",
+      "body": "1. **Say \"in part\" and say which part.** A bare \"superseded\" invites a reader to discard a document that is mostly still correct. 2. **Point at the ADR, not at the spec that implemented it.** The ADR is the decision record and is where the reasoning lives. 3. **Annotate both ends \u2014 between ADRs.** The superseding ADR names what it supersedes; the superseded ADR points forward. A one-way pointer only helps readers who already arrived from the right side.",
+      "source": "docs/CONVENTIONS.md"
+    },
+    {
+      "slug": "docs-the-spec-end-is-deliberately-one-way-adrs-do-not",
+      "title": "Docs The spec end is deliberately one way ADRs do not",
+      "body": "The **spec end is deliberately one-way**: ADRs do not cite specs (see \u00a7 *Cite upward*), so a superseded spec points at the ADR and the ADR does not point back. That is the intended asymmetry, not a gap to close. 4. **Do not change the body's meaning \u2014 including \"just adding a line\".** An append is a body edit. The residue is real and accepted: someone who greps mid-file still lands on the old rule with no pointer in view. The mitigation is that the *operative* instruction lives in a Living file at the point of use (a config header, a linter's message), not that the frozen record is patched.",
+      "source": "docs/CONVENTIONS.md"
+    },
+    {
+      "slug": "docs-carve-out-meaning-preserving-mechanical-rewrites-are-allowe",
+      "title": "Docs Carve out meaning preserving mechanical rewrites are allowed a path",
+      "body": "**Carve-out: meaning-preserving mechanical rewrites are allowed** \u2014 a path or link rename, a moved file's reference, a repo-wide identifier change. `84d79223` (\"lift `docs/guides/` to `guides/`\") rewrote references across 156 files under `docs/specs/`, shipped specs included, and was right to. What freezes is the *record of the decision*, not the spelling of a path that has since moved; a frozen document with dangling links is a worse record, not a purer one. The test is whether a reader's understanding of what was decided changes. If it does, it is not mechanical.",
+      "source": "docs/CONVENTIONS.md"
+    },
+    {
+      "slug": "docs-link-the-closing-spec-the-way-the-supersession-form-links",
+      "title": "Docs Link the closing spec the way the supersession form links",
+      "body": "Link the closing spec, the way the supersession form links its ADR; the placeholder above is unlinked only so the repo's own link check does not chase it.",
+      "source": "docs/CONVENTIONS.md"
+    },
+    {
+      "slug": "docs-not-constrained-by-it-is-the-better-semantic-fit-it",
+      "title": "Docs Not Constrained by It is the better semantic fit it",
+      "body": "**Not `Constrained by:`.** It is the better semantic fit \u2014 it is the field that cites governing decisions \u2014 but it is a record of what governed the spec *at ship time*, and that record is still accurate. Editing it would rewrite history rather than annotate it, and would extend mutability to a second field for no gain. (`Constrained by:` *can* carry a supersession clause \u2014 `docs/specs/copilot-full-parity/spec.md` does exactly that \u2014 so the argument is that `Status` is the shorter carrier already licensed here, not that it is the only one capable of it.)",
+      "source": "docs/CONVENTIONS.md"
+    },
+    {
+      "slug": "gates-slugs-derive-from-titles-ruff-linter-ruff-linter-collision",
+      "title": "Gates Slugs derive from titles Ruff linter ruff linter collisions get",
+      "body": "- Slugs derive from titles (`Ruff linter` \u2192 `ruff-linter`), collisions get `-2`, `-3` suffixes. - Writing an existing slug **updates** it, preserving `id`, `created`, and access counters. - `importance` \u2208 [0, 1]; `[[slug]]` links in the body are indexed as edges.",
+      "source": "docs/gitpages/guide.md"
+    },
+    {
+      "slug": "gates-github-copilot-hosted-no-hooks-no-local-stdio-the-determin",
+      "title": "Gates GitHub Copilot hosted no hooks no local stdio the deterministic",
+      "body": "**GitHub Copilot (hosted)** \u2014 no hooks, no local stdio: the deterministic layer carries it. The adapter installs a memory contract into `.github/copilot-instructions.md` and a `memex verify` workflow on every PR.",
+      "source": "docs/gitpages/guide.md"
+    },
+    {
+      "slug": "gates-schema-violations-are-rejected-by-the-server-with-a-field",
+      "title": "Gates Schema violations are rejected by the server with a field",
+      "body": "Schema violations are rejected by the server with a field-precise error; domain rejections return sanitized error data. Tool descriptions are call-time contracts authored in `memex.domain.operations` \u2014 the same registry the CLI help uses.",
+      "source": "docs/gitpages/guide.md"
+    },
+    {
+      "slug": "gates-always-checked-every-page-parses-the-index-matches-content",
+      "title": "Gates Always checked every page parses the index matches content hashes",
+      "body": "Always checked: every page parses; the index matches content hashes; every link resolves. With `--since`, memex additionally reports recall activity (access telemetry) and write activity (updated timestamps) since the cutoff; `--require-*` turns missing evidence into exit code 1. The Copilot adapter ships a ready-made workflow (`marketplace/copilot/ memex-verify.yml`).",
+      "source": "docs/gitpages/guide.md"
+    },
+    {
+      "slug": "gates-architecturemd-when-present-is-the-concise-descriptive-sys",
+      "title": "Gates ARCHITECTUREmd when present is the concise descriptive system model responsibilities",
+      "body": "`/ARCHITECTURE.md`, when present, is the concise descriptive system model: responsibilities, allowed dependency edges, state ownership, flows, extension points, enforced invariants, and deeper current-state links. It is optional; add it when a repo has more than one subsystem or a boundary the directory tree cannot make clear.",
+      "source": "docs/CONVENTIONS.md"
+    },
+    {
+      "slug": "gates-architecture-documents-have-three-roles-overviewmd-is-desc",
+      "title": "Gates Architecture documents have three roles overviewmd is descriptive the map",
+      "body": "Architecture documents have three roles. `overview.md` is **descriptive** \u2014 the map of how the code is organized today, read to find things. `reference.md` is **normative** \u2014 the golden path (stack, building blocks, component stereotypes, cross-cutting standards) that new work conforms to, the target a feature's low-level design steers by. The system model explains the system, the map tells you where things are, and the golden path tells you how new things should be shaped. A thin repo has only the map; the golden path appears once there are real architecture decisions to hold work to.",
+      "source": "docs/CONVENTIONS.md"
+    },
+    {
+      "slug": "gates-the-bottom-layers-cite-the-upper-layers-upper-layers-do",
+      "title": "Gates The bottom layers cite the upper layers upper layers do",
+      "body": "The bottom layers cite the upper layers; upper layers do not know about lower layers. That's the whole point of the hierarchy.",
+      "source": "docs/CONVENTIONS.md"
+    },
+    {
+      "slug": "gates-a-later-decision-often-reverses-part-of-an-earlier-one",
+      "title": "Gates A later decision often reverses part of an earlier one",
+      "body": "A later decision often reverses part of an earlier one. The earlier document still describes what was true when it shipped, so it is not wrong \u2014 but a reader who starts there must not be left following a rule we no longer keep.",
+      "source": "docs/CONVENTIONS.md"
+    },
+    {
+      "slug": "gates-lifecycle-living-but-rarely-changed-mission-scope-and-foun",
+      "title": "Gates Lifecycle living but rarely changed Mission scope and foundational principle",
+      "body": "**Lifecycle:** living, but rarely changed. Mission, scope, and foundational-principle changes are reserved; wording, clarification, examples, typos, broken links, and accepted decisions are normal PRs regardless of pathname.",
+      "source": "docs/CONVENTIONS.md"
+    },
+    {
+      "slug": "gates-what-an-immutable-record-of-a-decision-and-the-context",
+      "title": "Gates What an immutable record of a decision and the context",
+      "body": "**What:** an immutable record of a decision and the context that produced it. \"We chose Postgres over DynamoDB because <reasons>, accepting <tradeoffs>.\"",
+      "source": "docs/CONVENTIONS.md"
+    },
+    {
+      "slug": "gates-the-key-property-of-an-adr-is-that-it-is",
+      "title": "Gates The key property of an ADR is that it is",
+      "body": "**The key property of an ADR is that it is never edited after acceptance.** If a decision is reversed or revised, you write a new ADR that supersedes the old one and update the old one's status to `Superseded by ADR-NNNN`. The old text stays. This is the difference between an ADR and documentation: ADRs are history.",
+      "source": "docs/CONVENTIONS.md"
+    },
+    {
+      "slug": "ops-memex-write-memex-recall-memex-consolidate-memex-forget-meme",
+      "title": "Ops memex write memex recall memex consolidate memex forget memex provenance",
+      "body": "`memex_write`, `memex_recall`, `memex_consolidate`, `memex_forget`, `memex_provenance`. Transcript capture uses harness hooks; manual ingestion, transcript cleanup, import, and export remain CLI commands.",
+      "source": "docs/gitpages/guide.md"
+    },
+    {
+      "slug": "ops-archives-are-validated-against-path-traversal-and-symlinks-b",
+      "title": "Ops Archives are validated against path traversal and symlinks before extraction",
+      "body": "Archives are validated against path traversal and symlinks before extraction; restores never delete your current data (moved to `pre-restore-<timestamp>/`).",
+      "source": "docs/gitpages/guide.md"
+    },
+    {
+      "slug": "ops-when-a-page-carries-a-last-verified-against-commit-marker",
+      "title": "Ops When a page carries a Last verified against commit marker",
+      "body": "When a page carries a `Last verified against commit` marker, it records a deliberate whole-page re-verification against that commit, not merely an edit. Update it only after re-reading the whole page against the tree at the recorded commit. An unchanged marker means the page has not received that full audit; it is provenance, not a freshness requirement.",
+      "source": "docs/CONVENTIONS.md"
+    },
+    {
+      "slug": "ops-workspace-prose-stays-terse-and-present-tense-a-generated-or",
+      "title": "Ops Workspace prose stays terse and present tense A generated or",
+      "body": "Workspace prose stays terse and present-tense. A generated or materially updated entry carries minimal provenance, one short summary of the current outcome or next-needed condition, and hard dependencies only. It must not carry history, rationale, procedure, review transcript, raw finding, copied source text, soft priority, or suggested order in comments or adjacent fields. When that context matters, write it to the resolved canonical artifact first and index only the pointer. Settled live coordination is removed or compacted; it is not replaced with a workspace history.",
+      "source": "docs/CONVENTIONS.md"
+    },
+    {
+      "slug": "ops-supported-legacy-workspace-entries-remain-visible-but-non-di",
+      "title": "Ops Supported legacy workspace entries remain visible but non dispatchable during",
+      "body": "Supported legacy workspace entries remain visible but non-dispatchable during the compatibility window. Migration planning consumes a reviewed, human-authored selection and remains read-only. Apply and rollback each consume a fresh, single-use, human-authored confirmation permitted by repository `[authorization.migration]` policy. Agents and migration tooling must never create, edit, prefill, or choose substantive route or authorization values in those files. Ledger-backed rollback restores the exact legacy workspace representation and never deletes the canonical artifact.",
+      "source": "docs/CONVENTIONS.md"
+    },
+    {
+      "slug": "ops-bundled-fixes-must-be-listed-under-bundled-fixes-and-fail",
+      "title": "Ops Bundled fixes must be listed under Bundled fixes and fail",
+      "body": "Bundled fixes must be listed under `Bundled fixes:` and fail closed on design calls or behavior changes. Tier 1 is reproducible: state the command and show a zero diff on re-run; it may span the repository. Tier 2 is provably inert: show no remaining references and green tests for bounded dead-code or unused-import removal. Tier 3 is hand-made: same-area, same-concern, visibly smaller mechanical work. Tier 1 and Tier 2 require their command or evidence.",
+      "source": "docs/CONVENTIONS.md"
+    },
+    {
+      "slug": "ops-known-limitation-the-procedure-has-been-validated-by-prose-w",
+      "title": "Ops Known limitation The procedure has been validated by prose walk",
+      "body": "**Known limitation.** The procedure has been validated by prose walk-through, not by an executed end-to-end dry-run. Any change to **pre-flight (procedure step 0)**, **worktree creation (step 1)**, **report persistence ordering (step 3)**, **merge order (step 5)**, **cleanup recovery (step 6)**, or the **`state.json` `worktrees` schema** must perform an actual `git worktree add` + parallel-dispatch round against a throwaway spec before merging \u2014 read-only walk-through is not sufficient for those surfaces. Step numbers refer to the procedure at `references/supervisor-mode.md` in the `work-loop` skill.",
+      "source": "docs/CONVENTIONS.md"
+    },
+    {
+      "slug": "ops-the-broker-agnostic-invariants-below-apply-to-every-credenti",
+      "title": "Ops The broker agnostic invariants below apply to every credentialed primitive",
+      "body": "The broker-agnostic invariants below apply to every credentialed primitive regardless of broker. Broker-specific lint extensions layer on top (`auth: creds` requires a credential-resolver import in `scripts/` \u2014 `from credbroker import \u2026`, or the legacy `from .credentials_shim \u2026`; `auth: env` requires each declared `<NAMESPACE>_<KEY>` to be read at least once; `auth: sso-cookie` requires either a credbroker SSO import (`from credbroker import load_sso_cookies`) or subprocess-invocation of the canonical `Path.home() / \".agentbundle\" / \"bin\" / \"sso-broker.py\"` path; `auth: cli` falls through to broker-agnostic checks only).",
+      "source": "docs/CONVENTIONS.md"
+    },
+    {
+      "slug": "ops-1-if-the-requested-addition-is-not-genuinely-needed-skip",
+      "title": "Ops 1 If the requested addition is not genuinely needed skip",
+      "body": "1. If the requested addition is not genuinely needed, skip it and say so once. 2. Search once, within the current decision boundary, for an adequate existing repository solution; reuse a hit or move on after a decisive empty result. 3. Prefer the standard library when it satisfies the outcome. 4. Prefer a native platform capability when it satisfies the outcome. 5. Prefer an already-installed dependency when it satisfies the outcome; an import absent from the owning manifest is a new dependency. 6. Use one obvious line when it is the complete, maintainable solution. 7. Otherwise write the minimum correct solution in the fewest statements and files that preserve ownership and tests.",
+      "source": "AGENTS.md"
+    },
+    {
+      "slug": "ops-security-considerations-trigger-securitymd-rules-govern-hook",
+      "title": "Ops Security considerations trigger SECURITYmd rules govern hook and archive boundaries",
+      "body": "- `Security considerations` \u2014 trigger: SECURITY.md rules govern hook and archive boundaries (already linked from the site guide). - `Scoped instructions` \u2014 trigger: `docs/AGENTS.md` (documentation subtree) exists and carries deltas. -->",
+      "source": "AGENTS.md"
+    },
+    {
+      "slug": "ops-agents-forget-your-stack-rules-and-past-decisions-memex-keep",
+      "title": "Ops Agents forget your stack rules and past decisions Memex keeps",
+      "body": "Agents forget your stack, rules, and past decisions. Memex keeps that knowledge in local files and brings relevant memories into coding sessions.",
+      "source": "README.md"
+    },
+    {
+      "slug": "ops-markdown-is-the-memory-each-page-under-memexdocs-is-readable",
+      "title": "Ops Markdown is the memory Each page under memexdocs is readable",
+      "body": "- **Markdown is the memory.** Each page under `~/.memex/docs/` is readable, editable, portable, and suitable for version control. - **Search is rebuildable.** SQLite FTS5 provides BM25 search; `memex rebuild-index` restores the index from the pages. - **Sessions are traceable.** Captured transcripts link to episode memories, so you can find the conversation behind a memory.",
+      "source": "README.md"
+    },
+    {
+      "slug": "scope-project-front-matter-is-opaque-identity-authority",
+      "title": "Scope project front matter is opaque identity authority",
+      "body": "Project front matter remains the authority for the opaque `project_id` and safe display label. Use `--scope project --project-id <id> --project-label <name>` when writing, then use the same scope and id to recall only that project.",
+      "source": "docs/gitpages/guide.md"
+    },
+    {
+      "slug": "scope-local-recall-selects-one-opaque-project-id",
+      "title": "Scope local recall selects one opaque project id",
+      "body": "Global recall searches every namespace. Local recall selects one project ID. Project IDs are opaque hashes derived from the Git remote when available, or the local folder identity otherwise; front matter and SQLite use that `project_id` as the namespace authority, not the directory name.",
+      "source": "docs/gitpages/spec.md"
+    },
+    {
+      "slug": "task-evidence-asks-focused-questions-within-one-context-budget",
+      "title": "Task evidence asks focused questions within one context budget",
+      "body": "A coding agent working from a broad goal gathers the distinct, current project facts it needs before editing code. It asks up to three focused questions through the existing recall operation, combines source-linked answers within one context budget, and says when evidence is missing.",
+      "source": "docs/specs/task-evidence-recall/spec.md"
+    },
+    {
+      "slug": "task-evidence-duplicate-hits-appear-once-with-source-paths",
+      "title": "Task evidence duplicate hits appear once with source paths",
+      "body": "For at most three focused questions, duplicate hits appear once, retain their source paths, and the combined set has at most eight distinct hits.",
+      "source": "docs/specs/task-evidence-recall/spec.md"
+    },
+    {
+      "slug": "task-evidence-promotion-compares-broad-and-linked-baselines",
+      "title": "Task evidence promotion compares broad and linked baselines",
+      "body": "Focused-question guidance is promoted only if held-out task-complete recall exceeds both the broad-query and linked-summary baselines by at least 10 percentage points.",
+      "source": "docs/specs/task-evidence-recall/spec.md"
+    },
+    {
+      "slug": "task-evidence-report-scores-paired-baselines-and-costs",
+      "title": "Task evidence report scores paired baselines and costs",
+      "body": "A paired report gives task-complete and fact-level recall for current Memex injection, one broad query, an ordinary linked task summary, unaided focused questions, and human-written focused questions. Each uses at most eight distinct hits and a 4,096-token complete rendered context budget.",
+      "source": "docs/specs/task-evidence-recall/spec.md"
+    },
+    {
+      "slug": "mcp-recall-arguments-and-forget-result-stay-in-typed-tool-contra",
+      "title": "MCP recall arguments and forget result stay in typed tool contract",
+      "body": "| `memex_write` | `type`, `title`, `body`, `scope` (`global` or `project`), `tags?`, `importance?`, `links?`, `project_id?`, `project_label?` | `{\"slug\": str, \"file_path\": str}` |\n| `memex_recall` | `query`, `top_k?`, `node_type?` | `RecallResult` |\n| `memex_consolidate` | `mode?`, `max_episodes?` | `ConsolidationReport` |\n| `memex_forget` | `slug`, `mode?` | `{\"slug\": str, \"forgotten\": bool}` |\n| `memex_provenance` | `slug` | `ProvenanceReport` |",
+      "source": "docs/gitpages/spec.md"
+    },
+    {
+      "slug": "recallhit-exposes-slug-path-title-body-score-snippet-and-metadat",
+      "title": "RecallHit exposes slug path title body score snippet and metadata fields",
+      "body": "RecallHit = {\n    \"slug\": str,                             # Wiki file slug (filename without .md)\n    \"file_path\": str,                        # Absolute path to the .md file",
+      "source": "docs/gitpages/spec.md"
+    },
+    {
+      "slug": "recallresult-returns-query-hits-total-indexed-and-search-engine",
+      "title": "RecallResult returns query hits total indexed and search engine",
+      "body": "RecallResult = {\n    \"query\": str,\n    \"hits\": list[RecallHit],\n    \"total_indexed\": int,                    # Total nodes in index\n    \"search_engine\": Literal[\"semantic-and-fallback-fts5\"],  # Current default",
+      "source": "docs/gitpages/spec.md"
+    },
+    {
+      "slug": "forget-hard-deletes-page-index-row-and-links",
+      "title": "Forget hard deletes page index row and links",
+      "body": "| `hard` | Deletes the page, its index row, and its links \u2014 irreversible |",
+      "source": "docs/gitpages/guide.md"
+    },
+    {
+      "slug": "forget-hard-removes-scoped-page-index-row-and-namespace-links",
+      "title": "Forget hard removes scoped page index row and namespace links",
+      "body": "- `hard`: Deletes the selected scoped page under `~/.memex/docs/`; removes its index row and namespace-owned outgoing links.",
+      "source": "docs/gitpages/spec.md"
     }
   ]
 }

@@ -19,7 +19,9 @@
 # repository root.
 
 [backlog]
-open = []
+open = [
+  { path = "docs/intent-continuity-survey.md", kind = "research", source = { mode = "repo-origin", ref = "docs/intent-continuity-survey.md", revision = "2026-09-20" }, summary = "Evaluate applicable task intent and continuity across coding-agent sessions", needs = [] },
+]
 closed = []
 
 ["ini-001"]
@@ -28,7 +30,10 @@ status    = "active"
 milestone = "Evidence-aware retrieval"
 
 ["ini-001".work]
-queue   = []
+queue   = [
+  { path = "docs/specs/task-evidence-recall/spec.md", kind = "spec", source = { mode = "repo-origin", parent = "docs/product/briefs/intent-continuity.md" }, summary = "Evaluate and guide focused task recall using existing Memex operations", needs = [] },
+  { path = "docs/specs/project-aware-injection/spec.md", kind = "spec", source = { mode = "repo-origin", parent = "docs/product/briefs/intent-continuity.md" }, summary = "Measure session-start relevance and conditionally select project-aware memories", needs = [] },
+]
 active  = [
   { path = "docs/specs/quality-gated-retrieval/spec.md", kind = "spec", source = { mode = "repo-origin", parent = "docs/product/briefs/memory-retrieval-and-evidence.md" }, summary = "Select and ship one lexical ranker that improves hard-query accuracy and context cost within strict latency gates", needs = [] },
 ]
@@ -45,6 +50,7 @@ backlog = []
 ["ini-001".brief_queue]
 draft = []
 ready = [
+  { path = "docs/product/briefs/intent-continuity.md", kind = "brief", source = { mode = "repo-origin", ref = "docs/intent-continuity-survey.md", revision = "2026-09-20" }, summary = "Recover complete, relevant coding-task evidence within a bounded context", needs = [] },
   { path = "docs/product/briefs/memory-retrieval-and-evidence.md", kind = "brief", source = { mode = "repo-origin" }, summary = "Improve retrieval ranking, context efficiency, temporal evidence, and consolidation safety", needs = [] },
   { path = "docs/product/briefs/modern-htmx-dashboard.md", kind = "brief", source = { mode = "repo-origin" }, summary = "Revamp Memex into a modern, dashboard-first HTMX experience", needs = [] },
 ]
