@@ -29,6 +29,7 @@ from eval.task_evidence_model import (
     QuestionRun,
     pi_question_planner,
     run_model_comparison,
+    sanitized_task_evidence,
 )
 from memex.application.memory import Memex
 from memex.domain.models import RecallHit
@@ -519,6 +520,62 @@ def test_harness_retries_invalid_questions_and_counts_both_calls(
     assert run.plans[0].usage == run.usage
 
 
+@pytest.mark.parametrize(
+    "usage",
+    [
+        {"input": -1, "output": 10, "cost": {"total": 0.01}},
+        {"input": 10, "output": 10, "cost": {"total": -0.01}},
+        {"input": 10, "output": 10, "cost": {"total": float("nan")}},
+        {"input": True, "output": 10, "cost": {"total": 0.01}},
+    ],
+)
+def test_invalid_harness_usage_stops_before_next_call(
+    monkeypatch: pytest.MonkeyPatch,
+    usage: dict[str, object],
+) -> None:
+    calls = 0
+
+    def fake_run(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        nonlocal calls
+        calls += 1
+        output = json.dumps(
+            {
+                "type": "message_end",
+                "message": {
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": json.dumps({"queries": ["first"]})}],
+                    "usage": usage,
+                },
+            }
+        )
+        return subprocess.CompletedProcess(args=["fake"], returncode=0, stdout=output, stderr="")
+
+    monkeypatch.setattr(task_evidence_model, "_run_command", fake_run)
+    planner = HarnessQuestionPlanner(
+        harness="fake",
+        argv=(sys.executable,),
+        prompt_template="{goal}",
+        model_id="fake/model",
+        price_per_1k_prompt_tokens_usd=0.001,
+        price_per_1k_completion_tokens_usd=0.001,
+        max_completion_tokens=100,
+        cost_source="verified billing",
+    )
+
+    run = planner.plan(
+        [
+            {"name": "First", "goal": "first goal"},
+            {"name": "Second", "goal": "second goal"},
+        ],
+        ModelRunLimits(wall_seconds=300, spend_limit_usd=5.0),
+    )
+
+    assert calls == 1
+    assert run.status == "incomplete"
+    assert run.blocked_reason == "missing usage"
+    assert run.plans == []
+
+
 @pytest.mark.parametrize("billing_mode", ["usd", "plan_credits"])
 def test_billing_modes_require_usage_telemetry_before_next_call(
     monkeypatch: pytest.MonkeyPatch,
@@ -596,6 +653,11 @@ def test_model_comparison_passes_only_label_blind_task_inputs_to_planner() -> No
     assert report.promotion_gate.promoted is False
     assert "completed-code-check-not-run" in report.promotion_gate.failed_conditions
     assert report.promotion_gate.candidate_task_complete == 12
+    snapshot = sanitized_task_evidence(report)
+    assert len(snapshot) == 24
+    assert sum(row["complete"] for row in snapshot) == 12
+    assert all(row["calls"] == 3 for row in snapshot)
+    assert all("queries" not in row and "goal" not in row for row in snapshot)
 
 
 def test_pi_style_json_output_yields_questions_and_usage() -> None:

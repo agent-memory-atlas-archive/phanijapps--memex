@@ -88,6 +88,15 @@ retaining goals, prompts, generated questions, or memory contents:
 | Evaluation promotion decision | 37 | 191 |
 | Task report privacy | 38 | 241 |
 
+The run did not retain per-task hit and missing-link rows. Its aggregate 7/24
+candidate score can be checked against the in-memory evaluator result from
+that run, but cannot be independently audited from this retained report.
+The runner now exposes `sanitized_task_evidence(report)` to export task names,
+hit and missing source slugs, recall calls and tokens, leak counts, latency,
+and model usage without raw task goals, prompts, questions, or memory bodies.
+That export must be saved during a future authorized run; it cannot recover
+this run's discarded plans.
+
 ## Reuse
 
 `eval/task_evidence_model.py` accepts a harness-neutral question planner that
@@ -102,7 +111,17 @@ can implement the same planner contract without changing Memex recall.
 The evaluated configuration was:
 
 ```python
-run_model_comparison(
+import json
+from pathlib import Path
+
+from eval.task_evidence_model import (
+    ModelRunLimits,
+    pi_question_planner,
+    run_model_comparison,
+    sanitized_task_evidence,
+)
+
+report = run_model_comparison(
     planner=pi_question_planner(
         model_id="zai-coding-cn/glm-5.3-flash",
         billing_mode="plan_credits",
@@ -113,6 +132,10 @@ run_model_comparison(
     ),
     limits=ModelRunLimits(wall_seconds=300, spend_limit_usd=5.0),
 )
+if report.candidate is not None:
+    Path("docs/research/task-evidence-candidate-tasks.json").write_text(
+        json.dumps(sanitized_task_evidence(report), indent=2), encoding="utf-8"
+    )
 ```
 
 This configuration is reusable, but running it again consumes a new model

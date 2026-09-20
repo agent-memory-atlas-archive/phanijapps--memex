@@ -52,6 +52,18 @@
   disable tools, extensions, skills, context files, prompt templates,
   project-local approvals, and session storage. The reviewer found no blocker
   for the explicitly bounded pi configuration after that correction.
+- Final security review found that negative or non-finite harness usage could
+  reduce tracked spend. The parser now stops before the next model call on
+  invalid token or cost telemetry; regression tests cover negative tokens,
+  negative or non-finite cost, and boolean token fields.
+- Final quality review found that the run retained per-task model usage but
+  discarded per-task hits and missing links. The runner now exposes a
+  sanitized per-task evidence export for future runs. The prior run cannot be
+  reconstructed without another model call, so AC-0003 remains incomplete.
+- 2026-09-20: After both review fixes, the full suite passed with 700 tests,
+  one skip, and 90.24% coverage in 237.05 seconds. Ruff, mypy, format, and
+  strict MkDocs passed. Adversarial, security, and quality re-reviews returned
+  clean.
 - 2026-09-20: Full suite: 695 passed, one skipped, 90.24% coverage in 236.27
   seconds. The additional retry regression test passed. Ruff, mypy, and strict
   MkDocs passed.

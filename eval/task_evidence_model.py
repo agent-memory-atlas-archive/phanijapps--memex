@@ -47,6 +47,21 @@ class TaskQuestionInput(TypedDict):
     goal: str
 
 
+class TaskEvidenceSnapshot(TypedDict):
+    task: str
+    complete: bool
+    hits: list[str]
+    missing: list[str]
+    calls: int
+    rendered_tokens: int
+    latency_ms: float
+    inactive_hits: int
+    other_project_hits: int
+    model_prompt_tokens: int
+    model_completion_tokens: int
+    model_catalog_estimate_usd: float
+
+
 @dataclass(frozen=True, slots=True)
 class ModelRunLimits:
     wall_seconds: int = MODEL_WALL_LIMIT_SECONDS
@@ -222,6 +237,33 @@ def run_model_comparison(
         candidate=candidate,
         promotion_gate=_promotion_gate(baseline, candidate, question_run),
     )
+
+
+def sanitized_task_evidence(report: ModelComparisonReport) -> list[TaskEvidenceSnapshot]:
+    """Expose scored task evidence without prompts, questions, or memory text."""
+    if report.candidate is None:
+        return []
+    usage_by_task = {plan.task: plan.usage for plan in report.question_run.plans}
+    rows: list[TaskEvidenceSnapshot] = []
+    for task in report.candidate.tasks:
+        usage = usage_by_task[task.name]
+        rows.append(
+            {
+                "task": task.name,
+                "complete": task.complete,
+                "hits": task.hits,
+                "missing": task.missing,
+                "calls": task.cost.calls,
+                "rendered_tokens": task.cost.rendered_tokens,
+                "latency_ms": task.cost.latency_ms,
+                "inactive_hits": len(task.inactive_hits),
+                "other_project_hits": len(task.other_project_hits),
+                "model_prompt_tokens": usage.prompt_tokens,
+                "model_completion_tokens": usage.completion_tokens,
+                "model_catalog_estimate_usd": usage.catalog_estimate_usd,
+            }
+        )
+    return rows
 
 
 def _label_blind_tasks(fixture: Fixture) -> list[TaskQuestionInput]:
@@ -515,9 +557,9 @@ def _usage_from_event(event: dict[str, object]) -> ModelUsage | None:
 
 def _usage_int(usage: dict[str, object], names: tuple[str, ...]) -> int:
     for name in names:
-        value = usage.get(name)
-        if isinstance(value, int):
-            return value
+        if name in usage:
+            value = usage[name]
+            return value if isinstance(value, int) and not isinstance(value, bool) else -1
     return 0
 
 
@@ -569,13 +611,22 @@ def _usage_cost(usage: dict[str, object]) -> float:
     cost = usage.get("cost")
     if isinstance(cost, dict):
         total = cost.get("total")
-        if isinstance(total, int | float):
+        if isinstance(total, int | float) and not isinstance(total, bool):
             return float(total)
+        if "total" in cost:
+            return float("nan")
     return 0.0
 
 
 def _has_billable_usage(value: object) -> bool:
     if not isinstance(value, ModelUsage):
+        return False
+    if (
+        value.prompt_tokens < 0
+        or value.completion_tokens < 0
+        or not math.isfinite(value.spend_usd)
+        or value.spend_usd < 0
+    ):
         return False
     return bool(value.spend_usd or value.prompt_tokens or value.completion_tokens)
 
