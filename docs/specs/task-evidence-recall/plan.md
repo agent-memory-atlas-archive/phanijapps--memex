@@ -1,7 +1,7 @@
 # Plan: Task evidence recall
 
 - **Spec:** [`spec.md`](spec.md)
-- **Status:** Drafting
+- **Status:** Executing
 - **Repository anchors:** `docs/architecture/overview.md`, ADR-0001, ADR-0002,
   ADR-0004; `src/memex/application/memory.py`,
   `src/memex/application/context_injection.py`,
