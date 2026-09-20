@@ -40,6 +40,18 @@
   trailed the linked-summary baseline's 11/24. The candidate stayed
   unpromoted. The exact scores, accounting limits, and per-task model usage
   are in `docs/research/2026-09-20-task-evidence-focused-candidate.md`.
+- The approved plan requested three variable model runs. Only one full run fit
+  the owner's five-minute ceiling after formatting recovery. The required
+  uncertainty estimate is therefore unavailable, and this result cannot
+  authorize promotion. Repeating it on pi or another harness requires a new
+  model-run budget; the accepted promotion criteria remain open.
+- A pre-run security review of the pi subprocess and untrusted output boundary
+  found that plan-credit mode could start without catalog rates or a maximum
+  output bound. T2 was changed to require both before launch, reserve the
+  worst-case catalog equivalent before every call, count observed usage, and
+  disable tools, extensions, skills, context files, prompt templates,
+  project-local approvals, and session storage. The reviewer found no blocker
+  for the explicitly bounded pi configuration after that correction.
 - 2026-09-20: Full suite: 695 passed, one skipped, 90.24% coverage in 236.27
   seconds. The additional retry regression test passed. Ruff, mypy, and strict
   MkDocs passed.

@@ -29,6 +29,13 @@ either margin. The completed-code and poisoned-memory checks were not run, and
 no harness guidance or Memex runtime behavior changed. The one live comparison
 does not supply uncertainty from repeated model runs.
 
+The evaluator's failed conditions for this run were
+`broad-query-margin`, `linked-summary-margin`,
+`model-token-baseline-unavailable`, `completed-code-check-not-run`, and
+`poison-memory-trace-not-run`. The token condition means the recall-only
+baseline has no comparable model-token cost, so a combined token reduction
+cannot be established.
+
 ## Run and spend record
 
 The first launch stopped before any model call because the prompt template
