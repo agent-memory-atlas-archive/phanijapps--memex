@@ -1,6 +1,6 @@
 # Spec: Task evidence recall
 
-- **Status:** Draft
+- **Status:** Approved
 - **Owner:** Memex maintainers
 - **Plan:** [`plan.md`](plan.md)
 - **Constrained by:** ADR-0001, ADR-0002, ADR-0004
