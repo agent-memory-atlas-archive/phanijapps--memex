@@ -19,7 +19,9 @@
 # repository root.
 
 [backlog]
-open = []
+open = [
+  { path = "docs/intent-continuity-survey.md", kind = "research", source = { mode = "repo-origin", ref = "docs/intent-continuity-survey.md", revision = "2026-09-20" }, summary = "Evaluate applicable task intent and continuity across coding-agent sessions", needs = [] },
+]
 closed = []
 
 ["ini-001"]
@@ -43,7 +45,9 @@ active  = []
 backlog = []
 
 ["ini-001".brief_queue]
-draft = []
+draft = [
+  { path = "docs/product/briefs/intent-continuity.md", kind = "brief", source = { mode = "repo-origin", ref = "docs/intent-continuity-survey.md", revision = "2026-09-20" }, summary = "Recover complete, relevant coding-task evidence within a bounded context", needs = [] },
+]
 ready = [
   { path = "docs/product/briefs/memory-retrieval-and-evidence.md", kind = "brief", source = { mode = "repo-origin" }, summary = "Improve retrieval ranking, context efficiency, temporal evidence, and consolidation safety", needs = [] },
   { path = "docs/product/briefs/modern-htmx-dashboard.md", kind = "brief", source = { mode = "repo-origin" }, summary = "Revamp Memex into a modern, dashboard-first HTMX experience", needs = [] },
