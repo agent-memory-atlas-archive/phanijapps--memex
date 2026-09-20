@@ -21,14 +21,18 @@ OPERATION_DESCRIPTIONS: dict[str, str] = {
     "memex_write": """Write a memory node to the filesystem wiki.
 
 When to use: the user states a durable fact, preference, rule, or
-summary worth recalling in later sessions.
+summary worth recalling in later sessions. Choose the scope from the fact's
+reach: use scope="project" for workspace architecture, conventions, and
+decisions; use scope="global" for facts intended across projects. If the
+reach is unclear, choose project. Do not rely on the global default.
 
 Key constraints: type is one of "entity", "preference", "procedure",
 "summary", "episode"; importance within [0, 1]; body is Markdown and
 may include [[slug]] links to other memory nodes. Episode nodes belong
-to memex_ingest_transcript, not this tool. Scope is "global" or "project";
-project writes require an opaque project_id and may include a display-only
-project_label. Same-named projects remain separate by project_id.
+to memex_ingest_transcript, not this tool. Scope is "global" or "project".
+For project scope, omit project_id to derive the project identity from the
+server process's working directory, or pass an opaque project_id explicitly. project_label is
+display-only. Same-named projects remain separate by project_id.
 
 Returns {"slug", "file_path"} of the stored node. Writing an existing
 slug updates it, preserving creation history and access counts.
@@ -50,8 +54,9 @@ Key constraints: the query needs at least one alphanumeric token and is
 limited to 1,024 UTF-8 bytes and 64 searchable tokens; top_k within
 [1, 100] (default 10); optional node_type filter. Expired or
 soft-forgotten nodes are hidden by default. Scope is "global" (all memory)
-or "project" (requires project_id); project_id selects the opaque project
-namespace, not a directory name.
+or "project". For project scope, omit project_id to derive identity from the
+server process's working directory, or pass an explicit opaque project_id.
+The ID selects a namespace, not a directory name.
 
 Returns hits ranked best-first, each with slug, title, snippet,
 node_type, importance, and file_path. Empty hits is a normal result.

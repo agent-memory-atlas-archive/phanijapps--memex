@@ -118,6 +118,29 @@ def test_registered_recall_description_pins_query_work_caps(expected: str) -> No
     assert expected in recall.description
 
 
+def test_registered_write_description_explains_scope_choice() -> None:
+    import asyncio
+
+    server = mcp_server.build_server()
+    write = next(tool for tool in asyncio.run(server.list_tools()) if tool.name == "memex_write")
+
+    assert "workspace architecture" in write.description
+    assert 'scope="project"' in write.description
+    assert 'scope="global"' in write.description
+    assert "derive the project identity" in write.description
+    assert "server process's working directory" in write.description
+
+
+def test_registered_recall_description_explains_derived_project_identity() -> None:
+    import asyncio
+
+    server = mcp_server.build_server()
+    recall = next(tool for tool in asyncio.run(server.list_tools()) if tool.name == "memex_recall")
+
+    assert "omit project_id to derive identity" in recall.description
+    assert "server process's working directory" in recall.description
+
+
 def test_tool_docstrings_follow_pyguide() -> None:
     """Source docstrings are maintainer docs (pyguide), not wire text."""
     functions = [

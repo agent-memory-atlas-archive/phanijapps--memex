@@ -85,6 +85,40 @@ def test_codex_install_wires_notify_and_mcp(homes: tuple[Path, Path]) -> None:
     assert agents2.count("Memory contract (memex)") == 1
 
 
+def test_codex_install_upgrades_old_memory_rule_without_changing_custom_text(
+    homes: tuple[Path, Path],
+) -> None:
+    home, project = homes
+    project.mkdir(parents=True)
+    old_snippet = """# Memory contract (memex)
+
+- At task start, run `memex hook session-start` and treat its output as
+  project context: it lists durable memories relevant to this repository.
+- When the user states a durable fact, preference, or rule, record it:
+  `memex write --type <entity|preference|procedure|summary> --title "..." --body "..."`
+- The `memex_recall` MCP tool (or `memex recall "<query>"`) searches all
+  stored memories; prefer it over re-asking the user.
+- Transcripts are captured automatically at turn completion; you never
+  need to ingest sessions manually.
+"""
+    agents = project / "AGENTS.md"
+    original = f"# Custom project guidance\n\n{old_snippet}\nKeep this rule.\n"
+    agents.write_text(original, encoding="utf-8")
+
+    install_harness("codex", MARKETPLACE, home=home, project=project)
+
+    updated = agents.read_text(encoding="utf-8")
+    assert old_snippet not in updated
+    assert "Keep this rule." in updated
+    assert "user states a durable fact" in updated
+    assert 'scope="project"' in updated
+    assert 'scope="global"' in updated
+    assert agents.with_suffix(".md.memex-bak").read_text(encoding="utf-8") == original
+
+    install_harness("codex", MARKETPLACE, home=home, project=project)
+    assert agents.read_text(encoding="utf-8") == updated
+
+
 def test_copilot_install_instructions_and_workflow(homes: tuple[Path, Path]) -> None:
     home, project = homes
     install_harness("copilot", MARKETPLACE, home=home, project=project)
@@ -97,6 +131,42 @@ def test_copilot_install_instructions_and_workflow(homes: tuple[Path, Path]) -> 
     install_harness("copilot", MARKETPLACE, home=home, project=project)
     instructions_text = instructions.read_text(encoding="utf-8")
     assert instructions_text.count("## Memory (memex)") == 1
+    assert "--scope <project|global>" in instructions_text
+
+
+def test_copilot_install_upgrades_old_scope_rule_without_changing_custom_text(
+    homes: tuple[Path, Path],
+) -> None:
+    home, project = homes
+    instructions = project / ".github/copilot-instructions.md"
+    instructions.parent.mkdir(parents=True)
+    old_snippet = """## Memory (memex)
+
+This project uses memex for durable memory. Respect the memory workflow:
+
+- Relevant project memories are surfaced automatically in CI feedback.
+  Before assuming user preferences, tooling choices, or project rules,
+  check the `memex MEMORY` blocks in this repository's memory exports.
+- When your change relies on a durable fact (a preference, a tooling
+  rule, a deployment constraint), record it in your PR description so a
+  maintainer can persist it with
+  `memex write --type <entity|preference|procedure> --title "..." --body "..."`.
+- The `memex-verify` workflow on this repository reports memory health
+  (index freshness, link integrity) for every PR.
+"""
+    original = f"# Custom instructions\n\n{old_snippet}\nKeep this rule.\n"
+    instructions.write_text(original, encoding="utf-8")
+
+    install_harness("copilot", MARKETPLACE, home=home, project=project)
+
+    updated = instructions.read_text(encoding="utf-8")
+    assert old_snippet not in updated
+    assert "Keep this rule." in updated
+    assert "--scope <project|global>" in updated
+    assert instructions.with_suffix(".md.memex-bak").read_text(encoding="utf-8") == original
+
+    install_harness("copilot", MARKETPLACE, home=home, project=project)
+    assert instructions.read_text(encoding="utf-8") == updated
 
 
 def test_cli_harness_install(
