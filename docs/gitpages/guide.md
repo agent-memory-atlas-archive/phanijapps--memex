@@ -322,6 +322,13 @@ in `config.toml`, and Copilot via `.vscode/mcp.json` for VS Code agent
 mode. pi intentionally has no built-in MCP; its extension is the
 integration. `--no-mcp` skips registration everywhere.
 
+From the project where it was installed, remove one adapter with
+`memex uninstall <name>` (or `memex harness uninstall <name>`). This removes
+Memex's hooks, MCP registration, copied adapter files,
+and exact guidance snippets for that harness. Unrelated settings and modified
+adapter files are left in place and reported. The command keeps `~/.memex`
+memories, transcripts, and configuration; run it once per installed harness.
+
 Installing `claude`, `codex`, or `pi` also provisions `memex.toml`
 (absent one) with `[consolidation] provider = "<harness>"` — so
 distillation rides the coding harness's own model, credentials, and

@@ -53,6 +53,7 @@ One contract, every harness:
 ```bash
 memex install              # interactive: pick a harness
 memex install claude        # or codex, pi, copilot, custom
+memex uninstall claude      # remove an adapter; keep ~/.memex data
 ```
 
 ## Quickstart
