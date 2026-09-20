@@ -12,8 +12,43 @@ The [coding-agent recall report](https://github.com/phanijapps/memex/blob/eval/a
 2. Compare `one_shot_missing` and `focused_missing` for each task in the printed report. In the project-memory task, the broad query misses the derived project identity card. The focused queries retrieve it.
 3. Inspect the [fixture](https://github.com/phanijapps/memex/blob/eval/agent-recall/eval/data/coding-agent-workflow.json) for the task goals, required memory labels, and focused queries. Current [FTS5 retrieval](../../src/memex/infrastructure/bm25_retriever.py) uses strict term matching and broadens to `OR` only after zero results, so one query can rank some matching cards while still missing a different prerequisite.
 
-## Potential fix
+## Current evidence and next slice
 
-Start at the agent or harness layer: turn a broad task into two or three concrete information needs, call the existing project-scoped `memex_recall` for each, deduplicate the results, and fit the combined evidence into one explicit token budget. Preserve the current scope filters. This needs no new MCP tool or storage model. If unaided query planning still misses prerequisite concepts, test a retrieval-layer change against that demonstrated failure before expanding the design.
+The expanded [24-task baseline](../research/2026-09-20-task-evidence-baseline.md)
+found complete evidence for 5/24 tasks through the current hook and 7/24
+through one broad query. Human-written focused queries reached 12/24, but a
+single pi model run reached 7/24 and did not pass the promotion gate; see the
+[candidate report](../research/2026-09-20-task-evidence-focused-candidate.md).
+None of these numbers measures completed coding work.
 
-Validate with agents generating their own queries from held-out goals, rather than the fixture's human-written focused queries. Report task-complete evidence recall, cross-project and archived hits, total context tokens, and extra calls against the one-query baseline. The next step is that unaided evaluation; the current report cannot establish that the proposed flow solves the agent-level problem.
+A [file-search diagnostic](../research/2026-09-20-task-evidence-file-search-probe.md)
+combined FTS5 with a simple scan of the same page text and reached 8/24
+complete tasks. That gain is too small to justify a new default search tool.
+
+The next slice is a task evidence workflow that searches for distinct facts,
+combines and deduplicates source-linked pages within one context budget, and
+states which questions remain unanswered. A bounded file-text fallback is a
+candidate only if it adds material coverage on fresh tasks while preserving
+project, archive, and time filters. Freeze fresh labels before tuning, then
+measure complete evidence sets, fact recall, rendered tokens, calls, latency,
+leakage, and completed code against the existing baselines. The first model
+comparison's five-minute and $5 approval has been spent; any new model run
+needs its own ceiling.
+
+## Phased build decision
+
+1. **Make the measurement auditable.** Retain per-task hit and missing-page
+   lists for future candidate runs, count pi cache tokens in model usage, and
+   reject non-finite cost limits. Freeze new task labels before trying another
+   retrieval candidate. Keep the current hook unchanged during this phase.
+2. **Test task-directed retrieval.** Use the existing scoped recall operation
+   to search distinct information needs, deduplicate pages, follow verified
+   source links when useful, and surface unanswered needs. Compare a bounded
+   file-text fallback only when recall misses; add it to the product only if it
+   materially improves complete-task coverage under the same eight-page and
+   4,096-token limits. This phase produces an experimental candidate, not an
+   automatic default.
+3. **Promote only after the full gate.** Repeat model-backed tests under a new
+   approved time and spend limit, test completed coding behavior and a poisoned
+   memory, and apply the task-evidence spec's recall, cost, latency, scope, and
+   safety gates. Update installed guidance only if every gate passes.
