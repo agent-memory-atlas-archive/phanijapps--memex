@@ -29,8 +29,8 @@ without it is rejected instead of silently going to global memory.
 
 Key constraints: type is one of "entity", "preference", "procedure",
 "summary", "episode"; importance within [0, 1]; body is Markdown and
-may include [[slug]] links to other memory nodes. Episode nodes belong
-to memex_ingest_transcript, not this tool. Scope is "global" or "project".
+may include [[slug]] links to other memory nodes. Episode nodes come from
+transcript hooks or CLI ingestion, not this tool. Scope is "global" or "project".
 For project scope, omit project_id to derive the project identity from the
 server process's working directory, or pass an opaque project_id explicitly. project_label is
 display-only. Same-named projects remain separate by project_id.
@@ -106,8 +106,7 @@ server with an is_error result; an unknown slug returns
     "memex_ingest_transcript": """Ingest a conversation transcript: stores turns verbatim as JSONL,
 writes session metadata, and creates an episode memory node linking to it.
 
-When to use: at session end, so later sessions can trace memories back
-to this conversation.
+When to use: CLI recovery of a session missed by its capture hook.
 
 Key constraints: session_id uses [A-Za-z0-9._-] only (it becomes a
 filename); each turn needs role ("user", "agent", or "tool"),
@@ -117,18 +116,17 @@ turn: {"role": "user", "content": "prefer ruff", "turn": 1,
 
 Returns a report with the episode_node slug and turn counts.
 
-Failures arrive on two channels: malformed turn shapes are rejected
-by the server with an is_error result naming the field; invalid
-values return {"error": "..."} — check that key first. Re-ingesting
-an existing session_id fails. Side effects: writes transcript and
-episode files and updates the index.""",
+Invalid turns are rejected. Re-ingesting an existing session_id requires
+the CLI --overwrite option. Side effects: writes transcript and episode
+files and updates the index.""",
     "memex_clear_transcripts": """Delete every raw transcript after explicit confirmation.
 
 When to use: reclaim transcript storage while preserving the episode memory
-pages. Pass confirm=true; without it nothing is deleted. Episode pages remain
-searchable and their transcript_ref is changed to a retired marker.
+pages. Run `memex clear-transcripts --confirm`; without it nothing is
+deleted. Episode pages remain searchable and their transcript_ref is
+changed to a retired marker.
 
-Returns {"cleared": int}. Errors return {"error": "..."}. Side effects:
+Returns {"cleared": int}. Side effects:
 deletes raw JSONL and metadata transcript files only after confirmation.""",
     "memex_provenance": """Trace a memory node back to the conversation that produced it.
 

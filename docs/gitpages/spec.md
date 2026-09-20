@@ -1168,10 +1168,10 @@ responds on stdout.
 | `memex_recall` | `query`, `top_k?`, `node_type?` | `RecallResult` |
 | `memex_consolidate` | `mode?`, `max_episodes?` | `ConsolidationReport` |
 | `memex_forget` | `slug`, `mode?` | `{"slug": str, "forgotten": bool}` |
-| `memex_ingest_transcript` | `session_id`, `turns` | `TranscriptLinkReport` |
 | `memex_provenance` | `slug` | `ProvenanceReport` |
-| `memex_export` | `format?` | `{"nodes": list[WikiNode]}` |
-| `memex_import` | `nodes` | `{"imported": int}` |
+
+Transcript capture uses harness hooks. Manual transcript ingestion, transcript
+cleanup, JSON import, and JSON export remain CLI operations; they are not MCP tools.
 
 **Implementation:** Register typed tools with the official MCP Python SDK.
 Use its stdio transport and generated schemas; do not implement JSON-RPC framing

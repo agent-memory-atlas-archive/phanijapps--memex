@@ -29,7 +29,7 @@ memex recall "deploy"
 
 Agents forget to call tools. Memex does not rely on them remembering:
 
-- **Pull** — eight typed MCP tools (`memex serve-mcp`) for model-initiated
+- **Pull** — five typed MCP tools (`memex serve-mcp`) for model-initiated
   memory operations, with enums and bounds enforced in the tool schemas.
 - **Push** — harness hooks (`memex hook session-start | prompt | transcript`)
   inject relevant memories into context on every turn and capture session

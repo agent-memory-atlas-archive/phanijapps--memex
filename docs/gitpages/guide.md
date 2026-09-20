@@ -291,7 +291,7 @@ deterministic push layer and a verifiable proof layer:
 ```
 L3  PROOF    memex verify (CI / pre-commit)   exit code fails the build
 L2  PUSH     memex hook <event>               context injection + capture
-L1  PULL     memex serve-mcp                  eight typed tools
+L1  PULL     memex serve-mcp                  five typed tools
 ```
 
 ### The hook contract
@@ -365,12 +365,12 @@ memex hook transcript --harness pi --path <session.jsonl> --consolidate
 
 ### MCP tools
 
-`memex serve-mcp` exposes eight tools with typed schemas (enums and bounds
+`memex serve-mcp` exposes five tools with typed schemas (enums and bounds
 in `inputSchema`, documented `{"error": ...}` result convention):
 
 `memex_write`, `memex_recall`, `memex_consolidate`, `memex_forget`,
-`memex_ingest_transcript`, `memex_provenance`, `memex_export`,
-`memex_import`.
+`memex_provenance`. Transcript capture uses harness hooks; manual ingestion,
+transcript cleanup, import, and export remain CLI commands.
 
 Schema violations are rejected by the server with a field-precise error;
 domain rejections return sanitized error data. Tool descriptions are

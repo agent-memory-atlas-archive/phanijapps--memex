@@ -30,21 +30,15 @@ from memex.domain.models import (
     ConsolidateInput,
     ConsolidateMode,
     ForgetMode,
-    IngestTranscriptInput,
     NodeType,
-    TurnStreamEntry,
     WriteInput,
 )
 from memex.domain.operations import (
     OPERATION_DESCRIPTIONS,
     ConsolidateResultDict,
-    ExportDict,
     ForgetResultDict,
-    ImportReportDict,
     ProvenanceDict,
     RecallResultDict,
-    TranscriptReportDict,
-    TurnDict,
     WriteResultDict,
 )
 from memex.infrastructure.workspace_context import project_context, project_identity
@@ -106,8 +100,8 @@ def memex_write(
     slug updates it, preserving id, created, and access counters.
 
     Args:
-        type: Episode is not creatable here — episodes require a session,
-            so use memex_ingest_transcript for those.
+        type: Episode is not creatable here — episodes require transcript
+            ingestion through a harness hook or the CLI.
         title: Human-readable; the slug derives from it.
         body: Markdown; ``[[slug]]`` references become wiki links, merged
             with ``links``.
@@ -183,14 +177,6 @@ def memex_recall(
         return cast(RecallResultDict, _caught("memex_recall", exc))
 
 
-def memex_clear_transcripts(confirm: bool = False) -> dict[str, int | str]:
-    """Clear raw transcripts after explicit confirmation and retire episodes."""
-    try:
-        return {"cleared": _get_memex().clear_transcripts(confirm=confirm)}
-    except Exception as exc:
-        return cast(dict[str, int | str], _caught("memex_clear_transcripts", exc))
-
-
 def memex_consolidate(
     mode: ConsolidateMode | None = None,
     max_episodes: Annotated[int, Field(ge=1)] = 10,
@@ -243,34 +229,6 @@ def memex_forget(slug: str, mode: ForgetMode | None = None) -> ForgetResultDict:
         return cast(ForgetResultDict, _caught("memex_forget", exc))
 
 
-def memex_ingest_transcript(session_id: str, turns: list[TurnDict]) -> TranscriptReportDict:
-    """Store a transcript verbatim and create its episode node.
-
-    Creates three artifacts — transcripts/{session_id}.jsonl,
-    .meta.json, and wiki/episodes/{session_id}.md with transcript_ref —
-    and indexes the episode. Turn contents are never logged. Re-ingest
-    fails unless overwrite semantics are added; session_id becomes a
-    filename (validated charset).
-
-    Args:
-        session_id: [A-Za-z0-9._-] only.
-        turns: TurnStreamEntry-shaped dicts; ts optional (empty means
-            unknown and is omitted from the JSONL).
-
-    Returns:
-        TranscriptLinkReport as JSON — episode_node slug, file paths,
-        turn counts by role.
-    """
-    try:
-        parsed = [TurnStreamEntry.from_dict(turn) for turn in turns]
-        report = _get_memex().ingest_transcript(
-            IngestTranscriptInput(session_id=session_id, turns=parsed)
-        )
-        return cast(TranscriptReportDict, to_jsonable(report))
-    except Exception as exc:
-        return cast(TranscriptReportDict, _caught("memex_ingest_transcript", exc))
-
-
 def memex_provenance(slug: str) -> ProvenanceDict:
     """Trace a node back to its originating transcript(s).
 
@@ -291,43 +249,6 @@ def memex_provenance(slug: str) -> ProvenanceDict:
         return cast(ProvenanceDict, to_jsonable(report))
     except Exception as exc:
         return cast(ProvenanceDict, _caught("memex_provenance", exc))
-
-
-def memex_export() -> ExportDict:
-    """Export every node as an import-ready JSON document.
-
-    Pure read: nothing is written and no memory state changes.
-
-    Returns:
-        Export document as JSON — version, exported_at, nodes (each
-        with slug, type, title, body, tags, importance, timestamps,
-        links, transcript_ref).
-    """
-    try:
-        return cast(ExportDict, to_jsonable(_get_memex().import_export.export()))
-    except Exception as exc:
-        return cast(ExportDict, _caught("memex_export", exc))
-
-
-def memex_import(nodes: list[dict[str, Any]]) -> ImportReportDict:
-    """Import nodes from a memex_export document.
-
-    Invalid entries are reported and skipped, not fatal. Importing an
-    existing slug updates that node.
-
-    Args:
-        nodes: Objects as emitted by memex_export; each needs a valid
-            type and a non-empty title.
-
-    Returns:
-        {"imported": int, "skipped": list, "errors": list}.
-    """
-    try:
-        return cast(
-            ImportReportDict, to_jsonable(_get_memex().import_export.import_data({"nodes": nodes}))
-        )
-    except Exception as exc:
-        return cast(ImportReportDict, _caught("memex_import", exc))
 
 
 @dataclass(frozen=True)
@@ -383,55 +304,11 @@ _TOOL_SPECS: tuple[ToolSpec, ...] = (
         ),
     ),
     ToolSpec(
-        memex_ingest_transcript,
-        "Memex: ingest transcript",
-        ToolAnnotations(
-            title="Memex: ingest transcript",
-            read_only_hint=False,
-            destructive_hint=False,
-            idempotent_hint=False,
-            open_world_hint=False,
-        ),
-    ),
-    ToolSpec(
-        memex_clear_transcripts,
-        "Memex: clear raw transcripts",
-        ToolAnnotations(
-            title="Memex: clear raw transcripts",
-            read_only_hint=False,
-            destructive_hint=True,
-            idempotent_hint=True,
-            open_world_hint=False,
-        ),
-    ),
-    ToolSpec(
         memex_provenance,
         "Memex: trace provenance",
         ToolAnnotations(
             title="Memex: trace provenance",
             read_only_hint=True,
-            destructive_hint=False,
-            idempotent_hint=True,
-            open_world_hint=False,
-        ),
-    ),
-    ToolSpec(
-        memex_export,
-        "Memex: export memories",
-        ToolAnnotations(
-            title="Memex: export memories",
-            read_only_hint=True,
-            destructive_hint=False,
-            idempotent_hint=True,
-            open_world_hint=False,
-        ),
-    ),
-    ToolSpec(
-        memex_import,
-        "Memex: import memories",
-        ToolAnnotations(
-            title="Memex: import memories",
-            read_only_hint=False,
             destructive_hint=False,
             idempotent_hint=True,
             open_world_hint=False,
