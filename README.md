@@ -37,7 +37,7 @@ solve this with infrastructure. Memex solves it with a **filesystem**:
 
 | Layer | Mechanism | Guarantee |
 |---|---|---|
-| **Pull** | 9 typed MCP tools (`memex serve-mcp`) | The model can read/write memory when it chooses |
+| **Pull** | 5 typed MCP tools (`memex serve-mcp`) | The model can read/write memory when it chooses |
 | **Push** | Harness hooks (`memex hook …`) | Memories are injected into context **every turn**; transcripts are captured automatically |
 | **Proof** | `memex verify` in CI | Health and memory-activity evidence — or the build fails |
 
@@ -105,8 +105,7 @@ memex.close()
 <summary><strong>MCP tools</strong> (schemas carry enums and bounds; errors are sanitized `{"error": …}` data)</summary>
 
 `memex_write` · `memex_recall` · `memex_consolidate` · `memex_forget` ·
-`memex_ingest_transcript` · `memex_provenance` · `memex_export` ·
-`memex_import` · `memex_clear_transcripts`
+`memex_provenance`
 
 ```bash
 claude mcp add memex -- memex serve-mcp

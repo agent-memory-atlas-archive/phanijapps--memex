@@ -88,9 +88,7 @@ def _build_parser() -> argparse.ArgumentParser:
     ingest.add_argument("--turns-file", type=Path, required=True)
     ingest.add_argument("--overwrite", action="store_true")
 
-    clear_transcripts = sub.add_parser(
-        "clear-transcripts", help="Clear raw transcripts and retire episode references"
-    )
+    clear_transcripts = sub.add_parser("clear-transcripts", help=summary("memex_clear_transcripts"))
     clear_transcripts.add_argument("--confirm", action="store_true")
 
     rebuild = sub.add_parser("rebuild-index", help="Rebuild the secondary index from the wiki")

@@ -88,24 +88,6 @@ class TestSchemaChannel:
         assert channel == "sdk-rejected"
         assert "mode" in message
 
-    def test_ingest_bad_turn_role_rejected_by_schema(self, server: Any) -> None:
-        channel, message = call(
-            server,
-            "memex_ingest_transcript",
-            {"session_id": "s", "turns": [{"role": "system", "content": "x", "turn": 1}]},
-        )
-        assert channel == "sdk-rejected"
-        assert "role" in message
-
-    def test_ingest_turn_missing_required_field(self, server: Any) -> None:
-        channel, message = call(
-            server,
-            "memex_ingest_transcript",
-            {"session_id": "s", "turns": [{"role": "user", "content": "x"}]},
-        )
-        assert channel == "sdk-rejected"
-        assert "turn" in message
-
 
 class TestDomainChannel:
     """Valid shapes with invalid semantics return sanitized error data."""
@@ -136,18 +118,8 @@ class TestDomainChannel:
         assert payload == {"error": "memory node not found"}
 
 
-class TestTheOriginalBug:
-    """A turn without ts used to crash with TypeError through every layer."""
-
-    def test_turn_without_ts_succeeds(self, server: Any) -> None:
-        channel, payload = call(
-            server,
-            "memex_ingest_transcript",
-            {"session_id": "sess-nots", "turns": [{"role": "user", "content": "hi", "turn": 1}]},
-        )
-        assert channel == "result"
-        assert payload["episode_node"] == "sess-nots"
-        assert payload["turn_count"] == 1
+class TestTranscriptCliRegression:
+    """The remaining manual transcript path accepts turns without ts."""
 
     def test_cli_accepts_ts_less_jsonl(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
@@ -204,32 +176,9 @@ class TestWireSchemas:
         assert props["top_k"]["minimum"] == 1
         assert props["top_k"]["maximum"] == 100
 
-    def test_ingest_turns_have_typed_shape(self, server: Any) -> None:
-        schema = self.schemas(server)["memex_ingest_transcript"]["input"]
-        assert schema["properties"]["turns"]["items"]["$ref"] == "#/$defs/TurnDict"
-        turn = schema["$defs"]["TurnDict"]
-        assert set(turn["properties"]) == {
-            "role",
-            "content",
-            "turn",
-            "ts",
-            "tool_name",
-            "result",
-            "query",
-            "token_usage",
-        }
-        assert turn["properties"]["role"]["enum"] == ["user", "agent", "tool"]
-        assert set(turn["required"]) == {"role", "content", "turn"}
-        assert "ts" not in turn["required"]
-
     def test_output_schemas_are_not_vacuous(self, server: Any) -> None:
         schemas = self.schemas(server)
         write_out = schemas["memex_write"]["output"]
         assert {"slug", "file_path", "error"} <= set(write_out["properties"])
         recall_out = schemas["memex_recall"]["output"]
         assert {"hits", "total_indexed", "error"} <= set(recall_out["properties"])
-
-    def test_export_and_import_output_schemas(self, server: Any) -> None:
-        schemas = self.schemas(server)
-        assert "nodes" in schemas["memex_export"]["output"]["properties"]
-        assert {"imported", "errors"} <= set(schemas["memex_import"]["output"]["properties"])

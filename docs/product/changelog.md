@@ -21,6 +21,9 @@ unreleased until a release tag is created.
 
 ### Changed
 
+- MCP exposes five agent-facing tools. Transcript capture remains in harness
+  hooks; manual transcript ingestion, transcript cleanup, import, and export
+  remain on the CLI.
 - MCP `memex_write` requires an explicit `global` or `project` scope. Omitted
   and invalid scopes are rejected before writing. Project IDs are still derived
   from the server workspace when omitted.

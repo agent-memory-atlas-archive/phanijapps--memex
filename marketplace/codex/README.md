@@ -65,8 +65,8 @@ The rollout JSONL schema varies across Codex versions. The transcript
 parser is tolerant (unknown entries are skipped, never fatal) and the
 notify wrapper falls back to the newest `~/.codex/sessions/**/rollout-*.jsonl`
 when the event carries no path. Verify against your Codex version after
-installing: run one session, then `memex list-sessions` (via `memex
-ingest-transcript` report or the export tool).
+installing: run one session, then check `memex status` for capture activity
+or `memex export` for the episode node.
 
 ## Manual config
 

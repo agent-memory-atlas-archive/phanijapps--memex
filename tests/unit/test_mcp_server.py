@@ -8,10 +8,7 @@ from memex import mcp_server
 from memex.infrastructure.bm25_retriever import MAX_QUERY_BYTES, MAX_QUERY_TOKENS
 from memex.infrastructure.workspace_context import ProjectContext
 from memex.mcp_server import (
-    memex_export,
     memex_forget,
-    memex_import,
-    memex_ingest_transcript,
     memex_provenance,
     memex_recall,
     memex_write,
@@ -27,7 +24,7 @@ def isolated_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Pa
     mcp_server._reset()
 
 
-def test_all_memory_tools_registered() -> None:
+def test_only_agent_tools_registered() -> None:
     import asyncio
 
     server = mcp_server.build_server()
@@ -37,11 +34,7 @@ def test_all_memory_tools_registered() -> None:
         "memex_recall",
         "memex_consolidate",
         "memex_forget",
-        "memex_ingest_transcript",
-        "memex_clear_transcripts",
         "memex_provenance",
-        "memex_export",
-        "memex_import",
     }
     assert names == expected
 
@@ -51,11 +44,7 @@ EXPECTED_HINTS = {
     "memex_recall": {"read_only": True, "destructive": False, "idempotent": False},
     "memex_consolidate": {"read_only": False, "destructive": False, "idempotent": False},
     "memex_forget": {"read_only": False, "destructive": True, "idempotent": False},
-    "memex_ingest_transcript": {"read_only": False, "destructive": False, "idempotent": False},
-    "memex_clear_transcripts": {"read_only": False, "destructive": True, "idempotent": True},
     "memex_provenance": {"read_only": True, "destructive": False, "idempotent": True},
-    "memex_export": {"read_only": True, "destructive": False, "idempotent": True},
-    "memex_import": {"read_only": False, "destructive": False, "idempotent": True},
 }
 
 
@@ -84,24 +73,15 @@ def test_wire_descriptions_are_call_contracts() -> None:
         assert annotations.open_world_hint is False, name
 
 
-def test_ingest_description_documents_turn_format() -> None:
-    """The one tool whose input shape models cannot guess needs an example."""
-    from memex.domain.operations import OPERATION_DESCRIPTIONS
-
-    description = OPERATION_DESCRIPTIONS["memex_ingest_transcript"]
-    assert '"role"' in description
-    assert '"turn"' in description
-
-
 def test_wire_registry_matches_registered_tools() -> None:
-    """Drift guard: every tool has a wire entry, and no orphans."""
+    """Every registered tool has a shared description; CLI-only operations remain."""
     import asyncio
 
     from memex.domain.operations import OPERATION_DESCRIPTIONS
 
     server = mcp_server.build_server()
     names = {tool.name for tool in asyncio.run(server.list_tools())}
-    assert set(OPERATION_DESCRIPTIONS) == names
+    assert names <= set(OPERATION_DESCRIPTIONS)
 
 
 @pytest.mark.parametrize(
@@ -149,16 +129,12 @@ def test_tool_docstrings_follow_pyguide() -> None:
         mcp_server.memex_recall,
         mcp_server.memex_consolidate,
         mcp_server.memex_forget,
-        mcp_server.memex_ingest_transcript,
         mcp_server.memex_provenance,
-        mcp_server.memex_export,
-        mcp_server.memex_import,
     ]
     for fn in functions:
         assert fn.__doc__ and "Returns:" in fn.__doc__, fn.__name__
         assert "When to use:" not in fn.__doc__, f"{fn.__name__}: wire text leaked into source"
-        if fn.__name__ != "memex_export":  # zero-arg function: an Args section would be filler
-            assert "Args:" in fn.__doc__, fn.__name__
+        assert "Args:" in fn.__doc__, fn.__name__
 
 
 def test_write_recall_forget_flow() -> None:
@@ -232,28 +208,12 @@ def test_recall_oversized_query_uses_sanitized_error() -> None:
     assert "leaksecret" not in json.dumps(result)
 
 
-def test_transcript_and_provenance_tools() -> None:
-    report = memex_ingest_transcript(
-        session_id="sess-mcp",
-        turns=[{"role": "user", "content": "hello", "ts": "2026-09-15T10:00:00Z", "turn": 1}],
-    )
-    assert report["episode_node"] == "sess-mcp"
-
-    provenance = memex_provenance("sess-mcp")
-    assert provenance["confidence"] == "direct"
-    assert provenance["transcript_files"][0].endswith("sess-mcp.jsonl")
+def test_provenance_tool() -> None:
+    memex_write(type="entity", title="MCP entity", body="via mcp tool", scope="global")
+    provenance = memex_provenance("mcp-entity")
+    assert provenance["confidence"] == "none"
 
     assert memex_provenance("ghost") == {"error": "memory node not found"}
-
-
-def test_export_import_tools() -> None:
-    memex_write(type="entity", title="Export", body="b", scope="global")
-    exported = memex_export()
-    assert exported["version"] == "1.0"
-    assert len(exported["nodes"]) == 1
-
-    result = memex_import(exported["nodes"])
-    assert result["imported"] == 1
 
 
 def test_tool_exception_fallbacks_are_sanitized(
@@ -269,12 +229,7 @@ def test_tool_exception_fallbacks_are_sanitized(
     monkeypatch.setattr(srv, "_get_memex", lambda: _Boom())
 
     assert "error" in memex_recall("anything")
-    assert "error" in memex_export()
-    assert "error" in memex_import([])
     assert "error" in srv.memex_consolidate(mode="full")
-    assert "error" in srv.memex_ingest_transcript(
-        session_id="s", turns=[{"role": "user", "content": "hi", "turn": 1}]
-    )
     assert "error" in srv.memex_provenance("ghost")
     # The sanitized error must not leak the internal exception message
-    assert "secret path" not in json.dumps(srv.memex_export())
+    assert "secret path" not in json.dumps(memex_recall("anything"))
