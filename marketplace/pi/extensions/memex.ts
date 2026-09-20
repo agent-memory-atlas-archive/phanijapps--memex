@@ -21,6 +21,11 @@ const run = promisify(execFile);
 const MEMEX_BIN = process.env.MEMEX_BIN ?? "memex";
 const TOP_K = process.env.MEMEX_TOP_K ?? "5";
 const DISABLED = process.env.MEMEX_DISABLE === "1";
+const WRITE_GUIDANCE =
+  "When the user states a durable fact, preference, or rule, or asks to memorize one, " +
+  "use memex write. Choose --scope project for workspace architecture, conventions, " +
+  "and decisions; choose --scope global for facts intended across projects. " +
+  "If unclear, choose project. Check the returned file path.";
 
 function injection(content: string) {
   return {
@@ -41,8 +46,7 @@ export default function (pi: ExtensionAPI) {
           timeout: 15_000,
         });
         const text = stdout.trim();
-        if (text) return injection(text);
-        return;
+        return injection(text ? `${WRITE_GUIDANCE}\n\n${text}` : WRITE_GUIDANCE);
       }
       const prompt = typeof event.prompt === "string" ? event.prompt.trim() : "";
       if (!prompt) return;

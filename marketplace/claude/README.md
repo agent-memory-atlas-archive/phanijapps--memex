@@ -22,6 +22,10 @@ Automatic (merges into `~/.claude/settings.json`, backs up first):
 memex install claude   # from any directory; add --from only for a modified checkout
 ```
 
+The installer also adds [scoped write guidance](CLAUDE-snippet.md) to the
+project's `CLAUDE.md`, backing up an existing file. Existing custom Memex
+guidance is left in place.
+
 Manual: merge [`settings-hooks.json`](settings-hooks.json) into
 `~/.claude/settings` (user) or `.claude/settings.json` (project).
 

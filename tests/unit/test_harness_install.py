@@ -1,6 +1,9 @@
 """Harness installer: idempotent config merge/copy per harness."""
 
 import json
+import os
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -37,7 +40,44 @@ def test_pi_install_copies_extension(homes: tuple[Path, Path]) -> None:
     extension = home / ".pi/agent/extensions/memex.ts"
     assert extension.exists()
     assert "session_shutdown" in extension.read_text(encoding="utf-8")
+    assert "scope project" in extension.read_text(encoding="utf-8")
+    assert "scope global" in extension.read_text(encoding="utf-8")
     assert str(extension) in report.files_written
+
+
+def test_pi_first_turn_injects_scope_guidance_when_recall_is_empty(
+    homes: tuple[Path, Path],
+) -> None:
+    node = shutil.which("node")
+    no_output = shutil.which("true")
+    if node is None or no_output is None:
+        pytest.skip("Node and a no-output command are needed to exercise the pi extension")
+    version = subprocess.run(  # noqa: S603 - node is resolved from the test PATH
+        [node, "--version"], capture_output=True, text=True, check=True
+    ).stdout
+    if int(version.strip().lstrip("v").split(".", 1)[0]) < 24:
+        pytest.skip("Node 24 is needed to load the TypeScript extension directly")
+
+    home, project = homes
+    install_harness("pi", MARKETPLACE, home=home, project=project)
+    extension = home / ".pi/agent/extensions/memex.ts"
+    script = """
+import { pathToFileURL } from 'node:url';
+const { default: extension } = await import(pathToFileURL(process.argv[1]).href);
+let firstTurn;
+extension({ on: (name, handler) => { if (name === 'before_agent_start') firstTurn = handler; } });
+const result = await firstTurn({ prompt: 'Remember the architecture' }, {});
+process.stdout.write(result?.message?.content ?? '');
+"""
+    result = subprocess.run(  # noqa: S603 - installed extension and node paths are test-owned
+        [node, "--experimental-strip-types", "--input-type=module", "-e", script, str(extension)],
+        capture_output=True,
+        text=True,
+        check=True,
+        env={**os.environ, "MEMEX_BIN": no_output, "NODE_NO_WARNINGS": "1"},
+    )
+
+    assert "Choose --scope project for workspace architecture" in result.stdout
 
 
 def test_claude_merges_hooks_idempotently(homes: tuple[Path, Path]) -> None:
@@ -60,6 +100,41 @@ def test_claude_merges_hooks_idempotently(homes: tuple[Path, Path]) -> None:
     install_harness("claude", MARKETPLACE, home=home, project=project)
     second = json.loads(settings.read_text(encoding="utf-8"))
     assert second == first
+
+
+def test_claude_install_adds_scoped_write_guidance_without_replacing_custom_rules(
+    homes: tuple[Path, Path],
+) -> None:
+    home, project = homes
+    project.mkdir(parents=True)
+    rules = project / "CLAUDE.md"
+    rules.write_text("# Custom rules\nKeep this rule.\n", encoding="utf-8")
+
+    install_harness("claude", MARKETPLACE, home=home, project=project, with_mcp=False)
+
+    installed = rules.read_text(encoding="utf-8")
+    assert "Keep this rule." in installed
+    assert 'scope="project"' in installed
+    assert 'scope="global"' in installed
+    assert rules.with_suffix(".md.memex-bak").read_text(encoding="utf-8") == (
+        "# Custom rules\nKeep this rule.\n"
+    )
+
+    install_harness("claude", MARKETPLACE, home=home, project=project, with_mcp=False)
+    assert rules.read_text(encoding="utf-8") == installed
+
+
+def test_claude_install_preserves_custom_memex_guidance(homes: tuple[Path, Path]) -> None:
+    home, project = homes
+    project.mkdir(parents=True)
+    rules = project / "CLAUDE.md"
+    custom = "## Memory (memex)\nUse the team's memory policy.\n"
+    rules.write_text(custom, encoding="utf-8")
+
+    report = install_harness("claude", MARKETPLACE, home=home, project=project, with_mcp=False)
+
+    assert rules.read_text(encoding="utf-8") == custom
+    assert "CLAUDE.md has custom Memex guidance; left unchanged" in report.notes
 
 
 def test_codex_install_wires_notify_and_mcp(homes: tuple[Path, Path]) -> None:

@@ -165,6 +165,7 @@ def _register_claude_mcp(report: InstallReport) -> None:
 
 
 def _install_claude(marketplace: Path, home: Path, project: Path, report: InstallReport) -> None:
+    project.mkdir(parents=True, exist_ok=True)
     settings_path = home / ".claude" / "settings.json"
     settings_path.parent.mkdir(parents=True, exist_ok=True)
     settings: dict[str, object] = {}
@@ -213,6 +214,19 @@ def _install_claude(marketplace: Path, home: Path, project: Path, report: Instal
         report.notes.append("hooks already present; settings.json rewritten unchanged")
     if report.with_mcp:
         _register_claude_mcp(report)
+
+    rules_path = project / "CLAUDE.md"
+    snippet = (marketplace / "claude" / "CLAUDE-snippet.md").read_text(encoding="utf-8")
+    existing_rules = rules_path.read_text(encoding="utf-8") if rules_path.exists() else ""
+    if snippet in existing_rules:
+        report.notes.append("CLAUDE.md already contains the memory contract")
+    elif "## Memory (memex)" in existing_rules:
+        report.notes.append("CLAUDE.md has custom Memex guidance; left unchanged")
+    else:
+        _backup(rules_path)
+        separator = ("\n" if existing_rules.endswith("\n") else "\n\n") if existing_rules else ""
+        rules_path.write_text(existing_rules + separator + snippet, encoding="utf-8")
+        report.files_merged.append(str(rules_path))
 
 
 def _install_codex(marketplace: Path, home: Path, project: Path, report: InstallReport) -> None:

@@ -8,7 +8,8 @@ shutdown.
 ## What it does
 
 - **First turn** — injects repo-level memories (branch, last commit as
-  query hints) via `memex hook session-start`.
+  query hints) via `memex hook session-start`, plus a scoped-write rule even
+  when recall has no matches.
 - **Every later turn** — injects memories relevant to your prompt via
   `memex hook prompt`.
 - **Session shutdown / switch** — ingests `~/.pi/agent/sessions/...jsonl`

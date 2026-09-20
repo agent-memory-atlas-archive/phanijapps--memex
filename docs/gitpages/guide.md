@@ -327,12 +327,14 @@ billing via its CLI print mode, with no separate API key.
 
 **pi** — the reference adapter. A TypeScript extension injects repo-level
 memories on the first turn and prompt-relevant memories on every turn, and
+includes scoped-write guidance on the first turn even if recall is empty. It
 captures the session file on shutdown. Knobs: `MEMEX_BIN`, `MEMEX_TOP_K`,
 `MEMEX_DISABLE`.
 
 **Claude Code** — hooks in `settings.json`: SessionStart and
 UserPromptSubmit inject context (hook stdout becomes context); SessionEnd
-ingests the session transcript. MCP: `claude mcp add memex -- memex serve-mcp`.
+ingests the session transcript. The installer adds scoped-write guidance to the
+project's `CLAUDE.md`. MCP: `claude mcp add memex -- memex serve-mcp`.
 
 **Codex** — no native injection point, so: an AGENTS.md memory contract
 (recall at task start, write durable facts), MCP via `config.toml`, and a
