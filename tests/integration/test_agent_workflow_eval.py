@@ -905,7 +905,9 @@ def test_billing_modes_require_usage_telemetry_before_next_call(
     assert run.plans == []
 
 
-def test_model_comparison_passes_only_label_blind_task_inputs_to_planner() -> None:
+def test_model_comparison_passes_only_label_blind_task_inputs_to_planner(
+    tmp_path: Path,
+) -> None:
     human_queries = load_human_focused_queries()
     seen_tasks: list[dict[str, str]] = []
 
@@ -931,7 +933,8 @@ def test_model_comparison_passes_only_label_blind_task_inputs_to_planner() -> No
                 ],
             )
 
-    report = run_model_comparison(FakePlanner())
+    evidence_path = tmp_path / "task-evidence.json"
+    report = run_model_comparison(FakePlanner(), evidence_path=evidence_path)
 
     assert seen_tasks
     assert all(set(task) == {"name", "goal"} for task in seen_tasks)
@@ -946,6 +949,24 @@ def test_model_comparison_passes_only_label_blind_task_inputs_to_planner() -> No
     assert sum(row["complete"] for row in snapshot) == 12
     assert all(row["calls"] == 3 for row in snapshot)
     assert all("queries" not in row and "goal" not in row for row in snapshot)
+    export = json.loads(evidence_path.read_text(encoding="utf-8"))
+    assert export["status"] == "complete"
+    assert export["source_revision"] == report.baseline.source_revision
+    assert export["tasks"] == snapshot
+    assert "goal" not in evidence_path.read_text(encoding="utf-8")
+    assert "queries" not in evidence_path.read_text(encoding="utf-8")
+
+
+def test_blocked_model_comparison_replaces_stale_task_evidence(tmp_path: Path) -> None:
+    evidence_path = tmp_path / "task-evidence.json"
+    evidence_path.write_text('{"status": "complete", "tasks": [{"stale": true}]}')
+
+    report = run_model_comparison(evidence_path=evidence_path)
+
+    assert report.question_run.status == "blocked"
+    export = json.loads(evidence_path.read_text(encoding="utf-8"))
+    assert export["status"] == "blocked"
+    assert export["tasks"] == []
 
 
 def test_pi_style_json_output_yields_questions_and_usage() -> None:

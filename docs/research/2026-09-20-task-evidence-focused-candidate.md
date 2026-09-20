@@ -101,11 +101,12 @@ retaining goals, prompts, generated questions, or memory contents:
 The run did not retain per-task hit and missing-link rows. Its aggregate 7/24
 candidate score can be checked against the in-memory evaluator result from
 that run, but cannot be independently audited from this retained report.
-The runner now exposes `sanitized_task_evidence(report)` to export task names,
-hit and missing source slugs, recall calls and tokens, leak counts, latency,
-and model usage without raw task goals, prompts, questions, or memory bodies.
-That export must be saved during a future authorized run; it cannot recover
-this run's discarded plans.
+The runner now writes a task trace when `evidence_path` is set. It records task
+names, hit and missing source slugs, recall calls and tokens, leak counts,
+latency, and model usage without raw task goals, prompts, questions, or memory
+bodies. A blocked run replaces any trace at that path with an empty result, so
+an old success cannot be mistaken for the new run. This cannot recover the
+original run's discarded plans.
 
 ## Reuse
 
@@ -127,14 +128,12 @@ reported usage exceeds it, but cannot undo that call's cost. The corrected
 configuration is:
 
 ```python
-import json
 from pathlib import Path
 
 from eval.task_evidence_model import (
     ModelRunLimits,
     pi_question_planner,
     run_model_comparison,
-    sanitized_task_evidence,
 )
 
 report = run_model_comparison(
@@ -148,11 +147,8 @@ report = run_model_comparison(
         max_completion_tokens=131072,
     ),
     limits=ModelRunLimits(wall_seconds=300, spend_limit_usd=5.0),
+    evidence_path=Path("docs/research/task-evidence-candidate-tasks.json"),
 )
-if report.candidate is not None:
-    Path("docs/research/task-evidence-candidate-tasks.json").write_text(
-        json.dumps(sanitized_task_evidence(report), indent=2), encoding="utf-8"
-    )
 ```
 
 This configuration is reusable, but running it again consumes a new model

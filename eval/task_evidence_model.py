@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import shutil
 import subprocess
 import tempfile
@@ -246,6 +247,8 @@ def pi_question_planner(
 def run_model_comparison(
     planner: QuestionPlanner | None = None,
     limits: ModelRunLimits | None = None,
+    *,
+    evidence_path: Path | None = None,
 ) -> ModelComparisonReport:
     """Compare a label-blind model question plan with the committed baselines."""
     fixture = load_fixture()
@@ -257,12 +260,15 @@ def run_model_comparison(
     candidate: StrategyReport | None = None
     if question_run.status == "complete":
         candidate = _evaluate_query_plan(fixture, _candidate_query_plan(question_run, fixture))
-    return ModelComparisonReport(
+    report = ModelComparisonReport(
         baseline=baseline,
         question_run=question_run,
         candidate=candidate,
         promotion_gate=_promotion_gate(baseline, candidate, question_run),
     )
+    if evidence_path is not None:
+        _write_task_evidence(evidence_path, report)
+    return report
 
 
 def sanitized_task_evidence(report: ModelComparisonReport) -> list[TaskEvidenceSnapshot]:
@@ -290,6 +296,29 @@ def sanitized_task_evidence(report: ModelComparisonReport) -> list[TaskEvidenceS
             }
         )
     return rows
+
+
+def _write_task_evidence(path: Path, report: ModelComparisonReport) -> None:
+    """Replace a previous task trace, including when the new run is blocked."""
+    export = {
+        "source_revision": report.baseline.source_revision,
+        "status": report.question_run.status,
+        "model_id": report.question_run.model_id,
+        "blocked_reason": report.question_run.blocked_reason,
+        "tasks": sanitized_task_evidence(report),
+    }
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=path.parent, prefix=f".{path.name}.", delete=False
+        ) as temporary:
+            temporary_path = Path(temporary.name)
+            json.dump(export, temporary, indent=2)
+            temporary.write("\n")
+        os.replace(temporary_path, path)
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
 
 
 def _label_blind_tasks(fixture: Fixture) -> list[TaskQuestionInput]:

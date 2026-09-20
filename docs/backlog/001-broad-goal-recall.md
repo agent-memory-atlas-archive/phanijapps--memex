@@ -53,7 +53,7 @@ needs its own ceiling.
    memory, and apply the task-evidence spec's recall, cost, latency, scope, and
    safety gates. Update installed guidance only if every gate passes.
 
-The evaluator's cache-token and cost-limit corrections are implemented on the
-`feat/task-evidence-continuity` branch. Automatic retention of per-task traces,
-fresh frozen task labels, task-directed retrieval, and promotion checks remain
-open.
+The evaluator's cache-token and cost-limit corrections and opt-in automatic
+retention of sanitized per-task traces are implemented on the
+`feat/task-evidence-continuity` branch. Fresh frozen task labels, task-directed
+retrieval, and promotion checks remain open.
