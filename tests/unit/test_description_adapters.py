@@ -108,7 +108,11 @@ class TestAdapterParity:
 
     def test_valid_description_accepted_everywhere(self, tmp_path: Path) -> None:
         _facade_write(tmp_path / "facade-home", VALID_DESCRIPTION)
-        page = next((tmp_path / "facade-home/docs/global/entities").glob("*.md"))
+        page = next(
+            p
+            for p in (tmp_path / "facade-home/docs/global/entities").glob("*.md")
+            if p.name != "index.md"
+        )
         assert f'description: "{VALID_DESCRIPTION}"' in page.read_text(encoding="utf-8")
 
     def test_valid_description_accepted_by_cli(

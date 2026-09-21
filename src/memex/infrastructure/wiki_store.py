@@ -14,6 +14,7 @@ from pathlib import Path
 from memex.domain.errors import WikiStoreError
 from memex.domain.frontmatter import parse_front_matter, serialize_front_matter
 from memex.domain.models import NODE_TYPES, PAGE_STATUSES, WikiNode, new_id, utc_now_iso
+from memex.domain.reserved import RESERVED_SLUGS, is_structural
 from memex.domain.slugs import derive_slug, unique_slug
 
 TYPE_DIRS: dict[str, str] = {
@@ -221,6 +222,8 @@ class WikiStore:
         nodes: NodeList = []
         for type_dir in TYPE_DIRS.values():
             for path in sorted(self.wiki_dir.rglob(f"{type_dir}/*.md")):
+                if is_structural(path):
+                    continue  # generated index.md / optional OKF log.md
                 self._reject_unsafe_page_path(path)
                 try:
                     nodes.append(self._read_path(path))
@@ -295,8 +298,8 @@ class WikiStore:
         elif scope == "project" and project_id:
             root = self._project_dir(project_id, project_locator)
         else:
-            return set()
-        return {path.stem for path in root.rglob("*.md")}
+            return set(RESERVED_SLUGS)
+        return {path.stem for path in root.rglob("*.md")} | set(RESERVED_SLUGS)
 
     def _project_dir(self, project_id: str, project_locator: str | None) -> Path:
         if project_locator is not None:
@@ -360,6 +363,8 @@ class WikiStore:
         for path in sorted(self.wiki_dir.rglob(f"{slug}.md")):
             if path.stem != slug or path.parent.name not in TYPE_DIRS.values():
                 continue
+            if is_structural(path):
+                continue  # generated navigation is not a memory page
             node = self._read_path(path)
             if node_type is not None and node.type != node_type:
                 continue
@@ -384,7 +389,7 @@ class WikiStore:
             self._read_path(path)
             for root in roots
             for path in sorted(root.rglob("*.md"))
-            if path.parent.name in TYPE_DIRS.values()
+            if path.parent.name in TYPE_DIRS.values() and not is_structural(path)
         ]
         self._reject_duplicate_namespace_keys(
             [node for node in nodes if node.project_id == project_id]
@@ -408,6 +413,8 @@ class WikiStore:
             return None
         project_ids: set[str] = set()
         for path in sorted(project_dir.rglob("*.md")):
+            if is_structural(path):
+                continue
             node = self._read_path(path)
             if node.scope == "project" and node.project_id:
                 project_ids.add(node.project_id)

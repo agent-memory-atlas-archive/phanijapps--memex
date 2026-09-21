@@ -39,6 +39,7 @@ from memex.infrastructure.index_manager import IndexManager
 from memex.infrastructure.link_manager import LinkManager
 from memex.infrastructure.llm_clients import client_from_config
 from memex.infrastructure.logging import setup_logging
+from memex.infrastructure.navigation import NavigationGenerator
 from memex.infrastructure.run_log import append_run
 from memex.infrastructure.transcript_hook import TranscriptHook
 from memex.infrastructure.wiki_store import WikiStore, hash_body
@@ -79,8 +80,11 @@ class Memex:
         )
         self.backup_restore = BackupRestore(self.data_dir, self.config.db_path)
         self.import_export = ImportExport(self.wiki_store, self.index_manager, self.link_manager)
+        self.navigation = NavigationGenerator(self.wiki_store.wiki_dir)
         if rebuild_on_open:
-            self.rebuild_index(force=True)
+            # Navigation regeneration never happens on open: the transparent
+            # index upgrade stays free of Markdown writes (spec AC-0015).
+            self.rebuild_index(force=True, regenerate_navigation=False)
 
     def close(self) -> None:
         self.retriever.close()
@@ -142,6 +146,7 @@ class Memex:
         stored = self.wiki_store.write(node)
         self.index_manager.update_record(stored)
         self.link_manager.sync_node(stored)
+        self._refresh_navigation(stored.file_path)
         self.logger.info("operation=write slug=%s type=%s", stored.slug, stored.type)
         return stored
 
@@ -337,12 +342,15 @@ class Memex:
             node.status = "archived"
             stored = self.wiki_store.write(node)
             self.index_manager.update_record(stored)
+            self._refresh_navigation(stored.file_path)
             self.logger.info("operation=forget mode=archive slug=%s", slug)
             return ForgetResult(slug=slug, forgotten=True, mode=mode, file_path=stored.file_path)
         if mode == "hard":
+            page_path = node.file_path
             self.wiki_store.delete(slug)
             self.index_manager.remove_record(slug)
             self.link_manager.remove_slug(slug)
+            self._refresh_navigation(page_path)
             self.logger.info("operation=forget mode=hard slug=%s", slug)
             return ForgetResult(slug=slug, forgotten=True, mode=mode, file_path=None)
 
@@ -351,6 +359,7 @@ class Memex:
         setattr(node, field, timestamp)
         stored = self.wiki_store.write(node)
         self.index_manager.update_record(stored)
+        self._refresh_navigation(stored.file_path)
         self.logger.info("operation=forget mode=%s slug=%s", mode, slug)
         return ForgetResult(slug=slug, forgotten=True, mode=mode, file_path=stored.file_path)
 
@@ -399,7 +408,9 @@ class Memex:
         self.logger.info("operation=clear_transcripts count=%d", count)
         return count
 
-    def rebuild_index(self, *, force: bool = False) -> RebuildIndexReport:
+    def rebuild_index(
+        self, *, force: bool = False, regenerate_navigation: bool = True
+    ) -> RebuildIndexReport:
         """Rescan the wiki and refresh the secondary index and link graph.
 
         The wiki files are the truth: index rows for deleted pages are
@@ -458,6 +469,12 @@ class Memex:
         now = utc_now_iso()
         self.index_manager.set_meta("last_index_rebuild", now)
         self.index_manager.set_meta("wiki_file_count", str(len(nodes)))
+        if regenerate_navigation:
+            navigation_report = self.navigation.regenerate(nodes)
+            for change in navigation_report.by_category("collision"):
+                errors.append(f"navigation collision: {change.path}")
+            for change in navigation_report.by_category("write_failed"):
+                errors.append(f"navigation write_failed: {change.path}")
         duration_ms = (time.perf_counter() - started) * 1000
         self.logger.info(
             "operation=rebuild_index nodes=%d skipped=%d errors=%d",
@@ -526,6 +543,7 @@ class Memex:
         node.status = "active"
         stored = self.wiki_store.write(node)
         self.index_manager.update_record(stored)
+        self._refresh_navigation(stored.file_path)
         self.logger.info("operation=approve slug=%s", slug)
         return {"slug": slug, "status": "active"}
 
@@ -548,8 +566,25 @@ class Memex:
         source_node.links = sorted({*source_node.links, target})
         source_node = self.wiki_store.write(source_node)
         self.index_manager.update_record(source_node)
+        self._refresh_navigation(target_node.file_path)
+        self._refresh_navigation(source_node.file_path)
         self.logger.info("operation=merge target=%s source=%s", target, source)
         return {"target": target, "source": source, "source_status": "superseded"}
+
+    def _refresh_navigation(self, file_path: str | None) -> None:
+        """Best-effort index refresh after an authoritative page mutation.
+
+        Takes the mutated page's path and refreshes its directory chain.
+        Navigation is disposable: a failure here never fails or rolls back
+        the mutation. ``memex verify`` derives and reports the defect, and a
+        full rebuild repairs it.
+        """
+        if not file_path:
+            return
+        try:
+            self.navigation.refresh(self.wiki_store.scan_all(), Path(file_path).parent)
+        except Exception:
+            self.logger.warning("operation=navigation_refresh status=failed")
 
     def get_provenance(self, slug: str) -> ProvenanceReport | None:
         return self.transcript_hook.get_provenance(slug)

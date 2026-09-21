@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from memex.application.memory import Memex
+from memex.infrastructure.navigation import NavigationChange
 from memex.infrastructure.wiki_store import hash_body
 
 
@@ -69,6 +70,13 @@ def verify(
         )
     checks.append(_check("links-resolve", not broken, f"{len(broken)} broken links"))
 
+    navigation_changes = memex.navigation.diagnose(nodes)
+    navigation_defects = [
+        change for change in navigation_changes if change.category in {"missing", "stale", "orphan"}
+    ]
+    navigation_detail = _navigation_detail(navigation_changes)
+    checks.append(_check("navigation-consistent", not navigation_defects, navigation_detail))
+
     warnings: list[str] = []
     recall_evidence = False
     write_evidence = False
@@ -100,3 +108,16 @@ def verify(
         write_evidence=write_evidence,
         warnings=warnings,
     )
+
+
+def _navigation_detail(changes: list[NavigationChange]) -> str:
+    """Bounded navigation summary: categories, counts, docs-relative paths."""
+    if not changes:
+        return "navigation current"
+    counts = " ".join(
+        f"{category}={sum(1 for change in changes if change.category == category)}"
+        for category in ("missing", "stale", "orphan", "collision")
+        if any(change.category == category for change in changes)
+    )
+    paths = sorted({change.path for change in changes})
+    return f"{counts}: {'; '.join(paths)}"

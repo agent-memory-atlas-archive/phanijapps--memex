@@ -20,7 +20,7 @@ def test_healthy_store_passes(memex: Memex) -> None:
     report = verify(memex)
 
     assert report.ok is True
-    assert [check["ok"] for check in report.checks] == [True, True, True]
+    assert [check["ok"] for check in report.checks] == [True, True, True, True]
 
 
 def test_malformed_page_fails_health(memex: Memex, data_dir: Path) -> None:

@@ -66,7 +66,9 @@ class TestBoundaryIntegration:
             ]
         )
         assert code == 0
-        page = next((data_dir / "docs/global/entities").glob("*.md"))
+        page = next(
+            p for p in (data_dir / "docs/global/entities").glob("*.md") if p.name != "index.md"
+        )
         assert secret not in page.read_text(encoding="utf-8")
         assert "[REDACTED:" in page.read_text(encoding="utf-8")
 
@@ -133,7 +135,9 @@ class TestDescriptionScrub:
             ]
         )
         assert code == 0
-        page = next((data_dir / "docs/global/entities").glob("*.md"))
+        page = next(
+            p for p in (data_dir / "docs/global/entities").glob("*.md") if p.name != "index.md"
+        )
         text = page.read_text(encoding="utf-8")
         assert DESCRIPTION_SECRET not in text
         assert "[REDACTED:openai_key]" in text

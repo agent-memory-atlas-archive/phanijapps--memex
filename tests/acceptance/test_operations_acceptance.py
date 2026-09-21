@@ -95,8 +95,9 @@ def test_rebuild_index_command(
     assert exit_code == 0
     assert output["nodes_indexed"] == 4
     assert output["nodes_errored"] == 0
-    wiki_files = list((data_dir / "docs").rglob("*.md"))
-    assert output["nodes_indexed"] == len(wiki_files)
+    # Generated navigation is not wiki content: pages are the non-reserved .md files.
+    pages = [p for p in (data_dir / "docs").rglob("*.md") if p.name not in {"index.md", "log.md"}]
+    assert output["nodes_indexed"] == len(pages)
 
     memex = Memex(config)
     assert memex.index_manager.get_meta("last_index_rebuild") is not None

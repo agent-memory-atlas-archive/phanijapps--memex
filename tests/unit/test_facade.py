@@ -184,7 +184,9 @@ def test_rebuild_after_manual_edit(memex: Memex) -> None:
 
 
 def data_dir_page(memex: Memex) -> Path:
-    return next((memex.data_dir / "docs/global/entities").glob("*.md"))
+    return next(
+        p for p in (memex.data_dir / "docs/global/entities").glob("*.md") if p.name != "index.md"
+    )
 
 
 def test_apply_decay_via_facade(memex: Memex) -> None:
