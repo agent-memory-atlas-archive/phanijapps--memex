@@ -171,6 +171,28 @@ def test_export_import_roundtrip_preserves_project_scope(memex: Memex, data_dir:
     assert restored.project_id == "a" * 24
 
 
+def test_import_scrubs_secret_shaped_description(memex: Memex, data_dir: Path) -> None:
+    secret = "sk-proj-1234567890abcdefghij"  # noqa: S105 - fixture, never real
+    document: dict[str, object] = {
+        "nodes": [
+            {
+                "slug": "imported-secret",
+                "type": "entity",
+                "title": "Imported secret",
+                "body": "clean body",
+                "description": f"token {secret} here",
+            }
+        ]
+    }
+    result = memex.import_export.import_data(document)
+    assert result["imported"] == 1
+    node = memex.wiki_store.read("imported-secret")
+    assert node is not None and node.file_path
+    assert secret not in node.description
+    assert "[REDACTED:openai_key]" in node.description
+    assert secret not in Path(node.file_path).read_text(encoding="utf-8")
+
+
 def test_rebuild_after_manual_edit(memex: Memex) -> None:
     memex.write(WriteInput(type="entity", title="Manual edit", body="original"))
     page = data_dir_page(memex)

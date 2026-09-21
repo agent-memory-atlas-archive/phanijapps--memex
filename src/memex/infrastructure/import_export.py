@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Callable
 from pathlib import Path
 
 from memex.domain.models import NODE_TYPES, WikiNode, utc_now_iso
+from memex.domain.scrub import scrub
 from memex.infrastructure.index_manager import IndexManager
 from memex.infrastructure.link_manager import LinkManager
 from memex.infrastructure.wiki_store import WikiStore
@@ -20,11 +22,17 @@ class ImportExport:
     """Export every wiki node as a JSON document; import them back."""
 
     def __init__(
-        self, wiki_store: WikiStore, index_mgr: IndexManager, link_mgr: LinkManager
+        self,
+        wiki_store: WikiStore,
+        index_mgr: IndexManager,
+        link_mgr: LinkManager,
+        *,
+        on_page_written: Callable[[Path], None] | None = None,
     ) -> None:
         self._store = wiki_store
         self._index = index_mgr
         self._links = link_mgr
+        self._on_page_written = on_page_written
 
     def export(self, output_path: Path | None = None) -> dict[str, object]:
         document: dict[str, object] = {
@@ -67,6 +75,8 @@ class ImportExport:
             stored = self._store.write(node)
             self._index.update_record(stored)
             self._links.sync_node(stored)
+            if self._on_page_written is not None and stored.file_path:
+                self._on_page_written(Path(stored.file_path))
             imported += 1
         logger.info("operation=import imported=%d errors=%d", imported, len(errors))
         return {"imported": imported, "skipped": skipped, "errors": errors}
@@ -119,7 +129,9 @@ class ImportExport:
         return WikiNode(
             type=node_type,
             title=title,
-            description=description or "",
+            # Descriptions are scrubbed at this persisting boundary like the
+            # facade write path; bodies keep their pre-existing behavior.
+            description=scrub(description)[0] if description else "",
             body=self._str(item, "body"),
             id=self._str(item, "id"),
             slug=str(slug) if isinstance(slug, str) and slug else "",

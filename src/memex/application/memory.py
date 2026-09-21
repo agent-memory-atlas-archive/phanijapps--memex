@@ -10,6 +10,7 @@ from memex.application.decay import RecencyDecay
 from memex.application.ports import LLMClient
 from memex.domain.errors import LLMError
 from memex.domain.models import (
+    DESCRIPTION_MAX_BYTES,
     FORGET_MODES,
     BackupReport,
     ConsolidateInput,
@@ -133,6 +134,14 @@ class Memex:
         scrub_kinds = body_kinds + description_kinds
         if scrub_kinds:
             self.logger.warning("operation=write scrubbed=%s", ",".join(scrub_kinds))
+        if len(clean_description.encode("utf-8")) > DESCRIPTION_MAX_BYTES:
+            # AC-0002 budget applies to the stored value: redaction can grow
+            # an input that passed the WriteInput boundary, so the budget is
+            # re-checked on the scrubbed text with an honest message.
+            raise ValueError(
+                "description exceeds 512 UTF-8 bytes after secret redaction; "
+                "shorten the description"
+            )
         node = WikiNode(
             type=input.type,
             title=input.title,

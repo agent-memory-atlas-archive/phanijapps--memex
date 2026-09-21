@@ -275,3 +275,27 @@ class TestDescriptionScrub:
         warning = caplog.records[-1].getMessage()
         assert "openai_key" in warning
         assert DESCRIPTION_SECRET not in warning
+
+    def test_boundary_description_without_secrets_writes(self, data_dir: Path) -> None:
+        # AC-0002 acceptance composed with AC-0013: exactly 512 UTF-8 bytes
+        # on one line, no secrets, persists unchanged.
+        memex = Memex(MemexConfig(data_dir=data_dir))
+        limit = "é" * 256
+        assert len(limit.encode("utf-8")) == 512
+        stored = memex.write(
+            WriteInput(type="entity", title="Boundary", body="b", description=limit)
+        )
+        assert stored.description == limit
+        memex.close()
+
+    def test_redaction_growth_over_boundary_rejected_with_clear_error(self, data_dir: Path) -> None:
+        # A 512-byte description whose legacy-key token grows past the byte
+        # budget once redacted: the write is rejected with a message that
+        # names the redaction interaction instead of the generic limit.
+        memex = Memex(MemexConfig(data_dir=data_dir))
+        legacy_key = "sk-AAAAAAAAAAAAAAAAAAAA"  # 23 bytes -> 28-byte marker
+        description = "a" * (512 - len(legacy_key)) + legacy_key
+        assert len(description.encode("utf-8")) == 512
+        with pytest.raises(ValueError, match="after secret redaction"):
+            memex.write(WriteInput(type="entity", title="Grows", body="b", description=description))
+        memex.close()
