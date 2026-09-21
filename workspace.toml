@@ -36,6 +36,7 @@ queue   = [
 active  = [
   { path = "docs/specs/task-evidence-recall/spec.md", kind = "spec", source = { mode = "repo-origin", parent = "docs/product/briefs/intent-continuity.md" }, summary = "Evaluate and guide focused task recall using existing Memex operations", needs = [] },
   { path = "docs/specs/quality-gated-retrieval/spec.md", kind = "spec", source = { mode = "repo-origin", parent = "docs/product/briefs/memory-retrieval-and-evidence.md" }, summary = "Select and ship one lexical ranker that improves hard-query accuracy and context cost within strict latency gates", needs = [] },
+  { path = "docs/specs/agentic-frontmatter-search/spec.md", kind = "spec", source = { mode = "repo-origin", parent = "docs/product/briefs/memory-retrieval-and-evidence.md" }, summary = "Add searchable page descriptions, generated directory indexes, and a bounded search-read-follow agent journey", needs = [] },
 ]
 shipped = [
   { path = "docs/specs/project-scoped-memory-migration/spec.md", kind = "spec", source = { mode = "repo-origin", parent = "docs/product/briefs/project-scoped-memory.md" }, summary = "Add project-scoped pages, scoped recall, and dated transcript lifecycle without runtime migration", needs = [] },
