@@ -5,7 +5,7 @@ Notable user-visible changes are recorded here. The format follows
 through 0.2.4 are reconstructed from the version-bump commits; later work remains
 unreleased until a release tag is created.
 
-## [Unreleased]
+## [memex][0.5.0] — 2026-09-21
 
 ### Added
 
