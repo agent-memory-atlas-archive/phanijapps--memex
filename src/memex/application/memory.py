@@ -115,14 +115,16 @@ class Memex:
             raise ValueError(
                 f"body exceeds wiki.max_body_chars ({self.config.wiki.max_body_chars})"
             )
-        clean_body, scrub_kinds = scrub(input.body)
+        clean_body, body_kinds = scrub(input.body)
+        clean_description, description_kinds = scrub(input.description)
+        scrub_kinds = body_kinds + description_kinds
         if scrub_kinds:
             self.logger.warning("operation=write scrubbed=%s", ",".join(scrub_kinds))
         node = WikiNode(
             type=input.type,
             title=input.title,
             body=clean_body,
-            description=input.description,
+            description=clean_description,
             id="",
             tags=input.tags,
             importance=input.importance,

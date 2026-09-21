@@ -15,6 +15,7 @@ from memex.domain.models import (
     WikiNode,
     WriteInput,
 )
+from memex.domain.scrub import scrub
 from memex.infrastructure.config import MemexConfig
 from memex.infrastructure.index_manager import IndexManager
 from memex.infrastructure.link_manager import LinkManager
@@ -45,12 +46,16 @@ and/or summary nodes that should be permanently stored in the wiki memory.
    Only link to nodes listed in "Existing nodes in the knowledge base" below.
 6. Node bodies should be 2-5 sentences. Be specific.
 7. tags should be lowercase, kebab-case: ["preference", "python", "tooling"]
+8. Give each node a "description": one short sentence on a single line
+   (at most 512 UTF-8 bytes) stating what the node contains. It is optional
+   but recommended.
 
 ## OUTPUT FORMAT
 Return a JSON array of node objects. Each object:
 {{
   "type": "entity" | "preference" | "procedure" | "summary",
   "title": "kebab-case-title",
+  "description": "optional one-sentence summary, single line",
   "body": "2-5 sentence description. May include [[wiki-link]] references.",
   "tags": ["tag1", "tag2"],
   "importance": 0.0-1.0,
@@ -177,6 +182,7 @@ class WikiConsolidator:
                     WriteInput(
                         type=str(item.get("type", "")),
                         title=str(item.get("title", "")),
+                        description=self._model_description(item),
                         body=str(item.get("body", "")),
                         tags=[str(tag) for tag in item.get("tags", [])],
                         importance=float(item.get("importance", 0.5)),
@@ -187,10 +193,22 @@ class WikiConsolidator:
                 logger.warning("operation=consolidate status=invalid-node-skipped")
         return candidates
 
+    @staticmethod
+    def _model_description(item: dict[str, object]) -> str:
+        """Scrub the model's optional description; the WriteInput validator
+        remains the enforcement boundary for shape and size."""
+        value = item.get("description")
+        if value is None:
+            return ""
+        if not isinstance(value, str):
+            raise ValueError("description must be a string")
+        return scrub(value)[0]
+
     def _store_node(self, candidate: WriteInput, report: ConsolidationReport) -> None:
         node = WikiNode(
             type=candidate.type,
             title=candidate.title,
+            description=candidate.description,
             body=candidate.body,
             id="",
             tags=candidate.tags,

@@ -77,6 +77,7 @@ class ImportExport:
             "slug": node.slug,
             "type": node.type,
             "title": node.title,
+            "description": node.description,
             "tags": node.tags,
             "importance": node.importance,
             "created": node.created,
@@ -100,10 +101,13 @@ class ImportExport:
         if not isinstance(importance, int | float):
             raise ValueError("importance must be numeric")
         slug = item.get("slug")
+        description = item.get("description")
         transcript_ref = item.get("transcript_ref")
         scope = item.get("scope", "global")
         project_id = item.get("project_id")
         project_label = item.get("project_label")
+        if description is not None and not isinstance(description, str):
+            raise ValueError("description must be a string or null")
         if scope not in {"global", "project"}:
             raise ValueError("scope must be 'global' or 'project'")
         if scope == "project" and not isinstance(project_id, str):
@@ -115,6 +119,7 @@ class ImportExport:
         return WikiNode(
             type=node_type,
             title=title,
+            description=description or "",
             body=self._str(item, "body"),
             id=self._str(item, "id"),
             slug=str(slug) if isinstance(slug, str) and slug else "",

@@ -89,6 +89,7 @@ def memex_write(
     title: str,
     body: str,
     scope: Literal["global", "project"],
+    description: str | None = None,
     tags: list[str] | None = None,
     importance: Annotated[float, Field(ge=0, le=1)] = 0.5,
     links: list[str] | None = None,
@@ -104,6 +105,8 @@ def memex_write(
         type: Episode is not creatable here — episodes require transcript
             ingestion through a harness hook or the CLI.
         title: Human-readable; the slug derives from it.
+        description: Optional one-sentence signpost (single line, at most
+            512 UTF-8 bytes); searchable and returned with recall hits.
         body: Markdown; ``[[slug]]`` references become wiki links, merged
             with ``links``.
         scope: Required namespace choice: global or project.
@@ -127,6 +130,7 @@ def memex_write(
                 type=type,
                 title=title,
                 body=body,
+                description=description or "",
                 tags=tags or [],
                 importance=importance,
                 links=links or [],
