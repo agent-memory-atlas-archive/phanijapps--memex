@@ -10,19 +10,28 @@ from __future__ import annotations
 
 import os
 import posixpath
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from memex.domain.errors import MemexError
 from memex.domain.models import NODE_TYPES, WikiNode
-from memex.domain.reserved import RESERVED_FILENAMES, classify_reserved, is_structural
+from memex.domain.reserved import (
+    OKF_VERSION,
+    RESERVED_FILENAMES,
+    classify_reserved,
+    is_structural,
+)
 from memex.infrastructure.wiki_store import TYPE_DIRS
 
 _CATEGORIES = ("written", "removed", "collision", "write_failed")
 _DIAGNOSTIC_CATEGORIES = ("missing", "stale", "orphan", "collision")
 _INDEX_NAME = "index.md"
-_OKF_VERSION = "0.2"
 _ESCAPE_CHARS = frozenset("\\`*_[]<>")
+
+# Bounded per-directory page listing (WikiStore.scan_dir shaped); refresh
+# parses only the mutated chain's own pages through it, never the store.
+ScanDir = Callable[[Path, list[str] | None], list[WikiNode]]
 
 
 class NavigationError(MemexError):
@@ -65,8 +74,9 @@ class NavigationGenerator:
         legacy page or any unrecognized file at an index path is reported as
         a collision and never touched.
         """
+        self._guard_nodes_inside(nodes)
         report = NavigationReport()
-        needed = self._needed_dirs(nodes)
+        needed = self._needed_dirs()
         for directory in sorted(needed):
             self._write_index(directory, self.render(directory, nodes), report)
         for target in sorted(self._wiki_dir.rglob(_INDEX_NAME)):
@@ -75,25 +85,24 @@ class NavigationGenerator:
             self._remove_index(target.parent, report)
         return report
 
-    def refresh(self, nodes: list[WikiNode], changed_dir: Path) -> NavigationReport:
+    def refresh(self, changed_dir: Path, scan_dir: ScanDir) -> NavigationReport:
         """Refresh indexes on the ancestor chain of one mutated directory.
 
-        Best effort: filesystem failures become ``write_failed`` entries and
-        never raise, so an authoritative page mutation stays successful.
+        Parses only pages directly inside the chain's directories through
+        ``scan_dir``, so one mutation's refresh cost never scales with the
+        whole store; page existence elsewhere is a filesystem fact, not a
+        parse. Best effort: filesystem failures become ``write_failed``
+        entries and never raise, so an authoritative page mutation stays
+        successful.
         """
         report = NavigationReport()
         if not self._inside(changed_dir):
             return report
-        needed = self._needed_dirs(nodes)
-        chain: list[Path] = []
-        current = changed_dir
-        while current != self._wiki_dir:
-            chain.append(current)
-            current = current.parent
-        chain.append(self._wiki_dir)  # the root index always belongs to the tree
-        for directory in chain:
-            if directory in needed:
-                self._write_index(directory, self.render(directory, nodes), report)
+        scan_errors: list[str] = []
+        for directory in self._chain(changed_dir):
+            if self._subtree_has_pages(directory):
+                pages = scan_dir(directory, scan_errors)
+                self._write_index(directory, self.render(directory, pages), report)
             else:
                 self._remove_index(directory, report)
         return report
@@ -106,7 +115,7 @@ class NavigationGenerator:
         ``collision`` (legacy page blocking a needed index path).
         """
         changes: list[NavigationChange] = []
-        needed = self._needed_dirs(nodes)
+        needed = self._needed_dirs()
         for directory in sorted(needed):
             target = directory / _INDEX_NAME
             rel = self._rel(target)
@@ -156,7 +165,7 @@ class NavigationGenerator:
         children = sorted(
             child
             for child in directory.iterdir()
-            if child.is_dir() and self._subtree_has_pages(child, nodes)
+            if child.is_dir() and self._subtree_has_pages(child)
         )
         if children:
             lines.append("")
@@ -165,28 +174,28 @@ class NavigationGenerator:
                 lines.append(f"- [{child.name}/]({child.name}/{_INDEX_NAME})")
         body = "\n".join(lines) + "\n"
         if directory == self._wiki_dir:
-            return f'---\nokf_version: "{_OKF_VERSION}"\n---\n{body}'
+            return f'---\nokf_version: "{OKF_VERSION}"\n---\n{body}'
         return body
 
-    def _needed_dirs(self, nodes: list[WikiNode]) -> set[Path]:
-        """Directories needing an index: ancestors of page directories.
+    def _needed_dirs(self) -> set[Path]:
+        """Directories needing an index: ancestors of page-holding directories.
 
-        An empty store needs none: navigation exists to disclose pages, and
-        requiring a root index would fail ``verify`` on every fresh store
-        until an explicit rebuild runs.
+        A page is a non-structural ``*.md`` in a type-directory position; the
+        same predicate governs generation, refresh, and child links so the
+        surfaces cannot disagree. An empty store needs none: navigation
+        exists to disclose pages, and requiring a root index would fail
+        ``verify`` on every fresh store until an explicit rebuild runs.
         """
         needed: set[Path] = set()
-        for node in nodes:
-            if not node.file_path:
-                continue
-            page_dir = Path(node.file_path).parent
-            if not self._inside(page_dir):
-                raise NavigationError("navigation target escapes the docs root")
-            needed.add(self._wiki_dir)
-            current = page_dir
-            while current != self._wiki_dir:
-                needed.add(current)
-                current = current.parent
+        for type_name in TYPE_DIRS.values():
+            for path in self._wiki_dir.rglob(f"{type_name}/*.md"):
+                if is_structural(path):
+                    continue
+                needed.add(self._wiki_dir)
+                current = path.parent
+                while current != self._wiki_dir:
+                    needed.add(current)
+                    current = current.parent
         return needed
 
     def _write_index(self, directory: Path, text: str, report: NavigationReport) -> None:
@@ -195,7 +204,9 @@ class NavigationGenerator:
         if target.exists() and not is_structural(target):
             report.changes.append(NavigationChange("collision", rel))
             return
-        tmp = target.with_name(target.name + ".tmp")
+        # Process-unique temp name: concurrent index writes in one directory
+        # cannot interleave each other's write/replace pair.
+        tmp = target.with_name(f"{target.name}.{os.getpid()}.tmp")
         try:
             directory.mkdir(parents=True, exist_ok=True)
             tmp.write_text(text, encoding="utf-8")
@@ -234,14 +245,41 @@ class NavigationGenerator:
             raise NavigationError("navigation link target escapes the docs root")
         return link
 
-    def _subtree_has_pages(self, directory: Path, nodes: list[WikiNode]) -> bool:
-        resolved = directory.resolve(strict=False)
+    def _subtree_has_pages(self, directory: Path) -> bool:
+        """Filesystem fact: does this subtree hold a memory page?
+
+        A page is a non-structural ``*.md`` either directly in ``directory``
+        when it is itself a type directory, or in a type-directory position
+        below it. Existence only — no page parsing, so refresh cost stays
+        bounded by directory walking rather than content.
+        """
+        if not directory.is_dir():
+            return False
+        if directory.name in TYPE_DIRS.values() and any(
+            not is_structural(path) for path in directory.glob("*.md")
+        ):
+            return True
+        return any(
+            not is_structural(path)
+            for type_name in TYPE_DIRS.values()
+            for path in directory.rglob(f"{type_name}/*.md")
+        )
+
+    def _chain(self, changed_dir: Path) -> list[Path]:
+        """The changed directory and every ancestor up to the docs root."""
+        chain: list[Path] = []
+        current = changed_dir
+        while current != self._wiki_dir:
+            chain.append(current)
+            current = current.parent
+        chain.append(self._wiki_dir)  # the root index always belongs to the tree
+        return chain
+
+    def _guard_nodes_inside(self, nodes: list[WikiNode]) -> None:
+        """Reject caller-supplied pages whose paths escape the docs root."""
         for node in nodes:
-            if not node.file_path or not self._inside(Path(node.file_path)):
-                continue
-            if Path(node.file_path).resolve(strict=False).is_relative_to(resolved):
-                return True
-        return False
+            if node.file_path and not self._inside(Path(node.file_path)):
+                raise NavigationError("navigation target escapes the docs root")
 
     def _inside(self, path: Path) -> bool:
         try:
@@ -260,5 +298,6 @@ __all__ = [
     "NavigationError",
     "NavigationGenerator",
     "NavigationReport",
+    "ScanDir",
     "classify_reserved",
 ]

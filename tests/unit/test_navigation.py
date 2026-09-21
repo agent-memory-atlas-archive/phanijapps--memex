@@ -16,7 +16,7 @@ import pytest
 
 from memex.application.memory import Memex
 from memex.application.verify import verify
-from memex.domain.models import WikiNode, WriteInput
+from memex.domain.models import WriteInput
 from memex.infrastructure.config import ConfigLoader
 from memex.infrastructure.navigation import (
     NavigationError,
@@ -266,7 +266,33 @@ def test_legacy_page_at_reserved_slug_stays_usable_and_blocks_generation(
     assert verdict.checks[0]["ok"] is True  # wiki still parses
 
     # The rebuild surfaces the collision as a bounded report entry too.
-    assert any("collision" in e and "index.md" in e for e in report.errors)
+    assert any("collision" in e and "index.md" in e for e in report.navigation_defects)
+
+
+def test_rebuild_report_separates_navigation_defects_from_node_errors(data_dir: Path) -> None:
+    from memex.domain.models import WikiNode as Node
+
+    memex = _memex(data_dir)
+    _write(memex, "Report page")
+    # A legacy page at the reserved index path blocks generation there.
+    legacy = memex.wiki_store.write(
+        Node(
+            type="entity",
+            title="Legacy blocker",
+            body="b",
+            id="44444444-4444-4444-4444-444444444444",
+        )
+    )
+    assert legacy.file_path
+    source = Path(legacy.file_path)
+    target = source.with_name("index.md")
+    target.write_bytes(source.read_bytes())
+    source.unlink()
+
+    report = memex.rebuild_index(force=True)
+    assert report.errors == []
+    assert report.nodes_errored == 0
+    assert any("collision" in d and "index.md" in d for d in report.navigation_defects)
 
 
 def test_new_writes_never_allocate_reserved_slugs(data_dir: Path) -> None:
@@ -346,6 +372,100 @@ def test_deleting_last_page_removes_index_and_updates_ancestors(data_dir: Path) 
     assert not list(docs.rglob("index.md"))
 
 
+def test_transcript_capture_refreshes_navigation(data_dir: Path) -> None:
+    from memex.domain.models import IngestTranscriptInput, TurnStreamEntry
+
+    memex = _memex(data_dir)
+    memex.ingest_transcript(
+        IngestTranscriptInput(
+            session_id="sess-1",
+            turns=[TurnStreamEntry(role="user", content="hello", turn=1)],
+        )
+    )
+    docs = memex.wiki_store.wiki_dir
+    episodes = (docs / "global" / "episodes" / "index.md").read_text(encoding="utf-8")
+    assert "[Session sess-1](sess-1.md)" in episodes
+    assert (docs / "global" / "index.md").exists()
+    assert (docs / "index.md").exists()
+
+
+def test_consolidation_refreshes_navigation(data_dir: Path) -> None:
+    import json
+
+    from memex.application.ports import LLMResponse
+    from memex.domain.models import ConsolidateInput, IngestTranscriptInput, TurnStreamEntry
+
+    memex = _memex(data_dir)
+    memex.ingest_transcript(
+        IngestTranscriptInput(
+            session_id="sess-c",
+            turns=[TurnStreamEntry(role="user", content="prefer ruff over flake8", turn=1)],
+        )
+    )
+
+    class SingleNodeLLM:
+        def complete(self, system: str, user: str, *, max_tokens: int) -> LLMResponse:
+            return LLMResponse(
+                text=json.dumps(
+                    [
+                        {
+                            "type": "entity",
+                            "title": "Distilled fact",
+                            "body": "clean consolidated body",
+                            "description": "one line signpost",
+                            "importance": 0.8,
+                        }
+                    ]
+                ),
+                prompt_tokens=1,
+                completion_tokens=1,
+            )
+
+    memex._llm = SingleNodeLLM()
+    report = memex.consolidate(ConsolidateInput(mode="full"))
+    assert report.nodes_created
+
+    entities = (memex.wiki_store.wiki_dir / "global" / "entities" / "index.md").read_text(
+        encoding="utf-8"
+    )
+    assert "[Distilled fact](distilled-fact.md) — one line signpost" in entities
+
+
+def test_import_refreshes_navigation(data_dir: Path) -> None:
+    memex = _memex(data_dir)
+    document: dict[str, object] = {
+        "nodes": [
+            {
+                "slug": "imported-page",
+                "type": "entity",
+                "title": "Imported page",
+                "body": "b",
+                "description": "imported desc",
+            }
+        ]
+    }
+    result = memex.import_export.import_data(document)
+    assert result["imported"] == 1
+    entities = (memex.wiki_store.wiki_dir / "global" / "entities" / "index.md").read_text(
+        encoding="utf-8"
+    )
+    assert "[Imported page](imported-page.md) — imported desc" in entities
+
+
+def test_write_refresh_survives_unrelated_malformed_page(data_dir: Path) -> None:
+    memex = _memex(data_dir)
+    _write(memex, "Good page", description="d")
+    unrelated = memex.wiki_store.wiki_dir / "global" / "preferences" / "broken.md"
+    unrelated.write_text("not front matter at all", encoding="utf-8")
+    # The write's own chain refresh must neither parse nor depend on the
+    # unrelated malformed page elsewhere in the store.
+    _write(memex, "Second page", description="d2")
+    entities = (memex.wiki_store.wiki_dir / "global" / "entities" / "index.md").read_text(
+        encoding="utf-8"
+    )
+    assert "[Second page](second-page.md) — d2" in entities
+
+
 def test_lifecycle_and_merge_refresh_navigation(data_dir: Path) -> None:
     memex = _memex(data_dir)
     slug = _write(memex, "Pending page", description="before")
@@ -406,8 +526,8 @@ def test_navigation_refresh_failure_never_fails_the_mutation(data_dir: Path) -> 
 
     def exploding(
         self: NavigationGenerator,
-        nodes: list[WikiNode],
         changed_dir: Path,
+        scan_dir: object,
     ) -> NavigationReport:
         raise OSError("disk exploded /home/secret-user")
 
@@ -490,7 +610,7 @@ def test_navigation_diagnostics_never_carry_memory_content_or_secrets(
         description="desc with sk-proj-1234567890abcdefghij",
     )
     report = memex.rebuild_index(force=True)
-    for message in report.errors:
+    for message in (*report.errors, *report.navigation_defects):
         assert secret not in message
     verdict = verify(memex)
     nav = next(c for c in verdict.checks if c["check"] == "navigation-consistent")

@@ -138,7 +138,7 @@ def test_transcript_hook_idempotent(seeded: Path, capture: dict[str, str]) -> No
     assert cli.main(args) == 0
     assert cli.main(args) == 0  # overwrite by default: no error, no duplicate
 
-    episodes = list((seeded / "docs/global/episodes").glob("*.md"))
+    episodes = [p for p in (seeded / "docs/global/episodes").glob("*.md") if p.name != "index.md"]
     assert len(episodes) == 1
 
 

@@ -234,6 +234,31 @@ class WikiStore:
         self._reject_duplicate_namespace_keys(nodes)
         return nodes
 
+    def scan_dir(self, directory: Path, errors: StrList | None = None) -> NodeList:
+        """Parse only the pages whose parent is exactly ``directory``.
+
+        Same safeguards as :meth:`scan_all` (structural reserved files are
+        skipped, paths are confinement-checked, malformed pages raise or
+        append to ``errors``), at a cost bounded by one directory instead of
+        the whole store. Non-type directories never hold pages and return
+        an empty list without touching the filesystem.
+        """
+        if directory.name not in TYPE_DIRS.values() or not directory.is_dir():
+            return []
+        nodes: NodeList = []
+        for path in sorted(directory.glob("*.md")):
+            if is_structural(path):
+                continue  # generated index.md / optional OKF log.md
+            self._reject_unsafe_page_path(path)
+            try:
+                nodes.append(self._read_path(path))
+            except WikiStoreError as exc:
+                if errors is None:
+                    raise
+                errors.append(str(exc))
+        self._reject_duplicate_namespace_keys(nodes)
+        return nodes
+
     def _type_dir(
         self,
         node_type: str,

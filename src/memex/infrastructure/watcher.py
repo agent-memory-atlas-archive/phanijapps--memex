@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import threading
 from pathlib import Path
 
@@ -10,6 +11,8 @@ from memex.infrastructure.index_manager import IndexManager
 from memex.infrastructure.link_manager import LinkManager
 from memex.infrastructure.navigation import NavigationGenerator
 from memex.infrastructure.wiki_store import WikiStore, hash_body
+
+logger = logging.getLogger("memex")
 
 ChangeKey = tuple[str, str, str, str]
 
@@ -103,13 +106,13 @@ class IndexWatcher:
         """Best-effort navigation refresh; never fails re-indexing."""
         if self._navigation is None or not changed_dirs:
             return
-        nodes = self._store.scan_all()
         for directory in dict.fromkeys(changed_dirs):
             try:
-                self._navigation.refresh(nodes, directory)
-            except OSError:
-                # Navigation is disposable: verification reports the drift.
-                continue
+                self._navigation.refresh(directory, self._store.scan_dir)
+            except Exception:
+                # Navigation is disposable: verification reports the drift;
+                # a bounded log keeps the poll loop alive through any failure.
+                logger.warning("operation=watch_navigation_refresh status=failed")
 
     def _changed_keys(self) -> list[ChangeKey]:
         current = self._current_mtimes()

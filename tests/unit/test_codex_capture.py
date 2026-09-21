@@ -73,7 +73,9 @@ class TestHookMergeIdempotency:
     def test_repeated_capture_no_duplicate_episode(self, data_dir: Path) -> None:
         self._capture(data_dir, FIXTURES / "codex_rollout_compacted.jsonl")
         self._capture(data_dir, FIXTURES / "codex_rollout_compacted.jsonl")
-        episodes = list((data_dir / "docs/global/episodes").glob("*.md"))
+        episodes = [
+            p for p in (data_dir / "docs/global/episodes").glob("*.md") if p.name != "index.md"
+        ]
         assert len(episodes) == 1
 
     def test_merge_preserves_earlier_turns_after_shorter_parse(

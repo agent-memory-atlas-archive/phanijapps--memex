@@ -76,10 +76,19 @@ class Memex:
             default_top_k=self.config.bm25.default_top_k,
         )
         self.transcript_hook = TranscriptHook(
-            self.data_dir, self.wiki_store, self.index_manager, self.link_manager
+            self.data_dir,
+            self.wiki_store,
+            self.index_manager,
+            self.link_manager,
+            on_page_written=self._on_page_written,
         )
         self.backup_restore = BackupRestore(self.data_dir, self.config.db_path)
-        self.import_export = ImportExport(self.wiki_store, self.index_manager, self.link_manager)
+        self.import_export = ImportExport(
+            self.wiki_store,
+            self.index_manager,
+            self.link_manager,
+            on_page_written=self._on_page_written,
+        )
         self.navigation = NavigationGenerator(self.wiki_store.wiki_dir)
         if rebuild_on_open:
             # Navigation regeneration never happens on open: the transparent
@@ -288,6 +297,7 @@ class Memex:
                 self.link_manager,
                 self._llm_client(),
                 self.config,
+                on_page_written=self._on_page_written,
             )
         report = self._consolidator.consolidate(input)
         append_run(
@@ -469,18 +479,20 @@ class Memex:
         now = utc_now_iso()
         self.index_manager.set_meta("last_index_rebuild", now)
         self.index_manager.set_meta("wiki_file_count", str(len(nodes)))
+        navigation_defects: list[str] = []
         if regenerate_navigation:
             navigation_report = self.navigation.regenerate(nodes)
             for change in navigation_report.by_category("collision"):
-                errors.append(f"navigation collision: {change.path}")
+                navigation_defects.append(f"navigation collision: {change.path}")
             for change in navigation_report.by_category("write_failed"):
-                errors.append(f"navigation write_failed: {change.path}")
+                navigation_defects.append(f"navigation write_failed: {change.path}")
         duration_ms = (time.perf_counter() - started) * 1000
         self.logger.info(
-            "operation=rebuild_index nodes=%d skipped=%d errors=%d",
+            "operation=rebuild_index nodes=%d skipped=%d errors=%d navigation_defects=%d",
             len(nodes),
             skipped,
             len(errors),
+            len(navigation_defects),
         )
         return RebuildIndexReport(
             nodes_indexed=len(nodes) - skipped,
@@ -488,6 +500,7 @@ class Memex:
             nodes_errored=len(errors),
             duration_ms=round(duration_ms, 3),
             errors=errors,
+            navigation_defects=navigation_defects,
         )
 
     def backup(self, output_path: Path, *, include_mem_db: bool = True) -> BackupReport:
@@ -571,18 +584,27 @@ class Memex:
         self.logger.info("operation=merge target=%s source=%s", target, source)
         return {"target": target, "source": source, "source_status": "superseded"}
 
-    def _refresh_navigation(self, file_path: str | None) -> None:
-        """Best-effort index refresh after an authoritative page mutation.
+    def _on_page_written(self, path: Path) -> None:
+        """Shared post-write hook for component-driven page writes.
 
-        Takes the mutated page's path and refreshes its directory chain.
-        Navigation is disposable: a failure here never fails or rolls back
-        the mutation. ``memex verify`` derives and reports the defect, and a
-        full rebuild repairs it.
+        Transcript capture, consolidation, and import write pages directly;
+        this hook gives them the same navigation refresh the facade applies
+        to its own mutations. Never raises: refresh is best effort.
+        """
+        self._refresh_navigation(str(path))
+
+    def _refresh_navigation(self, file_path: str | None) -> None:
+        """Best-effort chain-scoped index refresh after a page mutation.
+
+        Takes the mutated page's path and refreshes its directory chain,
+        parsing only that chain's own pages. Navigation is disposable: a
+        failure here never fails or rolls back the mutation. ``memex verify``
+        derives and reports the defect, and a full rebuild repairs it.
         """
         if not file_path:
             return
         try:
-            self.navigation.refresh(self.wiki_store.scan_all(), Path(file_path).parent)
+            self.navigation.refresh(Path(file_path).parent, self.wiki_store.scan_dir)
         except Exception:
             self.logger.warning("operation=navigation_refresh status=failed")
 

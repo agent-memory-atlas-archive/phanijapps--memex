@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -38,6 +39,8 @@ class TranscriptHook:
         wiki_store: WikiStore,
         index_mgr: IndexManager,
         link_mgr: LinkManager,
+        *,
+        on_page_written: Callable[[Path], None] | None = None,
     ) -> None:
         self.data_dir = data_dir
         self.transcripts_dir = data_dir / "transcripts"
@@ -45,6 +48,7 @@ class TranscriptHook:
         self._store = wiki_store
         self._index = index_mgr
         self._links = link_mgr
+        self._on_page_written = on_page_written
 
     def ingest(
         self, input: IngestTranscriptInput, *, overwrite: bool = False
@@ -185,6 +189,7 @@ class TranscriptHook:
             episode.transcript_ref = f"retired:{episode.transcript_ref or session_id}"
             stored = self._store.write(episode)
             self._index.update_record(stored)
+            self._notify_page_written(stored)
 
     def clear_transcripts(self, *, confirm: bool = False) -> int:
         """Delete raw transcripts while retaining episodes with retired references."""
@@ -204,6 +209,7 @@ class TranscriptHook:
                 stored = self._store.write(episode)
                 self._index.update_record(stored)
                 self._links.sync_node(stored)
+                self._notify_page_written(stored)
             cleared += 1
         return cleared
 
@@ -228,7 +234,13 @@ class TranscriptHook:
         stored = self._store.write(episode)
         self._index.update_record(stored)
         self._links.sync_node(stored)
+        self._notify_page_written(stored)
         return stored
+
+    def _notify_page_written(self, stored: WikiNode) -> None:
+        """Post-write hook; the callback never raises (best effort by contract)."""
+        if self._on_page_written is not None and stored.file_path:
+            self._on_page_written(Path(stored.file_path))
 
     _SYSTEM_NOISE_PREFIXES = ("#", "<", "\u003crecommended", "<recommended", "<environment")
 

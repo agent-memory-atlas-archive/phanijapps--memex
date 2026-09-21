@@ -21,6 +21,11 @@ NON_EPISODE_TYPES: tuple[str, ...] = tuple(t for t in NODE_TYPES if t != "episod
 TURN_ROLES: tuple[str, ...] = ("user", "agent", "tool")
 FORGET_MODES: tuple[str, ...] = ("hard", "soft", "decay")
 
+# Stored description budget: one line, at most 512 UTF-8 bytes (spec AC-0002).
+# Enforced on the stored (post-scrub) value, so redaction growth cannot land
+# an over-budget field on disk with a misleading boundary error.
+DESCRIPTION_MAX_BYTES = 512
+
 # Wire-level enums; pinned to the runtime tuples by test so they cannot drift.
 NodeType = Literal["entity", "preference", "procedure", "summary", "episode"]
 TurnRole = Literal["user", "agent", "tool"]
@@ -52,7 +57,7 @@ def _check_iso(value: str, field_name: str) -> None:
 
 def _check_description(description: str) -> None:
     """One line, no control characters, at most 512 UTF-8 bytes (spec AC-0002)."""
-    if len(description.encode("utf-8")) > 512:
+    if len(description.encode("utf-8")) > DESCRIPTION_MAX_BYTES:
         raise ValueError("description must stay within 512 UTF-8 bytes")
     if any(unicodedata.category(character) == "Cc" for character in description):
         raise ValueError("description must be a single line without control characters")
@@ -461,13 +466,19 @@ class SessionSummary:
 
 @dataclass(slots=True)
 class RebuildIndexReport:
-    """Output of the index rebuild operation (spec §9.6)."""
+    """Output of the index rebuild operation (spec §9.6).
+
+    ``errors`` carries malformed-page messages only; navigation outcomes
+    (collision, write failure) are bounded entries in ``navigation_defects``
+    so per-node counts stay honest.
+    """
 
     nodes_indexed: int
     nodes_skipped: int
     nodes_errored: int
     duration_ms: float
     errors: list[str]
+    navigation_defects: list[str] = field(default_factory=list)
 
 
 @dataclass(slots=True)

@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import logging
 import re
+from collections.abc import Callable
+from pathlib import Path
 
 from memex.application.ports import LLMClient
 from memex.domain.errors import LLMError
@@ -100,6 +102,8 @@ class WikiConsolidator:
         link_mgr: LinkManager,
         llm_client: LLMClient,
         config: MemexConfig,
+        *,
+        on_page_written: Callable[[Path], None] | None = None,
     ) -> None:
         self._store = wiki_store
         self._index = index_mgr
@@ -107,6 +111,7 @@ class WikiConsolidator:
         self._llm = llm_client
         self._config = config
         self._approval = config.governance.approval
+        self._on_page_written = on_page_written
 
     def consolidate(self, input: ConsolidateInput) -> ConsolidationReport:
         episodes = self._select_episodes(input)
@@ -223,5 +228,7 @@ class WikiConsolidator:
         self._index.update_record(stored)
         links = self._links.sync_node(stored)
         report.links_added += len(links)
+        if self._on_page_written is not None and stored.file_path:
+            self._on_page_written(Path(stored.file_path))
         if updating:
             report.nodes_updated.append(stored.slug)

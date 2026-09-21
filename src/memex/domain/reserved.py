@@ -18,8 +18,10 @@ RESERVED_FILENAMES: tuple[str, ...] = ("index.md", "log.md")
 RESERVED_SLUGS: tuple[str, ...] = ("index", "log")
 
 # The generator-owned root index format: front matter limited to okf_version.
+# The generator and this classifier share one definition so a version bump
+# can never make fresh roots classify as legacy collisions.
+OKF_VERSION = "0.2"
 _OKF_ROOT_KEYS = {"okf_version"}
-_OKF_VERSION = "0.2"
 
 
 def _is_okf_root_shape(text: str) -> bool:
@@ -27,7 +29,7 @@ def _is_okf_root_shape(text: str) -> bool:
         data, _body = parse_front_matter(text)
     except FrontMatterError:
         return False
-    return set(data) == _OKF_ROOT_KEYS and data.get("okf_version") == _OKF_VERSION
+    return set(data) == _OKF_ROOT_KEYS and data.get("okf_version") == OKF_VERSION
 
 
 def classify_reserved(path: Path) -> str:

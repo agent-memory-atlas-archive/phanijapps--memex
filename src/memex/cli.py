@@ -715,6 +715,7 @@ def _run(args: argparse.Namespace) -> int:
                 memex.wiki_store,
                 poll_interval=args.poll_interval,
                 link_mgr=memex.link_manager,
+                navigation=memex.navigation,
             )
             watcher.start_polling()
             print("watching for wiki edits; press Ctrl-C to stop", file=sys.stderr)
