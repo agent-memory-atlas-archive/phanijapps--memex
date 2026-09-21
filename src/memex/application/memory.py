@@ -620,7 +620,7 @@ class Memex:
         defects = {
             category: count
             for category, count in report.category_counts().items()
-            if count and category != "written"
+            if count and category not in {"written", "removed"}
         }
         if defects:
             self.logger.warning(

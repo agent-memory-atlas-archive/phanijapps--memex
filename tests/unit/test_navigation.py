@@ -739,3 +739,43 @@ def test_symlinked_reserved_file_never_read_for_classification(
     nodes = memex.wiki_store.scan_all(errors)
     assert [n.slug for n in nodes] == ["alpha-entity"]  # real page still scanned
     assert errors  # the symlinked reserved name reports as an unsafe page path
+
+
+def test_refresh_partial_log_is_bounded_and_excludes_routine_removals(
+    data_dir: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Only genuine defects log; routine removals stay silent (round-5 pin)."""
+    import logging
+
+    memex = _memex(data_dir)
+    memex.logger.propagate = True  # caplog visibility; production keeps False
+    slug = _write(memex, "Doomed page")
+    memex.logger.setLevel(logging.WARNING)
+    with caplog.at_level(logging.WARNING, logger="memex"):
+        memex.forget(slug, mode="hard")  # routine removal: no warning
+    assert not [r for r in caplog.records if "navigation_refresh" in r.getMessage()]
+
+    entities = memex.wiki_store.wiki_dir / "global" / "entities"
+    entities.mkdir(parents=True, exist_ok=True)
+    (entities / "index.md").write_text(
+        "---\n"
+        'id: "legacy-1"\n'
+        'type: "entity"\n'
+        'title: "Legacy blocker"\n'
+        "tags: []\n"
+        "importance: 0.5\n"
+        'created: "2026-09-21T00:00:00Z"\n'
+        'updated: "2026-09-21T00:00:00Z"\n'
+        "access_count: 0\n"
+        "links: []\n"
+        'content_hash: "sha256:00"\n'
+        'status: "active"\n'
+        'scope: "global"\n'
+        "---\n\nbody\n",
+        encoding="utf-8",
+    )
+    with caplog.at_level(logging.WARNING, logger="memex"):
+        memex._refresh_navigation(str(entities / "index.md"))
+    partial = [r for r in caplog.records if "status=partial" in r.getMessage()]
+    assert partial and "collision=1" in partial[0].getMessage()
+    assert "Legacy" not in partial[0].getMessage()  # bounded: no memory content

@@ -67,13 +67,15 @@ rule, and the OpenAI SDK is the single LLM client.
   Descriptions mirror into the disposable index only; existing pages keep an
   empty description until edited.
 - **Downgrade behavior (same feature).** A pre-description binary opening a
-  v5 store treats the schema as compatible but its four-weight `bm25()` call
-  fails against the five-column FTS table, so recall raises until `mem.db` is
-  deleted (it rebuilds on next open); the old scanner also reports generated
-  body-only `index.md` files and pages carrying a `description` key as
-  malformed pages. Markdown is never touched by the upgrade; recovery from a
-  downgrade is deleting `mem.db`, removing generated indexes, and stripping
-  descriptions.
+  v5 store treats the schema as compatible, but its recall degrades silently:
+  SQLite FTS5 accepts fewer `bm25()` weights than columns, so the old
+  four-weight call runs against the five-column table with the old body
+  weight landing on the description column and old snippet column indexes
+  reading the wrong column — delete `mem.db` (it rebuilds on next open) to
+  restore correct ranking. The old scanner also reports generated body-only
+  `index.md` files and pages carrying a `description` key as malformed pages.
+  Markdown is never touched by the upgrade; recovery from a downgrade is
+  deleting `mem.db`, removing generated indexes, and stripping descriptions.
 - Change detection hashes body text on read: a hand-edited page keeps a stale
   front-matter `content_hash`, so the watcher and `rebuild_index` compare a
   freshly computed hash against the index row and refresh the front matter

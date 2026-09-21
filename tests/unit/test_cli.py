@@ -56,11 +56,8 @@ def test_watch_command_wires_navigation_and_refreshes(
     entities_index = data_dir / "docs" / "global" / "entities" / "index.md"
     assert "old text" in entities_index.read_text(encoding="utf-8")
 
-    captured: dict[str, IndexWatcher] = {}
-
     def start_and_reindex(self: IndexWatcher) -> None:
         """One synchronous poll cycle: external edit, then re-index."""
-        captured["watcher"] = self
         page.write_text(
             page.read_text(encoding="utf-8").replace("old text", "new text"), encoding="utf-8"
         )

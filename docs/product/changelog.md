@@ -17,11 +17,11 @@ unreleased until a release tag is created.
   titles and descriptions one directory at a time (root index declares
   `okf_version: "0.2"`); `index` and `log` are reserved slugs for new writes,
   pre-existing pages at those names are preserved, and stale SQLite indexes
-  rebuild transparently at schema v5 without touching Markdown. Opening a
-  v5 store with a pre-description binary is not supported: its recall raises
-  until `mem.db` is deleted (the index rebuilds on next open) and generated
-  `index.md` files plus `description` keys report as malformed pages —
-  remove generated indexes and strip descriptions before downgrading.
+  rebuild transparently at schema v5 without touching Markdown. A
+  pre-description binary on a v5 store silently mis-ranks recall (old
+  weights land on shifted FTS columns) and reports generated `index.md`
+  files and `description` keys as malformed pages — delete `mem.db` and
+  remove generated indexes before downgrading.
 - Token-budgeted recall and hook injection, a weak-match injection floor, page
   status lifecycle, manual approval, provenance fields, write-boundary secret
   scrubbing, `memex status`, and zero-yield verification warnings.
