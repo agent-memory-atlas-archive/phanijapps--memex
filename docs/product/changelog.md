@@ -18,6 +18,9 @@ unreleased until a release tag is created.
   precision, distractor, difficulty, and scale reporting.
 - Deterministic episode summaries and optional harness-assisted episode
   enrichment.
+- Optional project task recall through `memex recall --question` and the
+  existing `memex_recall` MCP tool. It combines up to three caller-written
+  questions into a bounded, source-linked context and names retrieval gaps.
 
 ### Changed
 

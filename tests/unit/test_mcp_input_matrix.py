@@ -112,6 +112,28 @@ class TestDomainChannel:
         assert channel == "result"
         assert payload == {"error": "invalid arguments for this operation"}
 
+    def test_task_recall_returns_flat_structured_content(self, server: Any) -> None:
+        project_id = "a" * 24
+        _, written = call(
+            server,
+            "memex_write",
+            {
+                "type": "entity",
+                "title": "Project layout",
+                "body": "project layout page",
+                "scope": "project",
+                "project_id": project_id,
+            },
+        )
+        channel, payload = call(
+            server,
+            "memex_recall",
+            {"query": "Repair lookup", "questions": ["project layout"], "project_id": project_id},
+        )
+        assert channel == "result"
+        assert payload["sources"] == [written["file_path"]]
+        assert "context" in payload and "result" not in payload
+
     def test_forget_unknown_slug(self, server: Any) -> None:
         channel, payload = call(server, "memex_forget", {"slug": "ghost"})
         assert channel == "result"
@@ -181,4 +203,6 @@ class TestWireSchemas:
         write_out = schemas["memex_write"]["output"]
         assert {"slug", "file_path", "error"} <= set(write_out["properties"])
         recall_out = schemas["memex_recall"]["output"]
-        assert {"hits", "total_indexed", "error"} <= set(recall_out["properties"])
+        assert {"hits", "total_indexed", "error", "context", "sources"} <= set(
+            recall_out["properties"]
+        )

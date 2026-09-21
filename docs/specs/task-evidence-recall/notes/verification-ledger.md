@@ -117,3 +117,18 @@
   --importance 0.8` wrote `ruff-linter`. `uv run memex recall "Ruff linter"
   --top-k 5` returned that active page as its only hit. Strict MkDocs built
   successfully after the guide and architecture updates.
+
+## Product task recall slice
+
+- 2026-09-20: Added optional project task mode to the existing recall CLI and
+  MCP tool. It accepts one to three caller-written questions, interleaves up to
+  eight unique active pages, reports questions with no eligible hit and
+  questions whose eligible hits were omitted, and limits the complete context
+  to 4,096 estimated tokens. One extra search hit per question detects a page
+  omitted by the eight-page cap; only returned pages gain access credit.
+- Review repairs rejected malformed question containers, aligned CLI and MCP
+  page caps, and excluded a page forgotten in the current second. Adversarial,
+  security, and quality rechecks returned clean. The full suite passed 756
+  tests with one skip and 90.29% coverage in 323.52 seconds. Ruff, mypy,
+  formatting, strict MkDocs, and spec-status lint passed. No model comparison
+  ran, so the held-out task scores remain unchanged.

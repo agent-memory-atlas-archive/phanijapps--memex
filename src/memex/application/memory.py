@@ -22,6 +22,8 @@ from memex.domain.models import (
     RecallResult,
     RestoreReport,
     SessionSummary,
+    TaskRecallInput,
+    TaskRecallResult,
     TranscriptLinkReport,
     WikiNode,
     WriteInput,
@@ -29,7 +31,7 @@ from memex.domain.models import (
 )
 from memex.domain.scrub import scrub
 from memex.infrastructure.backup import BackupRestore
-from memex.infrastructure.bm25_retriever import BM25Retriever
+from memex.infrastructure.bm25_retriever import BM25Retriever, _query_tokens
 from memex.infrastructure.config import ConfigLoader, MemexConfig
 from memex.infrastructure.consolidator import WikiConsolidator
 from memex.infrastructure.import_export import ImportExport
@@ -214,6 +216,41 @@ class Memex:
         self.logger.info(
             "operation=recall hits=%d total_indexed=%d", len(result.hits), result.total_indexed
         )
+        return result
+
+    def recall_task(self, input: TaskRecallInput) -> TaskRecallResult:
+        """Gather project evidence for caller-written questions within one budget."""
+        from memex.application.task_recall import assemble_task_recall, validate_task_budget
+
+        input = TaskRecallInput(
+            goal=input.goal,
+            questions=input.questions,
+            project_id=input.project_id,
+            max_hits=input.max_hits,
+            max_tokens=input.max_tokens,
+            node_type=input.node_type,
+            tags=list(input.tags) if input.tags is not None else None,
+        )
+        for question in input.questions:
+            try:
+                _query_tokens(question)
+            except ValueError as exc:
+                raise ValueError(f"invalid question: {exc}") from exc
+        validate_task_budget(input)
+        ranked = [
+            self.retriever.retrieve_without_access(
+                question,
+                top_k=9,  # One extra match makes an eight-page omission visible.
+                node_type=input.node_type,
+                tags=input.tags,
+                scope="project",
+                project_id=input.project_id,
+            ).hits
+            for question in input.questions
+        ]
+        result, selected = assemble_task_recall(input, ranked)
+        self.retriever.record_access(selected)
+        self.logger.info("operation=recall_task hits=%d", len(selected))
         return result
 
     def consolidate(self, input: ConsolidateInput) -> ConsolidationReport:

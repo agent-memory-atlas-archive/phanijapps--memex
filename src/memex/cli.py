@@ -19,6 +19,7 @@ from memex.domain.errors import MemexError
 from memex.domain.models import (
     ConsolidateInput,
     IngestTranscriptInput,
+    TaskRecallInput,
     TurnStreamEntry,
     WriteInput,
 )
@@ -67,13 +68,19 @@ def _build_parser() -> argparse.ArgumentParser:
 
     recall = sub.add_parser("recall", help=summary("memex_recall"))
     recall.add_argument("query")
+    recall.add_argument(
+        "--question",
+        action="append",
+        default=None,
+        help="Project task question (repeat up to three times)",
+    )
     recall.add_argument("--top-k", type=int, default=None)
     recall.add_argument("--type", default=None)
     recall.add_argument("--tag", action="append", default=None)
     recall.add_argument("--include-expired", action="store_true")
     recall.add_argument("--include-inactive", action="store_true")
     recall.add_argument("--max-tokens", type=int, default=None)
-    recall.add_argument("--scope", choices=["global", "project"], default="global")
+    recall.add_argument("--scope", choices=["global", "project"], default=None)
     recall.add_argument("--project-id", default=None)
 
     consolidate = sub.add_parser("consolidate", help=summary("memex_consolidate"))
@@ -614,20 +621,41 @@ def _run(args: argparse.Namespace) -> int:
             )
             _emit({"slug": node.slug, "file_path": node.file_path})
         elif args.command == "recall":
-            project_id, _, _ = _project_arguments(args)
-            _emit(
-                memex.recall(
-                    args.query,
-                    top_k=args.top_k,
-                    node_type=args.type,
-                    tags=args.tag,
-                    include_expired=args.include_expired,
-                    include_inactive=args.include_inactive,
-                    max_tokens=args.max_tokens,
-                    scope=args.scope,
-                    project_id=project_id,
+            if args.question is not None:
+                if args.scope == "global" or args.include_expired or args.include_inactive:
+                    raise ValueError("task recall requires active project scope")
+                args.scope = "project"
+                project_id, _, _ = _project_arguments(args)
+                if project_id is None:
+                    raise ValueError("project identity could not be derived")
+                _emit(
+                    memex.recall_task(
+                        TaskRecallInput(
+                            goal=args.query,
+                            questions=args.question,
+                            project_id=project_id,
+                            max_hits=min(args.top_k, 8) if args.top_k is not None else 8,
+                            max_tokens=args.max_tokens if args.max_tokens is not None else 4096,
+                            node_type=args.type,
+                            tags=args.tag,
+                        )
+                    )
                 )
-            )
+            else:
+                project_id, _, _ = _project_arguments(args)
+                _emit(
+                    memex.recall(
+                        args.query,
+                        top_k=args.top_k,
+                        node_type=args.type,
+                        tags=args.tag,
+                        include_expired=args.include_expired,
+                        include_inactive=args.include_inactive,
+                        max_tokens=args.max_tokens,
+                        scope=args.scope or "global",
+                        project_id=project_id,
+                    )
+                )
         elif args.command == "consolidate":
             _emit(
                 memex.consolidate(ConsolidateInput(mode=args.mode, max_episodes=args.max_episodes))

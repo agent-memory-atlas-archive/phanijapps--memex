@@ -1,6 +1,6 @@
 """Filesystem wiki memory harness.
 
-The wiki is the filesystem: Markdown pages under ``~/.memex/wiki/`` are the
+The wiki is the filesystem: Markdown pages under ``~/.memex/docs/`` are the
 source of truth, and SQLite (``mem.db``) is a rebuildable secondary index for
 BM25 retrieval and freshness tracking.
 """
@@ -26,6 +26,8 @@ from memex.domain.models import (
     RecallResult,
     RestoreReport,
     SessionSummary,
+    TaskRecallInput,
+    TaskRecallResult,
     TranscriptLinkReport,
     TurnStreamEntry,
     WikiNode,
@@ -54,6 +56,8 @@ __all__ = [
     "RecallResult",
     "RestoreReport",
     "SessionSummary",
+    "TaskRecallInput",
+    "TaskRecallResult",
     "TranscriptLinkReport",
     "TurnStreamEntry",
     "WikiNode",

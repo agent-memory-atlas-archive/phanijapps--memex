@@ -89,9 +89,14 @@ production recall path. It compares goal-based questions from a coding harness
 with the held-out baseline under wall-time and catalog-equivalent spend limits.
 One pi run completed 7 of 24 retrieval tasks, below the linked-summary
 baseline's 11 of 24. The promotion gate kept the candidate experimental; no
-question planner, summary assembly, or model call runs in ordinary recall or
-hook injection. See `docs/research/2026-09-20-task-evidence-focused-candidate.md`
-for the measured result and its limits.
+question planner or model call runs in ordinary recall or hook injection.
+Optional task mode on the existing recall adapters accepts up to three
+caller-written questions, searches one project for each through the same
+ranker, interleaves unique hits, then packs a complete context to 4,096
+estimated tokens. It marks unanswered and budget-omitted questions and records
+access only for included pages. The mode adds no model call or new index.
+See `docs/research/2026-09-20-task-evidence-focused-candidate.md` for the
+earlier measured result and its limits.
 
 ### Retrieval evaluation security controls
 

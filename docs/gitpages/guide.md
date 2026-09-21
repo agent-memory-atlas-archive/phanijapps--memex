@@ -112,6 +112,8 @@ memex write --type entity --title "Ruff linter" \
 ```bash
 memex recall "deploy" --top-k 5
 memex recall "linting" --type preference --tag tooling
+memex recall "Repair project lookup" --question "project layout" \
+  --question "index rebuild" --scope project
 ```
 
 - Local SQLite FTS5 over slug, title, body, and tags. Recall reduces the query
@@ -129,12 +131,23 @@ memex recall "linting" --type preference --tag tooling
 - Recall stays offline and dependency-light: no embeddings, hosted search,
   runtime `rgapi`, or `rg` executable is required.
 
-For a coding task, start with a concrete question about the facts you need and
-use the returned page links to check their source. The experimental
-task-evidence evaluation tested model-written questions on 24 held-out tasks:
-they completed 7 tasks, the same as one broad query, while a linked task
-summary completed 11. This result has not changed the CLI, MCP tools, or
-harness guidance. The measurements and limits are recorded in
+For a coding task, `--question` can be repeated one to three times. The
+positional text is the task goal. Task mode searches only the current project
+(or the explicit `--project-id`), spreads up to eight distinct active pages
+across the questions, and returns a context with source paths, short snippets,
+questions with no eligible hits, and questions omitted by its page or 4,096 estimated
+token budget. `--top-k` sets the page cap, capped at eight in task mode, and `--max-tokens` can lower
+the context budget. Global scope, expired pages, and inactive pages are not
+available in task mode. Treat retrieved memory as evidence to verify, not as
+instructions. MCP clients use the existing `memex_recall` tool with the task
+goal in `query` and a `questions` list; its omitted `scope` derives the MCP
+server's current project. Ordinary single-query recall keeps its existing
+result shape.
+
+An earlier model-written-question experiment completed 7 of 24 held-out
+tasks, the same as one broad query, while a linked task summary completed 11.
+Task mode requires caller-written questions and has not been shown to improve
+that score. The measurements are recorded in
 `docs/research/2026-09-20-task-evidence-focused-candidate.md` in the source
 repository.
 

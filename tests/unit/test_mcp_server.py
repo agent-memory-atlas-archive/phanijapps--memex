@@ -1,10 +1,12 @@
 import json
 from collections.abc import Iterator
 from pathlib import Path
+from typing import cast
 
 import pytest
 
 from memex import mcp_server
+from memex.domain.operations import RecallResultDict, TaskRecallResultDict
 from memex.infrastructure.bm25_retriever import MAX_QUERY_BYTES, MAX_QUERY_TOKENS
 from memex.infrastructure.workspace_context import ProjectContext
 from memex.mcp_server import (
@@ -141,11 +143,58 @@ def test_write_recall_forget_flow() -> None:
     written = memex_write(type="entity", title="MCP entity", body="via mcp tool", scope="global")
     assert written["slug"] == "mcp-entity"
 
-    recalled = memex_recall("mcp")
+    recalled = cast(RecallResultDict, memex_recall("mcp"))
     assert [hit["slug"] for hit in recalled["hits"]] == ["mcp-entity"]
 
     forgotten = memex_forget("mcp-entity")
     assert forgotten["forgotten"] is True
+
+
+def test_task_recall_derives_project_and_uses_existing_tool(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(mcp_server, "project_identity", lambda cwd: ("a" * 24, "memex"))
+    written = memex_write(
+        type="entity",
+        title="MCP project layout",
+        body="project layout page",
+        scope="project",
+        project_id="a" * 24,
+    )
+    for top_k in (8, 9):
+        task = cast(
+            TaskRecallResultDict,
+            memex_recall("Repair lookup", questions=["project layout"], top_k=top_k),
+        )
+        assert task["sources"] == [written["file_path"]]
+        assert task["unanswered_questions"] == []
+        assert "hits" not in task
+    assert "hits" in memex_recall("project layout", scope="project", project_id="a" * 24)
+
+
+@pytest.mark.parametrize("scope", ["global", "unknown"])
+def test_task_recall_rejects_non_project_scope(scope: str) -> None:
+    assert memex_recall("goal", questions=["query"], scope=scope) == {
+        "error": "invalid arguments for this operation"
+    }
+
+
+def test_task_recall_explicit_project_id_overrides_derived_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(mcp_server, "project_identity", lambda cwd: ("a" * 24, "memex"))
+    written = memex_write(
+        type="entity",
+        title="Private beta",
+        body="beta only page",
+        scope="project",
+        project_id="b" * 24,
+    )
+    task = cast(
+        TaskRecallResultDict,
+        memex_recall("Find beta", questions=["beta only"], project_id="b" * 24),
+    )
+    assert task["sources"] == [written["file_path"]]
 
 
 def test_project_write_uses_derived_readable_locator(monkeypatch: pytest.MonkeyPatch) -> None:

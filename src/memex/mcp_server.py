@@ -31,6 +31,7 @@ from memex.domain.models import (
     ConsolidateMode,
     ForgetMode,
     NodeType,
+    TaskRecallInput,
     WriteInput,
 )
 from memex.domain.operations import (
@@ -38,7 +39,7 @@ from memex.domain.operations import (
     ConsolidateResultDict,
     ForgetResultDict,
     ProvenanceDict,
-    RecallResultDict,
+    RecallWireDict,
     WriteResultDict,
 )
 from memex.infrastructure.workspace_context import project_context, project_identity
@@ -144,9 +145,10 @@ def memex_recall(
     query: str,
     top_k: Annotated[int, Field(ge=1, le=100)] = 10,
     node_type: NodeType | None = None,
-    scope: str = "global",
+    scope: str | None = None,
     project_id: str | None = None,
-) -> RecallResultDict:
+    questions: list[str] | None = None,
+) -> RecallWireDict:
     """Search the index with BM25 and return ranked hits.
 
     The query is reduced to bounded alphanumeric tokens, searched with strict
@@ -158,6 +160,9 @@ def memex_recall(
             the shared query-work cap.
         top_k: Default 10; schema bounds [1, 100].
         node_type: Optional equality filter on node type.
+        questions: Optional list of one to three task questions. With this
+            field, query is the task goal and the result is a bounded
+            project context with sources and named evidence gaps.
 
     Returns:
         RecallResult as JSON — hits ranked best-first (slug, title,
@@ -167,14 +172,27 @@ def memex_recall(
         only; memory files are untouched).
     """
     try:
+        if questions is not None:
+            if scope not in (None, "project"):
+                raise ValueError("task recall requires project scope")
+            if project_id is None:
+                project_id, _ = project_identity(Path.cwd())
+            task = TaskRecallInput(
+                goal=query,
+                questions=questions,
+                project_id=project_id,
+                max_hits=min(top_k, 8),
+                node_type=node_type,
+            )
+            return cast(RecallWireDict, to_jsonable(_get_memex().recall_task(task)))
         if scope == "project" and project_id is None:
             project_id, _ = project_identity(Path.cwd())
         result = _get_memex().recall(
-            query, top_k=top_k, node_type=node_type, scope=scope, project_id=project_id
+            query, top_k=top_k, node_type=node_type, scope=scope or "global", project_id=project_id
         )
-        return cast(RecallResultDict, to_jsonable(result))
+        return cast(RecallWireDict, to_jsonable(result))
     except Exception as exc:
-        return cast(RecallResultDict, _caught("memex_recall", exc))
+        return cast(RecallWireDict, _caught("memex_recall", exc))
 
 
 def memex_consolidate(

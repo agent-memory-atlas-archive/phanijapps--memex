@@ -305,6 +305,48 @@ class RecallResult:
 
 
 @dataclass(slots=True)
+class TaskRecallInput:
+    """A bounded set of project questions for one task context."""
+
+    goal: str
+    questions: list[str]
+    project_id: str
+    max_hits: int = 8
+    max_tokens: int = 4096
+    node_type: str | None = None
+    tags: list[str] | None = None
+
+    def __post_init__(self) -> None:
+        _check_project_metadata("project", self.project_id, None)
+        if not self.goal.strip() or len(self.goal.encode("utf-8")) > 1024:
+            raise ValueError("goal must contain text within 1,024 UTF-8 bytes")
+        if (
+            not isinstance(self.questions, list)
+            or not 1 <= len(self.questions) <= 3
+            or any(not isinstance(question, str) for question in self.questions)
+        ):
+            raise ValueError("questions must be a list of one to three strings")
+        self.questions = self.questions.copy()
+        if not 1 <= self.max_hits <= 8:
+            raise ValueError("max_hits must be in [1, 8]")
+        if not 1 <= self.max_tokens <= 4096:
+            raise ValueError("max_tokens must be in [1, 4096]")
+        if self.node_type is not None and self.node_type not in NODE_TYPES:
+            raise ValueError("node_type must be a supported memory type")
+
+
+@dataclass(slots=True)
+class TaskRecallResult:
+    """Rendered evidence and explicit gaps for a task."""
+
+    context: str
+    sources: list[str]
+    unanswered_questions: list[str]
+    omitted_questions: list[str]
+    rendered_tokens: int
+
+
+@dataclass(slots=True)
 class ForgetResult:
     """Output of the forget operation (spec §9.4)."""
 
