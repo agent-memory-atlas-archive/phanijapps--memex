@@ -39,6 +39,114 @@ def test_write_and_recall_roundtrip(data_dir: Path, capture: dict[str, str]) -> 
     assert [hit["slug"] for hit in result["hits"]] == ["cli-entity"]
 
 
+def test_task_recall_derives_project_and_preserves_single_query_shape(
+    data_dir: Path, capture: dict[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        cli,
+        "project_context",
+        lambda cwd: ProjectContext("a" * 24, "memex", "git-memex"),
+    )
+    assert (
+        cli.main(
+            [
+                "--data-dir",
+                str(data_dir),
+                "write",
+                "--type",
+                "entity",
+                "--title",
+                "Project layout",
+                "--body",
+                "project layout page",
+                "--scope",
+                "project",
+            ]
+        )
+        == 0
+    )
+    for top_k in (8, 9):
+        assert (
+            cli.main(
+                [
+                    "--data-dir",
+                    str(data_dir),
+                    "recall",
+                    "Repair lookup",
+                    "--question",
+                    "project layout",
+                    "--top-k",
+                    str(top_k),
+                ]
+            )
+            == 0
+        )
+        task = json.loads(capture["out"])
+        assert len(task["sources"]) == 1
+        assert task["unanswered_questions"] == []
+        assert task["rendered_tokens"] <= 4096
+
+    assert cli.main(["--data-dir", str(data_dir), "recall", "project layout"]) == 0
+    ordinary = json.loads(capture["out"])
+    assert "hits" in ordinary and "context" not in ordinary
+
+
+def test_task_recall_rejects_global_scope(
+    data_dir: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code = cli.main(
+        ["--data-dir", str(data_dir), "recall", "goal", "--question", "query", "--scope", "global"]
+    )
+    assert code == 1
+    assert "project scope" in capsys.readouterr().err
+
+
+def test_task_recall_explicit_project_id_overrides_derived_identity(
+    data_dir: Path, capture: dict[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        cli,
+        "project_context",
+        lambda cwd: ProjectContext("a" * 24, "memex", "git-memex"),
+    )
+    assert (
+        cli.main(
+            [
+                "--data-dir",
+                str(data_dir),
+                "write",
+                "--type",
+                "entity",
+                "--title",
+                "Private beta",
+                "--body",
+                "beta only page",
+                "--scope",
+                "project",
+                "--project-id",
+                "b" * 24,
+            ]
+        )
+        == 0
+    )
+    assert (
+        cli.main(
+            [
+                "--data-dir",
+                str(data_dir),
+                "recall",
+                "Find beta",
+                "--question",
+                "beta only",
+                "--project-id",
+                "b" * 24,
+            ]
+        )
+        == 0
+    )
+    assert len(json.loads(capture["out"])["sources"]) == 1
+
+
 def test_project_write_uses_derived_readable_locator(
     data_dir: Path, capture: dict[str, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:

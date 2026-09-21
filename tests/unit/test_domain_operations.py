@@ -15,6 +15,7 @@ from memex.domain.models import (
     ForgetResult,
     ProvenanceReport,
     RecallResult,
+    TaskRecallResult,
     TranscriptLinkReport,
     TurnStreamEntry,
     WikiNode,
@@ -25,6 +26,7 @@ from memex.domain.operations import (
     ForgetResultDict,
     ProvenanceDict,
     RecallResultDict,
+    TaskRecallResultDict,
     TranscriptReportDict,
     TurnDict,
     WriteResultDict,
@@ -33,6 +35,7 @@ from memex.domain.operations import (
 
 RESULT_TWINS = [
     (RecallResultDict, RecallResult),
+    (TaskRecallResultDict, TaskRecallResult),
     (ConsolidateResultDict, ConsolidationReport),
     (ForgetResultDict, ForgetResult),
     (TranscriptReportDict, TranscriptLinkReport),

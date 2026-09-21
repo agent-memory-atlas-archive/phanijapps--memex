@@ -446,8 +446,8 @@ class BM25Retriever:
             params[key] = f'%"{tag}"%'
         if not include_expired:
             now = utc_now_iso()
-            clauses.append("(w.expires_at IS NULL OR w.expires_at >= :now)")
-            clauses.append("(w.valid_to IS NULL OR w.valid_to >= :now)")
+            clauses.append("(w.expires_at IS NULL OR w.expires_at > :now)")
+            clauses.append("(w.valid_to IS NULL OR w.valid_to > :now)")
             params["now"] = now
         if not include_inactive:
             clauses.append("(w.status IS NULL OR w.status = 'active')")
