@@ -720,3 +720,22 @@ def test_undecodable_reserved_file_is_untouchable_collision(
     assert errors  # reported as a malformed page, never a crash
     assert report.by_category("collision")
     assert target.read_bytes() == b"\xff\xfe not utf8"
+
+
+def test_symlinked_reserved_file_never_read_for_classification(
+    data_dir: Path,
+) -> None:
+    """A symlink at a reserved name classifies not_reserved without reading it."""
+    from memex.domain.reserved import classify_reserved
+
+    memex = _memex(data_dir)
+    _write(memex, "Alpha entity")
+    page = _page_dir(memex, "alpha-entity") / "alpha-entity.md"
+    link = _page_dir(memex, "alpha-entity") / "index.md"
+    link.unlink()  # remove the generated structural index at that path
+    link.symlink_to(page)
+    assert classify_reserved(link) == "not_reserved"
+    errors: list[str] = []
+    nodes = memex.wiki_store.scan_all(errors)
+    assert [n.slug for n in nodes] == ["alpha-entity"]  # real page still scanned
+    assert errors  # the symlinked reserved name reports as an unsafe page path

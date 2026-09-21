@@ -47,6 +47,10 @@ def classify_reserved(path: Path) -> str:
     """
     if path.name not in RESERVED_FILENAMES:
         return "not_reserved"
+    if path.is_symlink():
+        # Classification never follows a link: a symlinked reserved name is
+        # an untouchable collision, left to the store's reject-then-read guard.
+        return "not_reserved"
     try:
         text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):

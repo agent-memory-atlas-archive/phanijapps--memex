@@ -224,8 +224,8 @@ class WikiStore:
             for path in sorted(self.wiki_dir.rglob(f"{type_dir}/*.md")):
                 if is_structural(path):
                     continue  # generated index.md / optional OKF log.md
-                self._reject_unsafe_page_path(path)
                 try:
+                    self._reject_unsafe_page_path(path)
                     nodes.append(self._read_path(path))
                 except WikiStoreError as exc:
                     if errors is None:
@@ -249,8 +249,8 @@ class WikiStore:
         for path in sorted(directory.glob("*.md")):
             if is_structural(path):
                 continue  # generated index.md / optional OKF log.md
-            self._reject_unsafe_page_path(path)
             try:
+                self._reject_unsafe_page_path(path)
                 nodes.append(self._read_path(path))
             except WikiStoreError as exc:
                 if errors is None:

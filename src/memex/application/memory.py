@@ -613,9 +613,20 @@ class Memex:
         if not file_path:
             return
         try:
-            self.navigation.refresh(Path(file_path).parent, self.wiki_store.scan_dir)
+            report = self.navigation.refresh(Path(file_path).parent, self.wiki_store.scan_dir)
         except Exception:
             self.logger.warning("operation=navigation_refresh status=failed")
+            return
+        defects = {
+            category: count
+            for category, count in report.category_counts().items()
+            if count and category != "written"
+        }
+        if defects:
+            self.logger.warning(
+                "operation=navigation_refresh status=partial %s",
+                " ".join(f"{category}={n}" for category, n in sorted(defects.items())),
+            )
 
     def get_provenance(self, slug: str) -> ProvenanceReport | None:
         return self.transcript_hook.get_provenance(slug)

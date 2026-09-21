@@ -14,19 +14,13 @@ import posixpath
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import ClassVar
 
 from memex.domain.errors import MemexError
 from memex.domain.models import NODE_TYPES, WikiNode
-from memex.domain.reserved import (
-    OKF_VERSION,
-    RESERVED_FILENAMES,
-    classify_reserved,
-    is_structural,
-)
+from memex.domain.reserved import OKF_VERSION, is_structural
 from memex.infrastructure.wiki_store import TYPE_DIRS
 
-_CATEGORIES = ("written", "removed", "collision", "write_failed")
-_DIAGNOSTIC_CATEGORIES = ("missing", "stale", "orphan", "collision")
 _INDEX_NAME = "index.md"
 _ESCAPE_CHARS = frozenset("\\`*_[]<>")
 
@@ -51,10 +45,15 @@ class NavigationChange:
 class NavigationReport:
     """Outcomes of a regeneration or refresh run. Bounded fields only."""
 
+    CATEGORIES: ClassVar[tuple[str, ...]] = ("written", "removed", "collision", "write_failed")
+
     changes: list[NavigationChange] = field(default_factory=list)
 
     def by_category(self, category: str) -> list[NavigationChange]:
         return [change for change in self.changes if change.category == category]
+
+    def category_counts(self) -> dict[str, int]:
+        return {category: len(self.by_category(category)) for category in self.CATEGORIES}
 
 
 def _escape(text: str) -> str:
@@ -78,6 +77,7 @@ class NavigationGenerator:
         """
         self._guard_nodes_inside(nodes)
         report = NavigationReport()
+        self._sweep_stale_tmps()
         needed = self._needed_dirs()
         for directory in sorted(needed):
             self._write_index(directory, self.render(directory, nodes), report)
@@ -200,6 +200,14 @@ class NavigationGenerator:
                     current = current.parent
         return needed
 
+    def _sweep_stale_tmps(self) -> None:
+        """Remove index tmp files stranded by a hard kill mid-write."""
+        for target in self._wiki_dir.rglob(f"{_INDEX_NAME}.*.tmp"):
+            try:
+                target.unlink()
+            except OSError:
+                continue  # bounded best effort; the file is inert to memory
+
     def _write_index(self, directory: Path, text: str, report: NavigationReport) -> None:
         target = directory / _INDEX_NAME
         rel = self._rel(target)
@@ -295,11 +303,8 @@ class NavigationGenerator:
 
 
 __all__ = [
-    "RESERVED_FILENAMES",
     "NavigationChange",
     "NavigationError",
     "NavigationGenerator",
     "NavigationReport",
-    "ScanDir",
-    "classify_reserved",
 ]

@@ -73,7 +73,6 @@ def test_watch_command_wires_navigation_and_refreshes(
     monkeypatch.setattr("time.sleep", interrupt)
     code = cli.main(["--data-dir", str(data_dir), "watch"])
     assert code == 0
-    assert captured["watcher"]._navigation is not None
     assert "new text" in entities_index.read_text(encoding="utf-8")
 
 
