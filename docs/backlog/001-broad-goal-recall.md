@@ -25,15 +25,20 @@ A [file-search diagnostic](../research/2026-09-20-task-evidence-file-search-prob
 combined FTS5 with a simple scan of the same page text and reached 8/24
 complete tasks. That gain is too small to justify a new default search tool.
 
-The next slice is a task evidence workflow that searches for distinct facts,
-combines and deduplicates source-linked pages within one context budget, and
-states which questions remain unanswered. A bounded file-text fallback is a
-candidate only if it adds material coverage on fresh tasks while preserving
-project, archive, and time filters. Freeze fresh labels before tuning, then
-measure complete evidence sets, fact recall, rendered tokens, calls, latency,
-leakage, and completed code against the existing baselines. The first model
-comparison's five-minute and $5 approval has been spent; any new model run
-needs its own ceiling.
+The [recovery comparison](../research/2026-09-20-task-evidence-recovery.md)
+froze eight fresh tasks and tried revised model-written questions. The candidate
+completed 8/24 prior tasks and 5/8 fresh tasks, below linked summaries on
+both sets and below broad recall on the fresh set. The second five-minute and
+$5 approval has been spent. The current hook and installed guidance remain
+unchanged.
+
+The next candidate should change how the agent gathers and assembles distinct
+facts, not merely reword its question prompt. It should combine source-linked
+pages within one context budget and state which information needs remain
+unanswered. A bounded file-text fallback belongs in the product only if it
+adds material coverage on a fresh corpus while preserving project, archive,
+and time filters. Measure complete evidence sets, fact recall, rendered tokens,
+calls, latency, leakage, and completed coding work before promotion.
 
 ## Phased build decision
 
@@ -53,7 +58,8 @@ needs its own ceiling.
    memory, and apply the task-evidence spec's recall, cost, latency, scope, and
    safety gates. Update installed guidance only if every gate passes.
 
-The evaluator's cache-token and cost-limit corrections and opt-in automatic
-retention of sanitized per-task traces are implemented on the
-`feat/task-evidence-continuity` branch. Fresh frozen task labels, task-directed
-retrieval, and promotion checks remain open.
+The evaluator's cache-token and cost-limit corrections, automatic sanitized
+task traces, and reusable fresh-corpus comparison are implemented on the
+`feat/task-evidence-recovery` branch. Task evidence assembly, a larger fresh
+validation set, completed-code and poisoned-memory checks, and promotion remain
+open. Another model-backed comparison requires a new time and spend ceiling.

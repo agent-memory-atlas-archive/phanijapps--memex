@@ -31,10 +31,10 @@ milestone = "Evidence-aware retrieval"
 
 ["ini-001".work]
 queue   = [
-  { path = "docs/specs/task-evidence-recall/spec.md", kind = "spec", source = { mode = "repo-origin", parent = "docs/product/briefs/intent-continuity.md" }, summary = "Evaluate and guide focused task recall using existing Memex operations", needs = [] },
   { path = "docs/specs/project-aware-injection/spec.md", kind = "spec", source = { mode = "repo-origin", parent = "docs/product/briefs/intent-continuity.md" }, summary = "Measure session-start relevance and conditionally select project-aware memories", needs = [] },
 ]
 active  = [
+  { path = "docs/specs/task-evidence-recall/spec.md", kind = "spec", source = { mode = "repo-origin", parent = "docs/product/briefs/intent-continuity.md" }, summary = "Evaluate and guide focused task recall using existing Memex operations", needs = [] },
   { path = "docs/specs/quality-gated-retrieval/spec.md", kind = "spec", source = { mode = "repo-origin", parent = "docs/product/briefs/memory-retrieval-and-evidence.md" }, summary = "Select and ship one lexical ranker that improves hard-query accuracy and context cost within strict latency gates", needs = [] },
 ]
 shipped = [

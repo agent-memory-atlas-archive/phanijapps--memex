@@ -68,6 +68,47 @@
   seconds. The additional retry regression test passed. Ruff, mypy, and strict
   MkDocs passed.
 
+## T2 recovery limit and disposition
+
+- On 2026-09-20, the delivery owner approved **one new held-out comparison**
+  with a five-minute wall-time ceiling and $5 maximum model spend. This is a
+  new allowance after the first run was spent. The runner must enforce both
+  limits across the whole comparison, including retries; no additional model
+  run is authorized by this entry.
+- Resolve here: repair the active spec's stale `workspace.toml` membership,
+  freeze a fresh task corpus before question tuning, implement the
+  label-blind comparison, and assess whether bounded evidence assembly is
+  needed. Surface later only a
+  promotion decision whose remaining model or coding checks exceed the
+  approved ceiling. No generic ranker or default hook change is justified by
+  the one-task gain from the file-text diagnostic.
+- The recovery sequence froze eight new goals, 48 cards, and eight linked
+  summaries before the model comparison. The revised question prompt was also
+  frozen before scoring. The first attempt stopped after three plans on
+  malformed question JSON. A format-only diagnostic returned valid JSON. The
+  completed continuation made 32 plans under a reduced 230-second and $4.9992
+  cap; all attempts together took 174.29 seconds and a conservative $0.00254235
+  catalog equivalent. The two launches did not have one durable budget counter.
+- The revised candidate completed 8/24 prior tasks and 5/8 fresh tasks. Broad
+  recall completed 7/24 and 6/8; linked summaries completed 11/24 and 8/8.
+  The candidate failed both promotion margins with no archived or other-project
+  hits. The paired scores and sanitized task traces are in
+  `docs/research/2026-09-20-task-evidence-recovery.md`. The planned bounded
+  evidence assembler is not needed for this failed question candidate and was
+  not added. Completed-code and poisoned-memory agent checks remain open; no
+  product recall or installed guidance changed.
+- Review found that a retry could reset the comparison allowance and that
+  candidate-only traces could not substantiate the baseline scores. The
+  recovery runner now persists one cumulative wall/spend ledger, reserves the
+  remaining allowance before work, and fails closed after an interrupted or
+  unmetered attempt. Sanitized task-level comparator traces for both cohorts
+  were regenerated offline from the frozen fixtures. These safeguards are
+  prospective; the completed comparison used manual cumulative accounting.
+- 2026-09-20: The follow-up runner and trace changes passed 737 tests with one
+  skip and 90.24% coverage in 324.22 seconds. Ruff, mypy, strict MkDocs, and
+  spec-status lint passed. The historical approval is recorded as closed in a
+  retrospective budget file; no additional model call was made for these fixes.
+
 ## T3 documentation check
 
 - 2026-09-20: With `MEMEX_DATA_DIR` set to a fresh `/tmp/memex-guide-*`

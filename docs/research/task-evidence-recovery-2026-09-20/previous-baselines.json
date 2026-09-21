@@ -1,0 +1,1883 @@
+{
+  "source_revision": "0f7813d0c4b1e3a6b2ddb46260ae6043aa2bc0cb",
+  "strategies": {
+    "current_injection": [
+      {
+        "task": "Claude lifecycle provenance",
+        "complete": false,
+        "hits": [
+          "scope-claude-code-hooks-in-settingsjson-sessionstart-and-userpro",
+          "safety-capture-and-distillation-can-be-one-step-any-harness-hook",
+          "task-evidence-asks-focused-questions-within-one-context-budget",
+          "mcp-installs-register-the-mcp-server-where-the-harness-supports-",
+          "harness-store-a-session-transcript-and-memex-links-it-to-an"
+        ],
+        "missing": [
+          "harness-harness-adapters-call-memex-hook-transcript-with-the-har",
+          "mcp-ingestion-writes-transcriptsyyyy-mm-ddsess-abcjsonl-metajson"
+        ],
+        "calls": 1,
+        "rendered_tokens": 640,
+        "latency_ms": 4.760726005770266,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Scoped architecture recall",
+        "complete": false,
+        "hits": [
+          "gates-architecture-documents-have-three-roles-overviewmd-is-desc",
+          "scope-at-task-start-run-memex-hook-session-start-and-treat",
+          "ops-supported-legacy-workspace-entries-remain-visible-but-non-di",
+          "ops-bundled-fixes-must-be-listed-under-bundled-fixes-and-fail",
+          "harness-repository-content-cannot-enable-capture-or-injection-in"
+        ],
+        "missing": [
+          "scope-the-durable-layout-separates-global-pages-at-docsglobaltyp",
+          "storage-memex-is-both-the-public-python-api-and-the-composition"
+        ],
+        "calls": 1,
+        "rendered_tokens": 637,
+        "latency_ms": 4.456065988051705,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "SQLite corruption recovery",
+        "complete": false,
+        "hits": [
+          "scope-at-task-start-run-memex-hook-session-start-and-treat",
+          "mcp-codex-no-native-injection-point-so-an-agentsmd-memory-contra",
+          "storage-the-filesystem-under-memex-data-dir-or-memex-is-the",
+          "storage-production-recall-uses-the-semantic-and-fallback-fts5-ra",
+          "mcp-local-sqlite-fts5-over-slug-title-body-and-tags-recall"
+        ],
+        "missing": [
+          "storage-the-page-write-justifies-every-index-mutation-a-failed-o",
+          "storage-the-index-is-disposable-memdb-mirrors-the-pages-for-fast"
+        ],
+        "calls": 1,
+        "rendered_tokens": 609,
+        "latency_ms": 3.0224780057324097,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "MCP surface review",
+        "complete": false,
+        "hits": [
+          "docs-legacy-id-named-project-folders-remain-readable-and-rebuild",
+          "mcp-installs-register-the-mcp-server-where-the-harness-supports-",
+          "mcp-from-the-project-where-it-was-installed-remove-one-adapter",
+          "harness-harness-adapters-call-memex-hook-transcript-with-the-har",
+          "ops-supported-legacy-workspace-entries-remain-visible-but-non-di"
+        ],
+        "missing": [
+          "mcp-mcp-tools-alone-depend-on-the-model-choosing-to-call",
+          "ops-memex-write-memex-recall-memex-consolidate-memex-forget-meme",
+          "storage-memex-is-both-the-public-python-api-and-the-composition"
+        ],
+        "calls": 1,
+        "rendered_tokens": 639,
+        "latency_ms": 3.8389649998862296,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Safe session distillation",
+        "complete": false,
+        "hits": [
+          "safety-capture-and-distillation-can-be-one-step-any-harness-hook",
+          "scope-the-memories-view-shows-20-newest-first-cards-per-page",
+          "ops-agents-forget-your-stack-rules-and-past-decisions-memex-keep",
+          "mcp-codex-no-native-injection-point-so-an-agentsmd-memory-contra",
+          "safety-audience-internal-contributors-agents-working-on-the-code"
+        ],
+        "missing": [
+          "storage-consolidation-is-the-only-operation-that-needs-an-llm-wi",
+          "harness-every-write-boundary-cli-mcp-transcript-ingest-consolida"
+        ],
+        "calls": 1,
+        "rendered_tokens": 639,
+        "latency_ms": 5.223503001616336,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Prompt injection budget",
+        "complete": true,
+        "hits": [
+          "scope-at-task-start-run-memex-hook-session-start-and-treat",
+          "task-evidence-report-scores-paired-baselines-and-costs",
+          "task-evidence-asks-focused-questions-within-one-context-budget",
+          "storage-1-bm25retriever-reduces-untrusted-query-text-to-safe-alp",
+          "harness-recall-and-hook-injection-pack-to-a-token-budget-max"
+        ],
+        "missing": [],
+        "calls": 1,
+        "rendered_tokens": 597,
+        "latency_ms": 3.117378000752069,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Task evidence assembly",
+        "complete": false,
+        "hits": [
+          "task-evidence-asks-focused-questions-within-one-context-budget",
+          "scope-at-task-start-run-memex-hook-session-start-and-treat",
+          "mcp-codex-no-native-injection-point-so-an-agentsmd-memory-contra",
+          "task-evidence-promotion-compares-broad-and-linked-baselines",
+          "task-evidence-report-scores-paired-baselines-and-costs"
+        ],
+        "missing": [
+          "task-evidence-duplicate-hits-appear-once-with-source-paths"
+        ],
+        "calls": 1,
+        "rendered_tokens": 594,
+        "latency_ms": 4.036497994093224,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Thin adapter change",
+        "complete": false,
+        "hits": [
+          "storage-change-a-page-field-in-the-domain-model-strict-front",
+          "harness-the-cli-has-two-deliberate-infrastructure-facing-seams-h",
+          "mcp-from-the-project-where-it-was-installed-remove-one-adapter",
+          "mcp-installing-claude-codex-or-pi-also-provisions-memextoml-abse",
+          "harness-harness-adapters-call-memex-hook-transcript-with-the-har"
+        ],
+        "missing": [
+          "storage-memex-is-both-the-public-python-api-and-the-composition",
+          "storage-1-an-adapter-creates-a-validated-writeinput-2-the-facade"
+        ],
+        "calls": 1,
+        "rendered_tokens": 666,
+        "latency_ms": 4.922795997117646,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Archived memory confusion",
+        "complete": false,
+        "hits": [
+          "task-evidence-report-scores-paired-baselines-and-costs",
+          "task-evidence-asks-focused-questions-within-one-context-budget",
+          "storage-1-bm25retriever-reduces-untrusted-query-text-to-safe-alp",
+          "harness-recall-and-hook-injection-pack-to-a-token-budget-max",
+          "mcp-codex-no-native-injection-point-so-an-agentsmd-memory-contra"
+        ],
+        "missing": [
+          "mcp-pages-carry-status-active-pending-superseded-archived-recall",
+          "scope-project-front-matter-is-opaque-identity-authority"
+        ],
+        "calls": 1,
+        "rendered_tokens": 631,
+        "latency_ms": 4.234998996253125,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Verify gate wiring",
+        "complete": false,
+        "hits": [
+          "mcp-mcp-tools-alone-depend-on-the-model-choosing-to-call",
+          "gates-always-checked-every-page-parses-the-index-matches-content",
+          "harness-memex-is-an-installable-python-package-and-cli-it-has",
+          "storage-memex-verify-checks-page-parsing-index-freshness-links-a",
+          "harness-store-a-session-transcript-and-memex-links-it-to-an"
+        ],
+        "missing": [
+          "docs-the-normal-gates-are-uv-run-ruff-check-uv-run"
+        ],
+        "calls": 1,
+        "rendered_tokens": 629,
+        "latency_ms": 3.6111549998167902,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Harness installer restraint",
+        "complete": false,
+        "hits": [
+          "harness-repository-content-cannot-enable-capture-or-injection-in",
+          "scope-the-memories-view-shows-20-newest-first-cards-per-page",
+          "scope-each-pack-declares-its-install-scope-repo-project-local-us",
+          "storage-the-dashboard-keeps-vizpy-as-the-public-local-server-sea",
+          "mcp-installing-claude-codex-or-pi-also-provisions-memextoml-abse"
+        ],
+        "missing": [
+          "harness-run-memex-install-without-a-name-to-choose-a-harness",
+          "mcp-installs-register-the-mcp-server-where-the-harness-supports-"
+        ],
+        "calls": 1,
+        "rendered_tokens": 642,
+        "latency_ms": 4.143946003750898,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Copilot transport wording",
+        "complete": false,
+        "hits": [
+          "scope-at-task-start-run-memex-hook-session-start-and-treat",
+          "safety-capture-and-distillation-can-be-one-step-any-harness-hook",
+          "harness-run-memex-install-without-a-name-to-choose-a-harness",
+          "scope-local-recall-selects-one-opaque-project-id",
+          "harness-repository-content-cannot-enable-capture-or-injection-in"
+        ],
+        "missing": [
+          "gates-github-copilot-hosted-no-hooks-no-local-stdio-the-determin",
+          "mcp-installs-register-the-mcp-server-where-the-harness-supports-"
+        ],
+        "calls": 1,
+        "rendered_tokens": 615,
+        "latency_ms": 4.556825995678082,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Dashboard read-only audit",
+        "complete": false,
+        "hits": [
+          "storage-the-memory-store-is-the-filesystem-every-memory-is-a",
+          "scope-the-memories-view-shows-20-newest-first-cards-per-page",
+          "ops-known-limitation-the-procedure-has-been-validated-by-prose-w",
+          "harness-memex-viz-starts-a-localhost-only-read-only-dashboard-it",
+          "safety-a-plan-that-stayed-substantively-editable-after-approval-"
+        ],
+        "missing": [
+          "storage-the-dashboard-keeps-vizpy-as-the-public-local-server-sea"
+        ],
+        "calls": 1,
+        "rendered_tokens": 651,
+        "latency_ms": 3.52442599250935,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Spec closeout report",
+        "complete": false,
+        "hits": [
+          "safety-there-are-therefore-two-stages-not-one-at-plan-approval",
+          "docs-carve-out-meaning-preserving-mechanical-rewrites-are-allowe",
+          "docs-not-constrained-by-it-is-the-better-semantic-fit-it",
+          "docs-the-spec-end-is-deliberately-one-way-adrs-do-not",
+          "safety-shipped-specs-above-means-the-whole-directory-specmd-and-"
+        ],
+        "missing": [
+          "docs-the-most-important-property-of-this-scheme-is-that-the"
+        ],
+        "calls": 1,
+        "rendered_tokens": 585,
+        "latency_ms": 3.141403998597525,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Recall compatibility check",
+        "complete": false,
+        "hits": [
+          "storage-change-a-page-field-in-the-domain-model-strict-front",
+          "mcp-recall-arguments-and-forget-result-stay-in-typed-tool-contra",
+          "docs-not-constrained-by-it-is-the-better-semantic-fit-it",
+          "safety-optional-experimental-status-an-rfc-that-proposes-running",
+          "task-evidence-asks-focused-questions-within-one-context-budget"
+        ],
+        "missing": [
+          "recallhit-exposes-slug-path-title-body-score-snippet-and-metadat",
+          "recallresult-returns-query-hits-total-indexed-and-search-engine"
+        ],
+        "calls": 1,
+        "rendered_tokens": 613,
+        "latency_ms": 4.886134993284941,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Token packing behavior",
+        "complete": true,
+        "hits": [
+          "harness-recall-and-hook-injection-pack-to-a-token-budget-max",
+          "gates-a-later-decision-often-reverses-part-of-an-earlier-one",
+          "docs-not-constrained-by-it-is-the-better-semantic-fit-it",
+          "task-evidence-duplicate-hits-appear-once-with-source-paths",
+          "safety-decision-history-adrs-current-product-state-product-roles"
+        ],
+        "missing": [],
+        "calls": 1,
+        "rendered_tokens": 585,
+        "latency_ms": 2.8366850019665435,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Transcript noise filter",
+        "complete": false,
+        "hits": [
+          "scope-at-task-start-run-memex-hook-session-start-and-treat",
+          "harness-repository-content-cannot-enable-capture-or-injection-in",
+          "mcp-the-first-transcript-line-is-an-optional-session-header-type",
+          "safety-logs-never-contain-memory-contents-the-audit-trail-record",
+          "scope-claude-code-hooks-in-settingsjson-sessionstart-and-userpro"
+        ],
+        "missing": [
+          "harness-every-write-boundary-cli-mcp-transcript-ingest-consolida",
+          "harness-harness-adapters-call-memex-hook-transcript-with-the-har"
+        ],
+        "calls": 1,
+        "rendered_tokens": 639,
+        "latency_ms": 2.9596669919556007,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Backup restore boundary",
+        "complete": false,
+        "hits": [
+          "safety-there-are-therefore-two-stages-not-one-at-plan-approval",
+          "safety-shipped-specs-above-means-the-whole-directory-specmd-and-",
+          "storage-memex-verify-checks-page-parsing-index-freshness-links-a",
+          "gates-a-later-decision-often-reverses-part-of-an-earlier-one",
+          "storage-the-dashboard-keeps-vizpy-as-the-public-local-server-sea"
+        ],
+        "missing": [
+          "ops-archives-are-validated-against-path-traversal-and-symlinks-b",
+          "ops-memex-write-memex-recall-memex-consolidate-memex-forget-meme"
+        ],
+        "calls": 1,
+        "rendered_tokens": 616,
+        "latency_ms": 4.648811009246856,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Expired memory handling",
+        "complete": false,
+        "hits": [
+          "gates-lifecycle-living-but-rarely-changed-mission-scope-and-foun",
+          "ops-supported-legacy-workspace-entries-remain-visible-but-non-di",
+          "mcp-temporal-validity-every-node-optionally-carries-expires-at-v",
+          "docs-the-normal-gates-are-uv-run-ruff-check-uv-run",
+          "mcp-local-sqlite-fts5-over-slug-title-body-and-tags-recall"
+        ],
+        "missing": [
+          "mcp-pages-carry-status-active-pending-superseded-archived-recall",
+          "storage-production-recall-uses-the-semantic-and-fallback-fts5-ra"
+        ],
+        "calls": 1,
+        "rendered_tokens": 630,
+        "latency_ms": 2.8975560126127675,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Hard forget safety",
+        "complete": true,
+        "hits": [
+          "forget-hard-removes-scoped-page-index-row-and-namespace-links",
+          "ops-when-a-page-carries-a-last-verified-against-commit-marker",
+          "forget-hard-deletes-page-index-row-and-links",
+          "mcp-pages-carry-status-active-pending-superseded-archived-recall",
+          "storage-the-page-write-justifies-every-index-mutation-a-failed-o"
+        ],
+        "missing": [],
+        "calls": 1,
+        "rendered_tokens": 623,
+        "latency_ms": 3.652963991044089,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Provenance investigation",
+        "complete": false,
+        "hits": [
+          "harness-store-a-session-transcript-and-memex-links-it-to-an",
+          "task-evidence-asks-focused-questions-within-one-context-budget",
+          "ops-agents-forget-your-stack-rules-and-past-decisions-memex-keep",
+          "ops-markdown-is-the-memory-each-page-under-memexdocs-is-readable",
+          "scope-at-task-start-run-memex-hook-session-start-and-treat"
+        ],
+        "missing": [
+          "mcp-ingestion-writes-transcriptsyyyy-mm-ddsess-abcjsonl-metajson",
+          "harness-harness-adapters-call-memex-hook-transcript-with-the-har"
+        ],
+        "calls": 1,
+        "rendered_tokens": 625,
+        "latency_ms": 4.334468001616187,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Project identity explanation",
+        "complete": true,
+        "hits": [
+          "scope-local-recall-selects-one-opaque-project-id",
+          "scope-the-durable-layout-separates-global-pages-at-docsglobaltyp",
+          "docs-legacy-id-named-project-folders-remain-readable-and-rebuild",
+          "scope-project-front-matter-is-opaque-identity-authority",
+          "scope-the-memories-view-shows-20-newest-first-cards-per-page"
+        ],
+        "missing": [],
+        "calls": 1,
+        "rendered_tokens": 660,
+        "latency_ms": 3.6934620002284646,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Evaluation promotion decision",
+        "complete": true,
+        "hits": [
+          "task-evidence-promotion-compares-broad-and-linked-baselines",
+          "task-evidence-report-scores-paired-baselines-and-costs",
+          "safety-capture-and-distillation-can-be-one-step-any-harness-hook",
+          "task-evidence-asks-focused-questions-within-one-context-budget",
+          "docs-the-most-important-property-of-this-scheme-is-that-the"
+        ],
+        "missing": [],
+        "calls": 1,
+        "rendered_tokens": 617,
+        "latency_ms": 4.440145014086738,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Task report privacy",
+        "complete": false,
+        "hits": [
+          "scope-the-memories-view-shows-20-newest-first-cards-per-page",
+          "ops-workspace-prose-stays-terse-and-present-tense-a-generated-or",
+          "task-evidence-duplicate-hits-appear-once-with-source-paths",
+          "harness-run-memex-install-without-a-name-to-choose-a-harness",
+          "task-evidence-asks-focused-questions-within-one-context-budget"
+        ],
+        "missing": [
+          "safety-logs-never-contain-memory-contents-the-audit-trail-record",
+          "safety-retrieval-evaluation-uses-independent-offline-workloads-a",
+          "harness-every-write-boundary-cli-mcp-transcript-ingest-consolida"
+        ],
+        "calls": 1,
+        "rendered_tokens": 606,
+        "latency_ms": 5.774775010650046,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      }
+    ],
+    "broad_query": [
+      {
+        "task": "Claude lifecycle provenance",
+        "complete": false,
+        "hits": [
+          "scope-claude-code-hooks-in-settingsjson-sessionstart-and-userpro",
+          "safety-capture-and-distillation-can-be-one-step-any-harness-hook",
+          "task-evidence-asks-focused-questions-within-one-context-budget",
+          "mcp-installs-register-the-mcp-server-where-the-harness-supports-",
+          "harness-store-a-session-transcript-and-memex-links-it-to-an",
+          "mcp-installing-claude-codex-or-pi-also-provisions-memextoml-abse",
+          "ops-markdown-is-the-memory-each-page-under-memexdocs-is-readable",
+          "ops-agents-forget-your-stack-rules-and-past-decisions-memex-keep"
+        ],
+        "missing": [
+          "harness-harness-adapters-call-memex-hook-transcript-with-the-har",
+          "mcp-ingestion-writes-transcriptsyyyy-mm-ddsess-abcjsonl-metajson"
+        ],
+        "calls": 1,
+        "rendered_tokens": 712,
+        "latency_ms": 5.206293004448526,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Scoped architecture recall",
+        "complete": false,
+        "hits": [
+          "gates-architecture-documents-have-three-roles-overviewmd-is-desc",
+          "scope-at-task-start-run-memex-hook-session-start-and-treat",
+          "ops-supported-legacy-workspace-entries-remain-visible-but-non-di",
+          "ops-bundled-fixes-must-be-listed-under-bundled-fixes-and-fail",
+          "harness-repository-content-cannot-enable-capture-or-injection-in",
+          "mcp-installs-register-the-mcp-server-where-the-harness-supports-",
+          "gates-architecturemd-when-present-is-the-concise-descriptive-sys",
+          "ops-markdown-is-the-memory-each-page-under-memexdocs-is-readable"
+        ],
+        "missing": [
+          "scope-the-durable-layout-separates-global-pages-at-docsglobaltyp",
+          "storage-memex-is-both-the-public-python-api-and-the-composition"
+        ],
+        "calls": 1,
+        "rendered_tokens": 692,
+        "latency_ms": 4.82714299869258,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "SQLite corruption recovery",
+        "complete": false,
+        "hits": [
+          "scope-at-task-start-run-memex-hook-session-start-and-treat",
+          "mcp-codex-no-native-injection-point-so-an-agentsmd-memory-contra",
+          "storage-the-filesystem-under-memex-data-dir-or-memex-is-the",
+          "storage-production-recall-uses-the-semantic-and-fallback-fts5-ra",
+          "mcp-local-sqlite-fts5-over-slug-title-body-and-tags-recall",
+          "gates-a-later-decision-often-reverses-part-of-an-earlier-one",
+          "harness-run-memex-install-without-a-name-to-choose-a-harness",
+          "gates-github-copilot-hosted-no-hooks-no-local-stdio-the-determin"
+        ],
+        "missing": [
+          "storage-the-page-write-justifies-every-index-mutation-a-failed-o",
+          "storage-the-index-is-disposable-memdb-mirrors-the-pages-for-fast"
+        ],
+        "calls": 1,
+        "rendered_tokens": 660,
+        "latency_ms": 3.7011499953223392,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "MCP surface review",
+        "complete": false,
+        "hits": [
+          "docs-legacy-id-named-project-folders-remain-readable-and-rebuild",
+          "mcp-installs-register-the-mcp-server-where-the-harness-supports-",
+          "mcp-from-the-project-where-it-was-installed-remove-one-adapter",
+          "harness-harness-adapters-call-memex-hook-transcript-with-the-har",
+          "ops-supported-legacy-workspace-entries-remain-visible-but-non-di",
+          "scope-the-memories-view-shows-20-newest-first-cards-per-page",
+          "ops-memex-write-memex-recall-memex-consolidate-memex-forget-meme",
+          "harness-concepts-concepts-getting-started-getting-started-operat"
+        ],
+        "missing": [
+          "mcp-mcp-tools-alone-depend-on-the-model-choosing-to-call",
+          "storage-memex-is-both-the-public-python-api-and-the-composition"
+        ],
+        "calls": 1,
+        "rendered_tokens": 723,
+        "latency_ms": 5.192675002035685,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Safe session distillation",
+        "complete": false,
+        "hits": [
+          "safety-capture-and-distillation-can-be-one-step-any-harness-hook",
+          "scope-the-memories-view-shows-20-newest-first-cards-per-page",
+          "ops-agents-forget-your-stack-rules-and-past-decisions-memex-keep",
+          "mcp-codex-no-native-injection-point-so-an-agentsmd-memory-contra",
+          "safety-audience-internal-contributors-agents-working-on-the-code",
+          "scope-at-task-start-run-memex-hook-session-start-and-treat",
+          "harness-store-a-session-transcript-and-memex-links-it-to-an",
+          "mcp-pi-the-reference-adapter-a-typescript-extension-injects-repo"
+        ],
+        "missing": [
+          "storage-consolidation-is-the-only-operation-that-needs-an-llm-wi",
+          "harness-every-write-boundary-cli-mcp-transcript-ingest-consolida"
+        ],
+        "calls": 1,
+        "rendered_tokens": 679,
+        "latency_ms": 4.388856003060937,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Prompt injection budget",
+        "complete": true,
+        "hits": [
+          "scope-at-task-start-run-memex-hook-session-start-and-treat",
+          "task-evidence-report-scores-paired-baselines-and-costs",
+          "task-evidence-asks-focused-questions-within-one-context-budget",
+          "storage-1-bm25retriever-reduces-untrusted-query-text-to-safe-alp",
+          "harness-recall-and-hook-injection-pack-to-a-token-budget-max",
+          "scope-the-memories-view-shows-20-newest-first-cards-per-page",
+          "mcp-pi-the-reference-adapter-a-typescript-extension-injects-repo",
+          "docs-carve-out-meaning-preserving-mechanical-rewrites-are-allowe"
+        ],
+        "missing": [],
+        "calls": 1,
+        "rendered_tokens": 650,
+        "latency_ms": 5.080701987026259,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Task evidence assembly",
+        "complete": true,
+        "hits": [
+          "task-evidence-asks-focused-questions-within-one-context-budget",
+          "scope-at-task-start-run-memex-hook-session-start-and-treat",
+          "mcp-codex-no-native-injection-point-so-an-agentsmd-memory-contra",
+          "task-evidence-promotion-compares-broad-and-linked-baselines",
+          "task-evidence-report-scores-paired-baselines-and-costs",
+          "task-evidence-duplicate-hits-appear-once-with-source-paths",
+          "ops-workspace-prose-stays-terse-and-present-tense-a-generated-or",
+          "docs-the-most-important-property-of-this-scheme-is-that-the"
+        ],
+        "missing": [],
+        "calls": 1,
+        "rendered_tokens": 631,
+        "latency_ms": 4.64663200546056,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Thin adapter change",
+        "complete": false,
+        "hits": [
+          "storage-change-a-page-field-in-the-domain-model-strict-front",
+          "harness-the-cli-has-two-deliberate-infrastructure-facing-seams-h",
+          "mcp-from-the-project-where-it-was-installed-remove-one-adapter",
+          "mcp-installing-claude-codex-or-pi-also-provisions-memextoml-abse",
+          "harness-harness-adapters-call-memex-hook-transcript-with-the-har",
+          "docs-carve-out-meaning-preserving-mechanical-rewrites-are-allowe",
+          "mcp-recall-arguments-and-forget-result-stay-in-typed-tool-contra",
+          "mcp-codex-no-native-injection-point-so-an-agentsmd-memory-contra"
+        ],
+        "missing": [
+          "storage-memex-is-both-the-public-python-api-and-the-composition",
+          "storage-1-an-adapter-creates-a-validated-writeinput-2-the-facade"
+        ],
+        "calls": 1,
+        "rendered_tokens": 730,
+        "latency_ms": 5.633376000332646,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Archived memory confusion",
+        "complete": false,
+        "hits": [
+          "task-evidence-report-scores-paired-baselines-and-costs",
+          "task-evidence-asks-focused-questions-within-one-context-budget",
+          "storage-1-bm25retriever-reduces-untrusted-query-text-to-safe-alp",
+          "harness-recall-and-hook-injection-pack-to-a-token-budget-max",
+          "mcp-codex-no-native-injection-point-so-an-agentsmd-memory-contra",
+          "task-evidence-duplicate-hits-appear-once-with-source-paths",
+          "scope-at-task-start-run-memex-hook-session-start-and-treat",
+          "gates-always-checked-every-page-parses-the-index-matches-content"
+        ],
+        "missing": [
+          "mcp-pages-carry-status-active-pending-superseded-archived-recall",
+          "scope-project-front-matter-is-opaque-identity-authority"
+        ],
+        "calls": 1,
+        "rendered_tokens": 681,
+        "latency_ms": 7.855335003114305,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Verify gate wiring",
+        "complete": false,
+        "hits": [
+          "mcp-mcp-tools-alone-depend-on-the-model-choosing-to-call",
+          "gates-always-checked-every-page-parses-the-index-matches-content",
+          "harness-memex-is-an-installable-python-package-and-cli-it-has",
+          "storage-memex-verify-checks-page-parsing-index-freshness-links-a",
+          "harness-store-a-session-transcript-and-memex-links-it-to-an",
+          "harness-concepts-concepts-getting-started-getting-started-operat",
+          "ops-when-a-page-carries-a-last-verified-against-commit-marker",
+          "safety-on-governance-docs-small-and-medium-projects-dont-need-a"
+        ],
+        "missing": [
+          "docs-the-normal-gates-are-uv-run-ruff-check-uv-run"
+        ],
+        "calls": 1,
+        "rendered_tokens": 707,
+        "latency_ms": 4.359313010354526,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Harness installer restraint",
+        "complete": false,
+        "hits": [
+          "harness-repository-content-cannot-enable-capture-or-injection-in",
+          "scope-the-memories-view-shows-20-newest-first-cards-per-page",
+          "scope-each-pack-declares-its-install-scope-repo-project-local-us",
+          "storage-the-dashboard-keeps-vizpy-as-the-public-local-server-sea",
+          "mcp-installing-claude-codex-or-pi-also-provisions-memextoml-abse",
+          "mcp-from-the-project-where-it-was-installed-remove-one-adapter",
+          "mcp-installs-register-the-mcp-server-where-the-harness-supports-",
+          "harness-memex-is-an-installable-python-package-and-cli-it-has"
+        ],
+        "missing": [
+          "harness-run-memex-install-without-a-name-to-choose-a-harness"
+        ],
+        "calls": 1,
+        "rendered_tokens": 695,
+        "latency_ms": 3.1029209931148216,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Copilot transport wording",
+        "complete": false,
+        "hits": [
+          "scope-at-task-start-run-memex-hook-session-start-and-treat",
+          "safety-capture-and-distillation-can-be-one-step-any-harness-hook",
+          "harness-run-memex-install-without-a-name-to-choose-a-harness",
+          "scope-local-recall-selects-one-opaque-project-id",
+          "harness-repository-content-cannot-enable-capture-or-injection-in",
+          "storage-consolidation-is-the-only-operation-that-needs-an-llm-wi",
+          "gates-github-copilot-hosted-no-hooks-no-local-stdio-the-determin",
+          "mcp-codex-no-native-injection-point-so-an-agentsmd-memory-contra"
+        ],
+        "missing": [
+          "mcp-installs-register-the-mcp-server-where-the-harness-supports-"
+        ],
+        "calls": 1,
+        "rendered_tokens": 683,
+        "latency_ms": 5.084047996206209,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Dashboard read-only audit",
+        "complete": true,
+        "hits": [
+          "storage-the-memory-store-is-the-filesystem-every-memory-is-a",
+          "scope-the-memories-view-shows-20-newest-first-cards-per-page",
+          "ops-known-limitation-the-procedure-has-been-validated-by-prose-w",
+          "harness-memex-viz-starts-a-localhost-only-read-only-dashboard-it",
+          "safety-a-plan-that-stayed-substantively-editable-after-approval-",
+          "ops-the-broker-agnostic-invariants-below-apply-to-every-credenti",
+          "storage-the-dashboard-keeps-vizpy-as-the-public-local-server-sea",
+          "ops-markdown-is-the-memory-each-page-under-memexdocs-is-readable"
+        ],
+        "missing": [],
+        "calls": 1,
+        "rendered_tokens": 703,
+        "latency_ms": 4.067973990458995,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Spec closeout report",
+        "complete": false,
+        "hits": [
+          "safety-there-are-therefore-two-stages-not-one-at-plan-approval",
+          "docs-carve-out-meaning-preserving-mechanical-rewrites-are-allowe",
+          "docs-not-constrained-by-it-is-the-better-semantic-fit-it",
+          "docs-the-spec-end-is-deliberately-one-way-adrs-do-not",
+          "safety-shipped-specs-above-means-the-whole-directory-specmd-and-",
+          "docs-1-say-in-part-and-say-which-part-a-bare",
+          "safety-a-plan-that-stayed-substantively-editable-after-approval-",
+          "recallhit-exposes-slug-path-title-body-score-snippet-and-metadat"
+        ],
+        "missing": [
+          "docs-the-most-important-property-of-this-scheme-is-that-the"
+        ],
+        "calls": 1,
+        "rendered_tokens": 652,
+        "latency_ms": 4.118765995372087,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Recall compatibility check",
+        "complete": false,
+        "hits": [
+          "storage-change-a-page-field-in-the-domain-model-strict-front",
+          "mcp-recall-arguments-and-forget-result-stay-in-typed-tool-contra",
+          "docs-not-constrained-by-it-is-the-better-semantic-fit-it",
+          "safety-optional-experimental-status-an-rfc-that-proposes-running",
+          "task-evidence-asks-focused-questions-within-one-context-budget",
+          "safety-shipped-specs-above-means-the-whole-directory-specmd-and-",
+          "safety-retrieval-evaluation-uses-independent-offline-workloads-a",
+          "safety-there-are-therefore-two-stages-not-one-at-plan-approval"
+        ],
+        "missing": [
+          "recallhit-exposes-slug-path-title-body-score-snippet-and-metadat",
+          "recallresult-returns-query-hits-total-indexed-and-search-engine"
+        ],
+        "calls": 1,
+        "rendered_tokens": 678,
+        "latency_ms": 4.025786998681724,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Token packing behavior",
+        "complete": true,
+        "hits": [
+          "harness-recall-and-hook-injection-pack-to-a-token-budget-max",
+          "gates-a-later-decision-often-reverses-part-of-an-earlier-one",
+          "docs-not-constrained-by-it-is-the-better-semantic-fit-it",
+          "task-evidence-duplicate-hits-appear-once-with-source-paths",
+          "safety-decision-history-adrs-current-product-state-product-roles",
+          "safety-logs-never-contain-memory-contents-the-audit-trail-record",
+          "storage-the-memory-store-is-the-filesystem-every-memory-is-a",
+          "ops-markdown-is-the-memory-each-page-under-memexdocs-is-readable"
+        ],
+        "missing": [],
+        "calls": 1,
+        "rendered_tokens": 638,
+        "latency_ms": 4.576464998535812,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Transcript noise filter",
+        "complete": false,
+        "hits": [
+          "scope-at-task-start-run-memex-hook-session-start-and-treat",
+          "harness-repository-content-cannot-enable-capture-or-injection-in",
+          "mcp-the-first-transcript-line-is-an-optional-session-header-type",
+          "safety-logs-never-contain-memory-contents-the-audit-trail-record",
+          "scope-claude-code-hooks-in-settingsjson-sessionstart-and-userpro",
+          "safety-capture-and-distillation-can-be-one-step-any-harness-hook",
+          "ops-markdown-is-the-memory-each-page-under-memexdocs-is-readable",
+          "harness-every-write-boundary-cli-mcp-transcript-ingest-consolida"
+        ],
+        "missing": [
+          "harness-harness-adapters-call-memex-hook-transcript-with-the-har"
+        ],
+        "calls": 1,
+        "rendered_tokens": 701,
+        "latency_ms": 4.185705998679623,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Backup restore boundary",
+        "complete": false,
+        "hits": [
+          "safety-there-are-therefore-two-stages-not-one-at-plan-approval",
+          "safety-shipped-specs-above-means-the-whole-directory-specmd-and-",
+          "storage-memex-verify-checks-page-parsing-index-freshness-links-a",
+          "gates-a-later-decision-often-reverses-part-of-an-earlier-one",
+          "storage-the-dashboard-keeps-vizpy-as-the-public-local-server-sea",
+          "docs-legacy-id-named-project-folders-remain-readable-and-rebuild",
+          "ops-known-limitation-the-procedure-has-been-validated-by-prose-w",
+          "gates-architecture-documents-have-three-roles-overviewmd-is-desc"
+        ],
+        "missing": [
+          "ops-archives-are-validated-against-path-traversal-and-symlinks-b",
+          "ops-memex-write-memex-recall-memex-consolidate-memex-forget-meme"
+        ],
+        "calls": 1,
+        "rendered_tokens": 686,
+        "latency_ms": 4.937820995110087,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Expired memory handling",
+        "complete": false,
+        "hits": [
+          "gates-lifecycle-living-but-rarely-changed-mission-scope-and-foun",
+          "ops-supported-legacy-workspace-entries-remain-visible-but-non-di",
+          "mcp-temporal-validity-every-node-optionally-carries-expires-at-v",
+          "docs-the-normal-gates-are-uv-run-ruff-check-uv-run",
+          "mcp-local-sqlite-fts5-over-slug-title-body-and-tags-recall",
+          "gates-a-later-decision-often-reverses-part-of-an-earlier-one",
+          "scope-at-task-start-run-memex-hook-session-start-and-treat",
+          "ops-bundled-fixes-must-be-listed-under-bundled-fixes-and-fail"
+        ],
+        "missing": [
+          "mcp-pages-carry-status-active-pending-superseded-archived-recall",
+          "storage-production-recall-uses-the-semantic-and-fallback-fts5-ra"
+        ],
+        "calls": 1,
+        "rendered_tokens": 655,
+        "latency_ms": 3.370103004272096,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Hard forget safety",
+        "complete": true,
+        "hits": [
+          "forget-hard-removes-scoped-page-index-row-and-namespace-links",
+          "ops-when-a-page-carries-a-last-verified-against-commit-marker",
+          "forget-hard-deletes-page-index-row-and-links",
+          "mcp-pages-carry-status-active-pending-superseded-archived-recall",
+          "storage-the-page-write-justifies-every-index-mutation-a-failed-o",
+          "storage-memex-verify-checks-page-parsing-index-freshness-links-a",
+          "storage-links-reference-other-pages-in-any-body-with-slug-links",
+          "gates-always-checked-every-page-parses-the-index-matches-content"
+        ],
+        "missing": [],
+        "calls": 1,
+        "rendered_tokens": 693,
+        "latency_ms": 4.785865006851964,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Provenance investigation",
+        "complete": false,
+        "hits": [
+          "harness-store-a-session-transcript-and-memex-links-it-to-an",
+          "task-evidence-asks-focused-questions-within-one-context-budget",
+          "ops-agents-forget-your-stack-rules-and-past-decisions-memex-keep",
+          "ops-markdown-is-the-memory-each-page-under-memexdocs-is-readable",
+          "scope-at-task-start-run-memex-hook-session-start-and-treat",
+          "storage-the-dashboard-keeps-vizpy-as-the-public-local-server-sea",
+          "safety-shipped-specs-above-means-the-whole-directory-specmd-and-",
+          "mcp-codex-no-native-injection-point-so-an-agentsmd-memory-contra"
+        ],
+        "missing": [
+          "mcp-ingestion-writes-transcriptsyyyy-mm-ddsess-abcjsonl-metajson",
+          "harness-harness-adapters-call-memex-hook-transcript-with-the-har"
+        ],
+        "calls": 1,
+        "rendered_tokens": 679,
+        "latency_ms": 3.7236480129649863,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Project identity explanation",
+        "complete": true,
+        "hits": [
+          "scope-local-recall-selects-one-opaque-project-id",
+          "scope-the-durable-layout-separates-global-pages-at-docsglobaltyp",
+          "docs-legacy-id-named-project-folders-remain-readable-and-rebuild",
+          "scope-project-front-matter-is-opaque-identity-authority",
+          "scope-the-memories-view-shows-20-newest-first-cards-per-page",
+          "mcp-the-first-transcript-line-is-an-optional-session-header-type",
+          "harness-harness-adapters-call-memex-hook-transcript-with-the-har",
+          "mcp-from-the-project-where-it-was-installed-remove-one-adapter"
+        ],
+        "missing": [],
+        "calls": 1,
+        "rendered_tokens": 710,
+        "latency_ms": 5.688203003956005,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Evaluation promotion decision",
+        "complete": true,
+        "hits": [
+          "task-evidence-promotion-compares-broad-and-linked-baselines",
+          "task-evidence-report-scores-paired-baselines-and-costs",
+          "safety-capture-and-distillation-can-be-one-step-any-harness-hook",
+          "task-evidence-asks-focused-questions-within-one-context-budget",
+          "docs-the-most-important-property-of-this-scheme-is-that-the",
+          "storage-consolidation-is-the-only-operation-that-needs-an-llm-wi",
+          "storage-memex-verify-checks-page-parsing-index-freshness-links-a",
+          "mcp-codex-no-native-injection-point-so-an-agentsmd-memory-contra"
+        ],
+        "missing": [],
+        "calls": 1,
+        "rendered_tokens": 675,
+        "latency_ms": 4.265445997589268,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Task report privacy",
+        "complete": false,
+        "hits": [
+          "scope-the-memories-view-shows-20-newest-first-cards-per-page",
+          "ops-workspace-prose-stays-terse-and-present-tense-a-generated-or",
+          "task-evidence-duplicate-hits-appear-once-with-source-paths",
+          "harness-run-memex-install-without-a-name-to-choose-a-harness",
+          "task-evidence-asks-focused-questions-within-one-context-budget",
+          "task-evidence-report-scores-paired-baselines-and-costs",
+          "safety-logs-never-contain-memory-contents-the-audit-trail-record",
+          "scope-at-task-start-run-memex-hook-session-start-and-treat"
+        ],
+        "missing": [
+          "safety-retrieval-evaluation-uses-independent-offline-workloads-a",
+          "harness-every-write-boundary-cli-mcp-transcript-ingest-consolida"
+        ],
+        "calls": 1,
+        "rendered_tokens": 649,
+        "latency_ms": 6.103642008383758,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      }
+    ],
+    "human_focused": [
+      {
+        "task": "Claude lifecycle provenance",
+        "complete": true,
+        "hits": [
+          "scope-claude-code-hooks-in-settingsjson-sessionstart-and-userpro",
+          "safety-capture-and-distillation-can-be-one-step-any-harness-hook",
+          "scope-at-task-start-run-memex-hook-session-start-and-treat",
+          "mcp-from-the-project-where-it-was-installed-remove-one-adapter",
+          "harness-harness-adapters-call-memex-hook-transcript-with-the-har",
+          "mcp-ingestion-writes-transcriptsyyyy-mm-ddsess-abcjsonl-metajson",
+          "safety-retrieval-evaluation-uses-independent-offline-workloads-a",
+          "mcp-the-first-transcript-line-is-an-optional-session-header-type"
+        ],
+        "missing": [],
+        "calls": 3,
+        "rendered_tokens": 728,
+        "latency_ms": 8.373775010113604,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Scoped architecture recall",
+        "complete": false,
+        "hits": [
+          "gates-architecture-documents-have-three-roles-overviewmd-is-desc",
+          "safety-shipped-specs-above-means-the-whole-directory-specmd-and-",
+          "mcp-installs-register-the-mcp-server-where-the-harness-supports-",
+          "scope-project-front-matter-is-opaque-identity-authority",
+          "mcp-recall-arguments-and-forget-result-stay-in-typed-tool-contra",
+          "scope-local-recall-selects-one-opaque-project-id",
+          "scope-the-memories-view-shows-20-newest-first-cards-per-page",
+          "mcp-local-sqlite-fts5-over-slug-title-body-and-tags-recall"
+        ],
+        "missing": [
+          "scope-the-durable-layout-separates-global-pages-at-docsglobaltyp",
+          "scope-at-task-start-run-memex-hook-session-start-and-treat",
+          "storage-memex-is-both-the-public-python-api-and-the-composition"
+        ],
+        "calls": 3,
+        "rendered_tokens": 700,
+        "latency_ms": 7.652988992049359,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "SQLite corruption recovery",
+        "complete": false,
+        "hits": [
+          "storage-the-filesystem-under-memex-data-dir-or-memex-is-the",
+          "storage-the-index-is-disposable-memdb-mirrors-the-pages-for-fast",
+          "harness-run-memex-install-without-a-name-to-choose-a-harness",
+          "storage-memex-verify-checks-page-parsing-index-freshness-links-a",
+          "ops-markdown-is-the-memory-each-page-under-memexdocs-is-readable",
+          "gates-always-checked-every-page-parses-the-index-matches-content",
+          "mcp-pages-carry-status-active-pending-superseded-archived-recall"
+        ],
+        "missing": [
+          "storage-the-page-write-justifies-every-index-mutation-a-failed-o"
+        ],
+        "calls": 3,
+        "rendered_tokens": 626,
+        "latency_ms": 6.983080005738884,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "MCP surface review",
+        "complete": true,
+        "hits": [
+          "mcp-mcp-tools-alone-depend-on-the-model-choosing-to-call",
+          "safety-logs-never-contain-memory-contents-the-audit-trail-record",
+          "gates-schema-violations-are-rejected-by-the-server-with-a-field",
+          "ops-memex-write-memex-recall-memex-consolidate-memex-forget-meme",
+          "storage-memex-is-both-the-public-python-api-and-the-composition",
+          "storage-change-a-page-field-in-the-domain-model-strict-front",
+          "storage-memex-verify-checks-page-parsing-index-freshness-links-a",
+          "ops-supported-legacy-workspace-entries-remain-visible-but-non-di"
+        ],
+        "missing": [],
+        "calls": 3,
+        "rendered_tokens": 731,
+        "latency_ms": 8.88496900734026,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Safe session distillation",
+        "complete": false,
+        "hits": [
+          "storage-consolidation-is-the-only-operation-that-needs-an-llm-wi",
+          "storage-1-an-adapter-creates-a-validated-writeinput-2-the-facade",
+          "gates-always-checked-every-page-parses-the-index-matches-content",
+          "mcp-pages-carry-status-active-pending-superseded-archived-recall",
+          "harness-recall-and-hook-injection-pack-to-a-token-budget-max",
+          "scope-the-keys-live-under-metadata-rather-than-at-top-level",
+          "harness-every-write-boundary-cli-mcp-transcript-ingest-consolida",
+          "storage-production-recall-uses-the-semantic-and-fallback-fts5-ra"
+        ],
+        "missing": [
+          "safety-capture-and-distillation-can-be-one-step-any-harness-hook"
+        ],
+        "calls": 3,
+        "rendered_tokens": 699,
+        "latency_ms": 7.871770008932799,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Prompt injection budget",
+        "complete": true,
+        "hits": [
+          "harness-recall-and-hook-injection-pack-to-a-token-budget-max",
+          "storage-1-bm25retriever-reduces-untrusted-query-text-to-safe-alp",
+          "scope-claude-code-hooks-in-settingsjson-sessionstart-and-userpro",
+          "task-evidence-report-scores-paired-baselines-and-costs",
+          "gates-a-later-decision-often-reverses-part-of-an-earlier-one",
+          "safety-decision-history-adrs-current-product-state-product-roles"
+        ],
+        "missing": [],
+        "calls": 3,
+        "rendered_tokens": 501,
+        "latency_ms": 7.235263008624315,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Task evidence assembly",
+        "complete": true,
+        "hits": [
+          "task-evidence-asks-focused-questions-within-one-context-budget",
+          "task-evidence-report-scores-paired-baselines-and-costs",
+          "task-evidence-promotion-compares-broad-and-linked-baselines",
+          "task-evidence-duplicate-hits-appear-once-with-source-paths",
+          "storage-production-recall-uses-the-semantic-and-fallback-fts5-ra",
+          "scope-local-recall-selects-one-opaque-project-id",
+          "mcp-local-sqlite-fts5-over-slug-title-body-and-tags-recall"
+        ],
+        "missing": [],
+        "calls": 3,
+        "rendered_tokens": 613,
+        "latency_ms": 9.303902013925835,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Thin adapter change",
+        "complete": false,
+        "hits": [
+          "storage-change-a-page-field-in-the-domain-model-strict-front",
+          "scope-at-task-start-run-memex-hook-session-start-and-treat",
+          "mcp-installing-claude-codex-or-pi-also-provisions-memextoml-abse",
+          "gates-architecture-documents-have-three-roles-overviewmd-is-desc",
+          "storage-memex-is-both-the-public-python-api-and-the-composition",
+          "ops-supported-legacy-workspace-entries-remain-visible-but-non-di",
+          "ops-bundled-fixes-must-be-listed-under-bundled-fixes-and-fail",
+          "mcp-recall-arguments-and-forget-result-stay-in-typed-tool-contra"
+        ],
+        "missing": [
+          "storage-1-an-adapter-creates-a-validated-writeinput-2-the-facade",
+          "harness-the-cli-has-two-deliberate-infrastructure-facing-seams-h"
+        ],
+        "calls": 3,
+        "rendered_tokens": 696,
+        "latency_ms": 8.065735004493035,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Archived memory confusion",
+        "complete": false,
+        "hits": [
+          "task-evidence-report-scores-paired-baselines-and-costs",
+          "docs-1-say-in-part-and-say-which-part-a-bare",
+          "safety-shipped-specs-above-means-the-whole-directory-specmd-and-",
+          "scope-local-recall-selects-one-opaque-project-id",
+          "scope-the-memories-view-shows-20-newest-first-cards-per-page",
+          "mcp-local-sqlite-fts5-over-slug-title-body-and-tags-recall",
+          "storage-1-bm25retriever-reduces-untrusted-query-text-to-safe-alp",
+          "harness-recall-and-hook-injection-pack-to-a-token-budget-max"
+        ],
+        "missing": [
+          "mcp-pages-carry-status-active-pending-superseded-archived-recall",
+          "scope-project-front-matter-is-opaque-identity-authority"
+        ],
+        "calls": 3,
+        "rendered_tokens": 646,
+        "latency_ms": 8.570770005462691,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Verify gate wiring",
+        "complete": false,
+        "hits": [
+          "storage-memex-verify-checks-page-parsing-index-freshness-links-a",
+          "harness-memex-viz-starts-a-localhost-only-read-only-dashboard-it",
+          "gates-always-checked-every-page-parses-the-index-matches-content",
+          "mcp-pages-carry-status-active-pending-superseded-archived-recall",
+          "harness-repository-content-cannot-enable-capture-or-injection-in",
+          "storage-the-memory-store-is-the-filesystem-every-memory-is-a",
+          "safety-logs-never-contain-memory-contents-the-audit-trail-record"
+        ],
+        "missing": [
+          "docs-the-normal-gates-are-uv-run-ruff-check-uv-run"
+        ],
+        "calls": 3,
+        "rendered_tokens": 624,
+        "latency_ms": 8.09226100682281,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Harness installer restraint",
+        "complete": true,
+        "hits": [
+          "harness-repository-content-cannot-enable-capture-or-injection-in",
+          "harness-run-memex-install-without-a-name-to-choose-a-harness",
+          "mcp-installs-register-the-mcp-server-where-the-harness-supports-",
+          "mcp-from-the-project-where-it-was-installed-remove-one-adapter",
+          "docs-carve-out-meaning-preserving-mechanical-rewrites-are-allowe",
+          "scope-claude-code-hooks-in-settingsjson-sessionstart-and-userpro"
+        ],
+        "missing": [],
+        "calls": 3,
+        "rendered_tokens": 543,
+        "latency_ms": 8.420912010478787,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Copilot transport wording",
+        "complete": true,
+        "hits": [
+          "gates-github-copilot-hosted-no-hooks-no-local-stdio-the-determin",
+          "mcp-local-sqlite-fts5-over-slug-title-body-and-tags-recall",
+          "storage-production-recall-uses-the-semantic-and-fallback-fts5-ra",
+          "mcp-installs-register-the-mcp-server-where-the-harness-supports-",
+          "safety-audience-internal-contributors-agents-working-on-the-code",
+          "task-evidence-asks-focused-questions-within-one-context-budget",
+          "mcp-mcp-tools-alone-depend-on-the-model-choosing-to-call",
+          "safety-capture-and-distillation-can-be-one-step-any-harness-hook"
+        ],
+        "missing": [],
+        "calls": 3,
+        "rendered_tokens": 705,
+        "latency_ms": 8.328636002261192,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Dashboard read-only audit",
+        "complete": false,
+        "hits": [
+          "scope-the-memories-view-shows-20-newest-first-cards-per-page",
+          "storage-the-dashboard-keeps-vizpy-as-the-public-local-server-sea",
+          "storage-the-page-write-justifies-every-index-mutation-a-failed-o",
+          "mcp-local-sqlite-fts5-over-slug-title-body-and-tags-recall",
+          "storage-the-memory-store-is-the-filesystem-every-memory-is-a",
+          "storage-1-an-adapter-creates-a-validated-writeinput-2-the-facade",
+          "ops-markdown-is-the-memory-each-page-under-memexdocs-is-readable"
+        ],
+        "missing": [
+          "harness-memex-viz-starts-a-localhost-only-read-only-dashboard-it"
+        ],
+        "calls": 3,
+        "rendered_tokens": 618,
+        "latency_ms": 7.918692004750483,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Spec closeout report",
+        "complete": true,
+        "hits": [
+          "safety-shipped-specs-above-means-the-whole-directory-specmd-and-",
+          "safety-there-are-therefore-two-stages-not-one-at-plan-approval",
+          "docs-carve-out-meaning-preserving-mechanical-rewrites-are-allowe",
+          "gates-architecture-documents-have-three-roles-overviewmd-is-desc",
+          "mcp-local-sqlite-fts5-over-slug-title-body-and-tags-recall",
+          "docs-the-most-important-property-of-this-scheme-is-that-the",
+          "docs-the-spec-end-is-deliberately-one-way-adrs-do-not"
+        ],
+        "missing": [],
+        "calls": 3,
+        "rendered_tokens": 581,
+        "latency_ms": 9.061179996933788,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Recall compatibility check",
+        "complete": false,
+        "hits": [
+          "mcp-recall-arguments-and-forget-result-stay-in-typed-tool-contra",
+          "gates-schema-violations-are-rejected-by-the-server-with-a-field",
+          "docs-not-constrained-by-it-is-the-better-semantic-fit-it",
+          "recallhit-exposes-slug-path-title-body-score-snippet-and-metadat",
+          "storage-change-a-page-field-in-the-domain-model-strict-front",
+          "harness-run-memex-install-without-a-name-to-choose-a-harness",
+          "docs-carve-out-meaning-preserving-mechanical-rewrites-are-allowe"
+        ],
+        "missing": [
+          "recallresult-returns-query-hits-total-indexed-and-search-engine"
+        ],
+        "calls": 3,
+        "rendered_tokens": 609,
+        "latency_ms": 9.26063301449176,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Token packing behavior",
+        "complete": true,
+        "hits": [
+          "harness-recall-and-hook-injection-pack-to-a-token-budget-max",
+          "storage-1-bm25retriever-reduces-untrusted-query-text-to-safe-alp",
+          "ops-1-if-the-requested-addition-is-not-genuinely-needed-skip",
+          "recallresult-returns-query-hits-total-indexed-and-search-engine"
+        ],
+        "missing": [],
+        "calls": 3,
+        "rendered_tokens": 332,
+        "latency_ms": 5.615551985101774,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Transcript noise filter",
+        "complete": false,
+        "hits": [
+          "harness-every-write-boundary-cli-mcp-transcript-ingest-consolida",
+          "mcp-from-the-project-where-it-was-installed-remove-one-adapter",
+          "safety-capture-and-distillation-can-be-one-step-any-harness-hook",
+          "storage-1-an-adapter-creates-a-validated-writeinput-2-the-facade",
+          "storage-memex-verify-checks-page-parsing-index-freshness-links-a",
+          "storage-consolidation-is-the-only-operation-that-needs-an-llm-wi",
+          "safety-logs-never-contain-memory-contents-the-audit-trail-record",
+          "docs-the-most-important-property-of-this-scheme-is-that-the"
+        ],
+        "missing": [
+          "harness-harness-adapters-call-memex-hook-transcript-with-the-har"
+        ],
+        "calls": 3,
+        "rendered_tokens": 690,
+        "latency_ms": 6.351932010147721,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Backup restore boundary",
+        "complete": false,
+        "hits": [
+          "storage-memex-verify-checks-page-parsing-index-freshness-links-a",
+          "harness-memex-is-an-installable-python-package-and-cli-it-has",
+          "ops-markdown-is-the-memory-each-page-under-memexdocs-is-readable",
+          "ops-archives-are-validated-against-path-traversal-and-symlinks-b",
+          "docs-legacy-id-named-project-folders-remain-readable-and-rebuild",
+          "safety-logs-never-contain-memory-contents-the-audit-trail-record"
+        ],
+        "missing": [
+          "ops-memex-write-memex-recall-memex-consolidate-memex-forget-meme"
+        ],
+        "calls": 3,
+        "rendered_tokens": 543,
+        "latency_ms": 5.63620901084505,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Expired memory handling",
+        "complete": false,
+        "hits": [
+          "mcp-temporal-validity-every-node-optionally-carries-expires-at-v",
+          "mcp-local-sqlite-fts5-over-slug-title-body-and-tags-recall",
+          "gates-lifecycle-living-but-rarely-changed-mission-scope-and-foun",
+          "mcp-pages-carry-status-active-pending-superseded-archived-recall",
+          "storage-1-bm25retriever-reduces-untrusted-query-text-to-safe-alp",
+          "safety-retrieval-evaluation-uses-independent-offline-workloads-a",
+          "recallresult-returns-query-hits-total-indexed-and-search-engine"
+        ],
+        "missing": [
+          "storage-production-recall-uses-the-semantic-and-fallback-fts5-ra"
+        ],
+        "calls": 3,
+        "rendered_tokens": 644,
+        "latency_ms": 6.432417998439632,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Hard forget safety",
+        "complete": true,
+        "hits": [
+          "forget-hard-removes-scoped-page-index-row-and-namespace-links",
+          "forget-hard-deletes-page-index-row-and-links",
+          "ops-workspace-prose-stays-terse-and-present-tense-a-generated-or",
+          "scope-local-recall-selects-one-opaque-project-id",
+          "scope-the-memories-view-shows-20-newest-first-cards-per-page",
+          "mcp-pages-carry-status-active-pending-superseded-archived-recall"
+        ],
+        "missing": [],
+        "calls": 3,
+        "rendered_tokens": 499,
+        "latency_ms": 6.6368379921186715,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Provenance investigation",
+        "complete": true,
+        "hits": [
+          "mcp-ingestion-writes-transcriptsyyyy-mm-ddsess-abcjsonl-metajson",
+          "harness-store-a-session-transcript-and-memex-links-it-to-an",
+          "harness-harness-adapters-call-memex-hook-transcript-with-the-har",
+          "docs-1-say-in-part-and-say-which-part-a-bare",
+          "gates-schema-violations-are-rejected-by-the-server-with-a-field",
+          "mcp-the-first-transcript-line-is-an-optional-session-header-type"
+        ],
+        "missing": [],
+        "calls": 3,
+        "rendered_tokens": 502,
+        "latency_ms": 6.62667999858968,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Project identity explanation",
+        "complete": true,
+        "hits": [
+          "scope-the-durable-layout-separates-global-pages-at-docsglobaltyp",
+          "docs-legacy-id-named-project-folders-remain-readable-and-rebuild",
+          "scope-local-recall-selects-one-opaque-project-id",
+          "scope-project-front-matter-is-opaque-identity-authority",
+          "mcp-the-first-transcript-line-is-an-optional-session-header-type",
+          "ops-supported-legacy-workspace-entries-remain-visible-but-non-di",
+          "storage-consolidation-is-the-only-operation-that-needs-an-llm-wi"
+        ],
+        "missing": [],
+        "calls": 3,
+        "rendered_tokens": 625,
+        "latency_ms": 8.366755006136373,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Evaluation promotion decision",
+        "complete": true,
+        "hits": [
+          "task-evidence-promotion-compares-broad-and-linked-baselines",
+          "task-evidence-report-scores-paired-baselines-and-costs",
+          "mcp-local-sqlite-fts5-over-slug-title-body-and-tags-recall",
+          "docs-1-say-in-part-and-say-which-part-a-bare",
+          "task-evidence-asks-focused-questions-within-one-context-budget"
+        ],
+        "missing": [],
+        "calls": 3,
+        "rendered_tokens": 410,
+        "latency_ms": 9.403895994182676,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Task report privacy",
+        "complete": false,
+        "hits": [
+          "task-evidence-report-scores-paired-baselines-and-costs",
+          "mcp-codex-no-native-injection-point-so-an-agentsmd-memory-contra",
+          "scope-at-task-start-run-memex-hook-session-start-and-treat",
+          "safety-logs-never-contain-memory-contents-the-audit-trail-record",
+          "docs-the-most-important-property-of-this-scheme-is-that-the",
+          "scope-each-pack-declares-its-install-scope-repo-project-local-us",
+          "harness-repository-content-cannot-enable-capture-or-injection-in",
+          "storage-the-filesystem-under-memex-data-dir-or-memex-is-the"
+        ],
+        "missing": [
+          "safety-retrieval-evaluation-uses-independent-offline-workloads-a",
+          "harness-every-write-boundary-cli-mcp-transcript-ingest-consolida"
+        ],
+        "calls": 3,
+        "rendered_tokens": 694,
+        "latency_ms": 8.150426016072743,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      }
+    ],
+    "linked_summary": [
+      {
+        "task": "Claude lifecycle provenance",
+        "complete": true,
+        "hits": [
+          "scope-claude-code-hooks-in-settingsjson-sessionstart-and-userpro",
+          "harness-harness-adapters-call-memex-hook-transcript-with-the-har",
+          "mcp-ingestion-writes-transcriptsyyyy-mm-ddsess-abcjsonl-metajson"
+        ],
+        "missing": [],
+        "calls": 1,
+        "rendered_tokens": 192,
+        "latency_ms": 48.257957998430356,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Scoped architecture recall",
+        "complete": false,
+        "hits": [
+          "scope-at-task-start-run-memex-hook-session-start-and-treat",
+          "scope-project-front-matter-is-opaque-identity-authority",
+          "scope-local-recall-selects-one-opaque-project-id"
+        ],
+        "missing": [
+          "scope-the-durable-layout-separates-global-pages-at-docsglobaltyp",
+          "storage-memex-is-both-the-public-python-api-and-the-composition"
+        ],
+        "calls": 1,
+        "rendered_tokens": 173,
+        "latency_ms": 41.679237998323515,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "SQLite corruption recovery",
+        "complete": true,
+        "hits": [
+          "storage-the-filesystem-under-memex-data-dir-or-memex-is-the",
+          "storage-the-page-write-justifies-every-index-mutation-a-failed-o",
+          "storage-memex-verify-checks-page-parsing-index-freshness-links-a",
+          "storage-the-index-is-disposable-memdb-mirrors-the-pages-for-fast"
+        ],
+        "missing": [],
+        "calls": 1,
+        "rendered_tokens": 208,
+        "latency_ms": 44.462994002969936,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "MCP surface review",
+        "complete": false,
+        "hits": [
+          "ops-memex-write-memex-recall-memex-consolidate-memex-forget-meme",
+          "gates-schema-violations-are-rejected-by-the-server-with-a-field",
+          "storage-memex-verify-checks-page-parsing-index-freshness-links-a"
+        ],
+        "missing": [
+          "mcp-mcp-tools-alone-depend-on-the-model-choosing-to-call",
+          "storage-memex-is-both-the-public-python-api-and-the-composition"
+        ],
+        "calls": 1,
+        "rendered_tokens": 190,
+        "latency_ms": 55.08010099583771,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Safe session distillation",
+        "complete": false,
+        "hits": [
+          "storage-consolidation-is-the-only-operation-that-needs-an-llm-wi",
+          "mcp-pages-carry-status-active-pending-superseded-archived-recall",
+          "harness-every-write-boundary-cli-mcp-transcript-ingest-consolida",
+          "safety-logs-never-contain-memory-contents-the-audit-trail-record"
+        ],
+        "missing": [
+          "safety-capture-and-distillation-can-be-one-step-any-harness-hook"
+        ],
+        "calls": 1,
+        "rendered_tokens": 227,
+        "latency_ms": 64.0649709966965,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Prompt injection budget",
+        "complete": true,
+        "hits": [
+          "storage-1-bm25retriever-reduces-untrusted-query-text-to-safe-alp",
+          "harness-recall-and-hook-injection-pack-to-a-token-budget-max",
+          "storage-production-recall-uses-the-semantic-and-fallback-fts5-ra"
+        ],
+        "missing": [],
+        "calls": 1,
+        "rendered_tokens": 190,
+        "latency_ms": 51.29585901158862,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Task evidence assembly",
+        "complete": true,
+        "hits": [
+          "task-evidence-asks-focused-questions-within-one-context-budget",
+          "task-evidence-duplicate-hits-appear-once-with-source-paths",
+          "scope-local-recall-selects-one-opaque-project-id"
+        ],
+        "missing": [],
+        "calls": 1,
+        "rendered_tokens": 167,
+        "latency_ms": 61.69487700390164,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Thin adapter change",
+        "complete": false,
+        "hits": [
+          "storage-memex-is-both-the-public-python-api-and-the-composition",
+          "storage-change-a-page-field-in-the-domain-model-strict-front",
+          "mcp-recall-arguments-and-forget-result-stay-in-typed-tool-contra",
+          "recallresult-returns-query-hits-total-indexed-and-search-engine"
+        ],
+        "missing": [
+          "storage-1-an-adapter-creates-a-validated-writeinput-2-the-facade",
+          "harness-the-cli-has-two-deliberate-infrastructure-facing-seams-h"
+        ],
+        "calls": 1,
+        "rendered_tokens": 215,
+        "latency_ms": 25.568436991306953,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Archived memory confusion",
+        "complete": false,
+        "hits": [
+          "mcp-pages-carry-status-active-pending-superseded-archived-recall",
+          "scope-local-recall-selects-one-opaque-project-id",
+          "storage-1-bm25retriever-reduces-untrusted-query-text-to-safe-alp"
+        ],
+        "missing": [
+          "scope-project-front-matter-is-opaque-identity-authority"
+        ],
+        "calls": 1,
+        "rendered_tokens": 179,
+        "latency_ms": 44.43511299905367,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Verify gate wiring",
+        "complete": false,
+        "hits": [
+          "storage-memex-verify-checks-page-parsing-index-freshness-links-a",
+          "gates-always-checked-every-page-parses-the-index-matches-content",
+          "harness-repository-content-cannot-enable-capture-or-injection-in"
+        ],
+        "missing": [
+          "docs-the-normal-gates-are-uv-run-ruff-check-uv-run"
+        ],
+        "calls": 1,
+        "rendered_tokens": 167,
+        "latency_ms": 29.526432990678586,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Harness installer restraint",
+        "complete": false,
+        "hits": [
+          "harness-repository-content-cannot-enable-capture-or-injection-in",
+          "mcp-from-the-project-where-it-was-installed-remove-one-adapter",
+          "scope-claude-code-hooks-in-settingsjson-sessionstart-and-userpro"
+        ],
+        "missing": [
+          "harness-run-memex-install-without-a-name-to-choose-a-harness",
+          "mcp-installs-register-the-mcp-server-where-the-harness-supports-"
+        ],
+        "calls": 1,
+        "rendered_tokens": 180,
+        "latency_ms": 27.01602400338743,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Copilot transport wording",
+        "complete": true,
+        "hits": [
+          "gates-github-copilot-hosted-no-hooks-no-local-stdio-the-determin",
+          "mcp-installs-register-the-mcp-server-where-the-harness-supports-",
+          "mcp-mcp-tools-alone-depend-on-the-model-choosing-to-call"
+        ],
+        "missing": [],
+        "calls": 1,
+        "rendered_tokens": 165,
+        "latency_ms": 38.372447990695946,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Dashboard read-only audit",
+        "complete": false,
+        "hits": [
+          "storage-the-dashboard-keeps-vizpy-as-the-public-local-server-sea",
+          "scope-the-memories-view-shows-20-newest-first-cards-per-page",
+          "storage-the-memory-store-is-the-filesystem-every-memory-is-a"
+        ],
+        "missing": [
+          "harness-memex-viz-starts-a-localhost-only-read-only-dashboard-it"
+        ],
+        "calls": 1,
+        "rendered_tokens": 164,
+        "latency_ms": 52.324624004540965,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Spec closeout report",
+        "complete": true,
+        "hits": [
+          "safety-shipped-specs-above-means-the-whole-directory-specmd-and-",
+          "safety-there-are-therefore-two-stages-not-one-at-plan-approval",
+          "docs-the-most-important-property-of-this-scheme-is-that-the"
+        ],
+        "missing": [],
+        "calls": 1,
+        "rendered_tokens": 172,
+        "latency_ms": 18.50412400381174,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Recall compatibility check",
+        "complete": false,
+        "hits": [
+          "storage-memex-is-both-the-public-python-api-and-the-composition",
+          "storage-change-a-page-field-in-the-domain-model-strict-front",
+          "mcp-recall-arguments-and-forget-result-stay-in-typed-tool-contra",
+          "recallresult-returns-query-hits-total-indexed-and-search-engine"
+        ],
+        "missing": [
+          "recallhit-exposes-slug-path-title-body-score-snippet-and-metadat"
+        ],
+        "calls": 1,
+        "rendered_tokens": 215,
+        "latency_ms": 41.56166399479844,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Token packing behavior",
+        "complete": true,
+        "hits": [
+          "harness-recall-and-hook-injection-pack-to-a-token-budget-max"
+        ],
+        "missing": [],
+        "calls": 1,
+        "rendered_tokens": 137,
+        "latency_ms": 27.95910400163848,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Transcript noise filter",
+        "complete": false,
+        "hits": [
+          "harness-every-write-boundary-cli-mcp-transcript-ingest-consolida",
+          "storage-1-an-adapter-creates-a-validated-writeinput-2-the-facade",
+          "safety-logs-never-contain-memory-contents-the-audit-trail-record"
+        ],
+        "missing": [
+          "harness-harness-adapters-call-memex-hook-transcript-with-the-har"
+        ],
+        "calls": 1,
+        "rendered_tokens": 182,
+        "latency_ms": 28.825369008700363,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Backup restore boundary",
+        "complete": true,
+        "hits": [
+          "storage-memex-verify-checks-page-parsing-index-freshness-links-a",
+          "ops-archives-are-validated-against-path-traversal-and-symlinks-b",
+          "ops-memex-write-memex-recall-memex-consolidate-memex-forget-meme"
+        ],
+        "missing": [],
+        "calls": 1,
+        "rendered_tokens": 190,
+        "latency_ms": 43.347709011868574,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Expired memory handling",
+        "complete": false,
+        "hits": [
+          "mcp-temporal-validity-every-node-optionally-carries-expires-at-v",
+          "mcp-pages-carry-status-active-pending-superseded-archived-recall",
+          "storage-1-bm25retriever-reduces-untrusted-query-text-to-safe-alp"
+        ],
+        "missing": [
+          "storage-production-recall-uses-the-semantic-and-fallback-fts5-ra"
+        ],
+        "calls": 1,
+        "rendered_tokens": 168,
+        "latency_ms": 39.030021012877114,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Hard forget safety",
+        "complete": true,
+        "hits": [
+          "forget-hard-deletes-page-index-row-and-links",
+          "forget-hard-removes-scoped-page-index-row-and-namespace-links",
+          "mcp-pages-carry-status-active-pending-superseded-archived-recall"
+        ],
+        "missing": [],
+        "calls": 1,
+        "rendered_tokens": 149,
+        "latency_ms": 47.86850599339232,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Provenance investigation",
+        "complete": false,
+        "hits": [
+          "storage-consolidation-is-the-only-operation-that-needs-an-llm-wi",
+          "mcp-pages-carry-status-active-pending-superseded-archived-recall",
+          "harness-every-write-boundary-cli-mcp-transcript-ingest-consolida",
+          "safety-logs-never-contain-memory-contents-the-audit-trail-record"
+        ],
+        "missing": [
+          "harness-store-a-session-transcript-and-memex-links-it-to-an",
+          "mcp-ingestion-writes-transcriptsyyyy-mm-ddsess-abcjsonl-metajson",
+          "harness-harness-adapters-call-memex-hook-transcript-with-the-har"
+        ],
+        "calls": 1,
+        "rendered_tokens": 227,
+        "latency_ms": 48.57665799499955,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Project identity explanation",
+        "complete": true,
+        "hits": [
+          "scope-the-durable-layout-separates-global-pages-at-docsglobaltyp",
+          "scope-project-front-matter-is-opaque-identity-authority",
+          "scope-local-recall-selects-one-opaque-project-id",
+          "docs-legacy-id-named-project-folders-remain-readable-and-rebuild"
+        ],
+        "missing": [],
+        "calls": 1,
+        "rendered_tokens": 208,
+        "latency_ms": 74.3780040065758,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Evaluation promotion decision",
+        "complete": true,
+        "hits": [
+          "task-evidence-promotion-compares-broad-and-linked-baselines",
+          "task-evidence-report-scores-paired-baselines-and-costs",
+          "task-evidence-asks-focused-questions-within-one-context-budget"
+        ],
+        "missing": [],
+        "calls": 1,
+        "rendered_tokens": 193,
+        "latency_ms": 80.25664600427262,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "Task report privacy",
+        "complete": false,
+        "hits": [
+          "storage-consolidation-is-the-only-operation-that-needs-an-llm-wi",
+          "mcp-pages-carry-status-active-pending-superseded-archived-recall",
+          "harness-every-write-boundary-cli-mcp-transcript-ingest-consolida",
+          "safety-logs-never-contain-memory-contents-the-audit-trail-record"
+        ],
+        "missing": [
+          "safety-retrieval-evaluation-uses-independent-offline-workloads-a"
+        ],
+        "calls": 1,
+        "rendered_tokens": 227,
+        "latency_ms": 39.744828987750225,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      }
+    ]
+  }
+}

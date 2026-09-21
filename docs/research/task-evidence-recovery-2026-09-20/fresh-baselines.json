@@ -1,0 +1,452 @@
+{
+  "source_revision": "ec105a3fad1aa5fb479125543451ff07a1b0fcb6",
+  "strategies": {
+    "current_injection": [
+      {
+        "task": "restoration-check",
+        "complete": false,
+        "hits": [
+          "verify-page-and-index-checks",
+          "restore-rebuilds-search-index",
+          "viz-loopback-read-boundary",
+          "source-document-audience",
+          "restore-preserves-previous-store"
+        ],
+        "missing": [
+          "backup-includes-three-stores",
+          "restore-validates-archive-members"
+        ],
+        "calls": 1,
+        "rendered_tokens": 557,
+        "latency_ms": 2.9800389893352985,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "project-folder-diagnosis",
+        "complete": true,
+        "hits": [
+          "project-folder-fallback",
+          "project-folder-from-git-origin",
+          "project-folder-collision-fails-closed",
+          "project-identity-in-front-matter",
+          "restore-preserves-previous-store"
+        ],
+        "missing": [],
+        "calls": 1,
+        "rendered_tokens": 572,
+        "latency_ms": 3.3561510063009337,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "session-capture-audit",
+        "complete": false,
+        "hits": [
+          "repeated-codex-capture",
+          "viz-untrusted-rendering",
+          "transcript-sidecar-usage",
+          "transcript-dated-storage",
+          "verify-required-evidence-exit"
+        ],
+        "missing": [
+          "transcript-episode-provenance"
+        ],
+        "calls": 1,
+        "rendered_tokens": 546,
+        "latency_ms": 3.5370969999348745,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "dashboard-route-hardening",
+        "complete": false,
+        "hits": [
+          "viz-fragments-same-rules",
+          "viz-loopback-read-boundary",
+          "dashboard-paging",
+          "viz-transcript-path-confinement",
+          "copilot-proof-workflow"
+        ],
+        "missing": [
+          "viz-untrusted-rendering"
+        ],
+        "calls": 1,
+        "rendered_tokens": 563,
+        "latency_ms": 2.497155001037754,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "ci-evidence-gate",
+        "complete": false,
+        "hits": [
+          "verify-page-and-index-checks",
+          "consolidation-explicit-operation",
+          "copilot-proof-workflow",
+          "injection-token-packing",
+          "verify-since-activity"
+        ],
+        "missing": [
+          "verify-required-evidence-exit"
+        ],
+        "calls": 1,
+        "rendered_tokens": 558,
+        "latency_ms": 3.6907920002704486,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "recall-behavior-review",
+        "complete": false,
+        "hits": [
+          "recall-column-weights",
+          "recall-safe-query-tokens",
+          "dashboard-search-mode",
+          "frozen-supersession-status",
+          "docs-living-versus-frozen"
+        ],
+        "missing": [
+          "recall-strict-then-fallback",
+          "recall-ordering-and-counters"
+        ],
+        "calls": 1,
+        "rendered_tokens": 551,
+        "latency_ms": 4.496089997701347,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "adapter-lifecycle-test",
+        "complete": true,
+        "hits": [
+          "adapter-install-backup",
+          "adapter-mcp-registration",
+          "adapter-uninstall-boundaries",
+          "adapter-uninstall-keeps-data",
+          "copilot-proof-workflow"
+        ],
+        "missing": [],
+        "calls": 1,
+        "rendered_tokens": 575,
+        "latency_ms": 2.7079940045950934,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "decision-document-update",
+        "complete": true,
+        "hits": [
+          "approved-spec-plan-pinned",
+          "docs-living-versus-frozen",
+          "frozen-supersession-status",
+          "adr-revision-by-successor",
+          "dashboard-search-mode"
+        ],
+        "missing": [],
+        "calls": 1,
+        "rendered_tokens": 534,
+        "latency_ms": 3.132644997094758,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      }
+    ],
+    "broad_query": [
+      {
+        "task": "restoration-check",
+        "complete": true,
+        "hits": [
+          "verify-page-and-index-checks",
+          "restore-rebuilds-search-index",
+          "viz-loopback-read-boundary",
+          "source-document-audience",
+          "restore-preserves-previous-store",
+          "restore-validates-archive-members",
+          "backup-includes-three-stores",
+          "verify-since-activity"
+        ],
+        "missing": [],
+        "calls": 1,
+        "rendered_tokens": 540,
+        "latency_ms": 4.312536009820178,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "project-folder-diagnosis",
+        "complete": true,
+        "hits": [
+          "project-folder-fallback",
+          "project-folder-from-git-origin",
+          "project-folder-collision-fails-closed",
+          "project-identity-in-front-matter",
+          "restore-preserves-previous-store",
+          "viz-fragments-same-rules",
+          "adr-revision-by-successor",
+          "dashboard-search-mode"
+        ],
+        "missing": [],
+        "calls": 1,
+        "rendered_tokens": 547,
+        "latency_ms": 3.7420489970827475,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "session-capture-audit",
+        "complete": true,
+        "hits": [
+          "repeated-codex-capture",
+          "viz-untrusted-rendering",
+          "transcript-sidecar-usage",
+          "transcript-dated-storage",
+          "verify-required-evidence-exit",
+          "secret-scrub-boundaries",
+          "mcp-tool-inventory",
+          "transcript-episode-provenance"
+        ],
+        "missing": [],
+        "calls": 1,
+        "rendered_tokens": 525,
+        "latency_ms": 4.180129006272182,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "dashboard-route-hardening",
+        "complete": true,
+        "hits": [
+          "viz-fragments-same-rules",
+          "viz-loopback-read-boundary",
+          "dashboard-paging",
+          "viz-transcript-path-confinement",
+          "copilot-proof-workflow",
+          "viz-untrusted-rendering",
+          "adr-revision-by-successor",
+          "approved-spec-plan-pinned"
+        ],
+        "missing": [],
+        "calls": 1,
+        "rendered_tokens": 552,
+        "latency_ms": 3.6290939897298813,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "ci-evidence-gate",
+        "complete": false,
+        "hits": [
+          "verify-page-and-index-checks",
+          "consolidation-explicit-operation",
+          "copilot-proof-workflow",
+          "injection-token-packing",
+          "verify-since-activity",
+          "adapter-mcp-registration",
+          "viz-loopback-read-boundary",
+          "project-folder-collision-fails-closed"
+        ],
+        "missing": [
+          "verify-required-evidence-exit"
+        ],
+        "calls": 1,
+        "rendered_tokens": 544,
+        "latency_ms": 6.511254992801696,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "recall-behavior-review",
+        "complete": false,
+        "hits": [
+          "recall-column-weights",
+          "recall-safe-query-tokens",
+          "dashboard-search-mode",
+          "frozen-supersession-status",
+          "docs-living-versus-frozen",
+          "adr-revision-by-successor",
+          "approved-spec-plan-pinned",
+          "verify-page-and-index-checks"
+        ],
+        "missing": [
+          "recall-strict-then-fallback",
+          "recall-ordering-and-counters"
+        ],
+        "calls": 1,
+        "rendered_tokens": 526,
+        "latency_ms": 2.6207920018350706,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "adapter-lifecycle-test",
+        "complete": true,
+        "hits": [
+          "adapter-install-backup",
+          "adapter-mcp-registration",
+          "adapter-uninstall-boundaries",
+          "adapter-uninstall-keeps-data",
+          "copilot-proof-workflow",
+          "backup-includes-three-stores",
+          "verify-required-evidence-exit",
+          "mcp-tool-inventory"
+        ],
+        "missing": [],
+        "calls": 1,
+        "rendered_tokens": 550,
+        "latency_ms": 3.9863519923528656,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "decision-document-update",
+        "complete": true,
+        "hits": [
+          "approved-spec-plan-pinned",
+          "docs-living-versus-frozen",
+          "frozen-supersession-status",
+          "adr-revision-by-successor",
+          "dashboard-search-mode",
+          "injection-token-packing",
+          "memory-write-collision",
+          "copilot-proof-workflow"
+        ],
+        "missing": [],
+        "calls": 1,
+        "rendered_tokens": 497,
+        "latency_ms": 2.6095450011780486,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      }
+    ],
+    "linked_summary": [
+      {
+        "task": "restoration-check",
+        "complete": true,
+        "hits": [
+          "backup-includes-three-stores",
+          "restore-validates-archive-members",
+          "restore-preserves-previous-store",
+          "restore-rebuilds-search-index"
+        ],
+        "missing": [],
+        "calls": 1,
+        "rendered_tokens": 145,
+        "latency_ms": 10.806310994667001,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "project-folder-diagnosis",
+        "complete": true,
+        "hits": [
+          "project-folder-from-git-origin",
+          "project-folder-fallback",
+          "project-identity-in-front-matter",
+          "project-folder-collision-fails-closed"
+        ],
+        "missing": [],
+        "calls": 1,
+        "rendered_tokens": 173,
+        "latency_ms": 16.71839000482578,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "session-capture-audit",
+        "complete": true,
+        "hits": [
+          "repeated-codex-capture",
+          "transcript-dated-storage",
+          "transcript-sidecar-usage",
+          "transcript-episode-provenance"
+        ],
+        "missing": [],
+        "calls": 1,
+        "rendered_tokens": 184,
+        "latency_ms": 12.821820011595264,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "dashboard-route-hardening",
+        "complete": true,
+        "hits": [
+          "viz-loopback-read-boundary",
+          "viz-fragments-same-rules",
+          "viz-untrusted-rendering",
+          "viz-transcript-path-confinement"
+        ],
+        "missing": [],
+        "calls": 1,
+        "rendered_tokens": 217,
+        "latency_ms": 17.004545996314846,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "ci-evidence-gate",
+        "complete": true,
+        "hits": [
+          "copilot-proof-workflow",
+          "verify-page-and-index-checks",
+          "verify-since-activity",
+          "verify-required-evidence-exit"
+        ],
+        "missing": [],
+        "calls": 1,
+        "rendered_tokens": 173,
+        "latency_ms": 24.32218000467401,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "recall-behavior-review",
+        "complete": true,
+        "hits": [
+          "recall-safe-query-tokens",
+          "recall-column-weights",
+          "recall-strict-then-fallback",
+          "recall-ordering-and-counters"
+        ],
+        "missing": [],
+        "calls": 1,
+        "rendered_tokens": 192,
+        "latency_ms": 24.36184299585875,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "adapter-lifecycle-test",
+        "complete": true,
+        "hits": [
+          "adapter-install-backup",
+          "adapter-mcp-registration",
+          "adapter-uninstall-boundaries",
+          "adapter-uninstall-keeps-data"
+        ],
+        "missing": [],
+        "calls": 1,
+        "rendered_tokens": 197,
+        "latency_ms": 23.58928299508989,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      },
+      {
+        "task": "decision-document-update",
+        "complete": true,
+        "hits": [
+          "docs-living-versus-frozen",
+          "adr-revision-by-successor",
+          "frozen-supersession-status",
+          "approved-spec-plan-pinned"
+        ],
+        "missing": [],
+        "calls": 1,
+        "rendered_tokens": 176,
+        "latency_ms": 22.118300999864005,
+        "inactive_hits": 0,
+        "other_project_hits": 0
+      }
+    ]
+  }
+}
