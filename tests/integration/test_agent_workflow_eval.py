@@ -236,9 +236,9 @@ def test_real_workflow_recall_keeps_scopes_and_recovers_task_evidence() -> None:
         "human_focused",
     }
     expected_metrics = {
-        "current_injection": (5, 0.4375, 24, 14988, 0, 0),
-        "broad_query": (7, 0.546875, 24, 16362, 0, 0),
-        "human_focused": (12, 0.734375, 72, 14559, 0, 0),
+        "current_injection": (5, 0.515625, 24, 15002, 0, 0),
+        "broad_query": (17, 0.875, 24, 72180, 0, 0),
+        "human_focused": (22, 0.96875, 72, 52593, 0, 0),
         "linked_summary": (11, 0.703125, 24, 4485, 0, 0),
     }
     for name, strategy in report.strategies.items():
@@ -251,7 +251,7 @@ def test_real_workflow_recall_keeps_scopes_and_recovers_task_evidence() -> None:
             strategy.other_project_hits,
         ) == expected_metrics[name]
         assert strategy.latency_ms > 0
-        assert all(len(task.hits) <= 8 for task in strategy.tasks)
+        assert all(len(task.hits) <= 36 for task in strategy.tasks)
     root = Path(__file__).resolve().parents[2]
     report_markdown = (root / BASELINE_REPORT).read_text(encoding="utf-8")
     assert _report_strategy_metrics(report_markdown) == _benchmark_strategy_metrics(report)
@@ -943,10 +943,10 @@ def test_model_comparison_passes_only_label_blind_task_inputs_to_planner(
     assert report.candidate.task_complete == human_focused_complete
     assert report.promotion_gate.promoted is False
     assert "completed-code-check-not-run" in report.promotion_gate.failed_conditions
-    assert report.promotion_gate.candidate_task_complete == 12
+    assert report.promotion_gate.candidate_task_complete == 22
     snapshot = sanitized_task_evidence(report)
     assert len(snapshot) == 24
-    assert sum(row["complete"] for row in snapshot) == 12
+    assert sum(row["complete"] for row in snapshot) == 22
     assert all(row["calls"] == 3 for row in snapshot)
     assert all("queries" not in row and "goal" not in row for row in snapshot)
     export = json.loads(evidence_path.read_text(encoding="utf-8"))

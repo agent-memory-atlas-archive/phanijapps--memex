@@ -112,7 +112,7 @@ def test_production_ranker_metadata_reports_promoted_strategy() -> None:
     assert metadata["column_weights"] == {
         "slug": 1.0,
         "title": 1.0,
-        "description": 1.0,
+        "description": 2.0,
         "body": 2.0,
         "tags": 1.0,
     }

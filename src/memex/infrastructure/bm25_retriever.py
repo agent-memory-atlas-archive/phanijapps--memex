@@ -17,7 +17,7 @@ MAX_QUERY_BYTES = 1024
 MAX_QUERY_TOKENS = 64
 _WINNER_SEARCH_ENGINE = "semantic-and-fallback-fts5"
 _WINNER_BODY_WEIGHT = 2.0
-_WINNER_DESCRIPTION_WEIGHT = 1.0  # neutral: keeps slug/title/body/tags contributions fixed
+_WINNER_DESCRIPTION_WEIGHT = 2.0  # a purpose-written signpost match ranks like a body match
 _QUERY_STOP_WORDS = frozenset(
     {
         "a",

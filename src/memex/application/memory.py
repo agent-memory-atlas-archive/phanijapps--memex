@@ -266,7 +266,7 @@ class Memex:
         ranked = [
             self.retriever.retrieve_without_access(
                 question,
-                top_k=9,  # One extra match makes an eight-page omission visible.
+                top_k=12,  # Deep per-question pool for the budget-bounded pack.
                 node_type=input.node_type,
                 tags=input.tags,
                 scope="project",

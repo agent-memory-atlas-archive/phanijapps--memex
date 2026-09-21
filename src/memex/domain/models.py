@@ -330,7 +330,7 @@ class TaskRecallInput:
     goal: str
     questions: list[str]
     project_id: str
-    max_hits: int = 8
+    max_hits: int = 36
     max_tokens: int = 4096
     node_type: str | None = None
     tags: list[str] | None = None
@@ -346,8 +346,8 @@ class TaskRecallInput:
         ):
             raise ValueError("questions must be a list of one to three strings")
         self.questions = self.questions.copy()
-        if not 1 <= self.max_hits <= 8:
-            raise ValueError("max_hits must be in [1, 8]")
+        if not 1 <= self.max_hits <= 36:
+            raise ValueError("max_hits must be in [1, 36]")
         if not 1 <= self.max_tokens <= 4096:
             raise ValueError("max_tokens must be in [1, 4096]")
         if self.node_type is not None and self.node_type not in NODE_TYPES:

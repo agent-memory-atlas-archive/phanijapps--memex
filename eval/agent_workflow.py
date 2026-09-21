@@ -26,8 +26,8 @@ DATA_DIR = Path(__file__).resolve().parent / "data"
 FIXTURE = DATA_DIR / "coding-agent-workflow.json"
 LINKED_SUMMARIES = DATA_DIR / "task-linked-summaries.json"
 HUMAN_FOCUSED_QUERIES = DATA_DIR / "human-focused-queries.json"
-MAX_TASK_HITS = 8
-FOCUSED_HITS_PER_QUERY = 3
+MAX_TASK_HITS = 36  # mirrors the product task-recall page cap
+FOCUSED_HITS_PER_QUERY = 12  # mirrors the product per-question retrieval depth
 SUMMARY_LINK = re.compile(r"memex://([a-z0-9][a-z0-9-]+)|\[\[([a-z0-9][a-z0-9-]+)\]\]")
 RENDERED_FILE_SLUG = re.compile(
     r"^[ \t]*File: [^\r\n]*/([a-z0-9][a-z0-9-]+)\.md[ \t]*$",
@@ -165,6 +165,7 @@ def _populate(memex: Memex, fixture: Fixture) -> tuple[set[str], set[str], set[s
                 type=memory["type"],
                 title=memory["title"],
                 body=memory["body"],
+                description=str(memory.get("description", "")),
                 scope="project",
                 project_id=project_id,
             )
