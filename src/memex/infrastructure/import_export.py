@@ -4,9 +4,13 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Callable
 from pathlib import Path
 
+from memex.domain.errors import IndexManagerError, WikiStoreError
 from memex.domain.models import NODE_TYPES, WikiNode, utc_now_iso
+from memex.domain.reserved import RESERVED_SLUGS
+from memex.domain.scrub import scrub
 from memex.infrastructure.index_manager import IndexManager
 from memex.infrastructure.link_manager import LinkManager
 from memex.infrastructure.wiki_store import WikiStore
@@ -20,11 +24,17 @@ class ImportExport:
     """Export every wiki node as a JSON document; import them back."""
 
     def __init__(
-        self, wiki_store: WikiStore, index_mgr: IndexManager, link_mgr: LinkManager
+        self,
+        wiki_store: WikiStore,
+        index_mgr: IndexManager,
+        link_mgr: LinkManager,
+        *,
+        on_page_written: Callable[[Path], None] | None = None,
     ) -> None:
         self._store = wiki_store
         self._index = index_mgr
         self._links = link_mgr
+        self._on_page_written = on_page_written
 
     def export(self, output_path: Path | None = None) -> dict[str, object]:
         document: dict[str, object] = {
@@ -57,16 +67,22 @@ class ImportExport:
                 continue
             try:
                 node = self._node_from_json(item)
-            except ValueError as exc:
+            except (ValueError, WikiStoreError) as exc:
                 errors.append(str(exc))
                 continue
             slug = node.slug
             if not slug:
                 skipped.append(str(item.get("title", "<untitled>")))
                 continue
-            stored = self._store.write(node)
-            self._index.update_record(stored)
-            self._links.sync_node(stored)
+            try:
+                stored = self._store.write(node)
+                self._index.update_record(stored)
+                self._links.sync_node(stored)
+            except (ValueError, WikiStoreError, IndexManagerError) as exc:
+                errors.append(str(exc))
+                continue
+            if self._on_page_written is not None and stored.file_path:
+                self._on_page_written(Path(stored.file_path))
             imported += 1
         logger.info("operation=import imported=%d errors=%d", imported, len(errors))
         return {"imported": imported, "skipped": skipped, "errors": errors}
@@ -77,6 +93,7 @@ class ImportExport:
             "slug": node.slug,
             "type": node.type,
             "title": node.title,
+            "description": node.description,
             "tags": node.tags,
             "importance": node.importance,
             "created": node.created,
@@ -100,10 +117,15 @@ class ImportExport:
         if not isinstance(importance, int | float):
             raise ValueError("importance must be numeric")
         slug = item.get("slug")
+        if isinstance(slug, str) and slug in RESERVED_SLUGS:
+            raise ValueError(f"reserved slug {slug!r} cannot be imported; rename the page first")
+        description = item.get("description")
         transcript_ref = item.get("transcript_ref")
         scope = item.get("scope", "global")
         project_id = item.get("project_id")
         project_label = item.get("project_label")
+        if description is not None and not isinstance(description, str):
+            raise ValueError("description must be a string or null")
         if scope not in {"global", "project"}:
             raise ValueError("scope must be 'global' or 'project'")
         if scope == "project" and not isinstance(project_id, str):
@@ -115,6 +137,9 @@ class ImportExport:
         return WikiNode(
             type=node_type,
             title=title,
+            # Descriptions are scrubbed at this persisting boundary like the
+            # facade write path; bodies keep their pre-existing behavior.
+            description=scrub(description)[0] if description else "",
             body=self._str(item, "body"),
             id=self._str(item, "id"),
             slug=str(slug) if isinstance(slug, str) and slug else "",

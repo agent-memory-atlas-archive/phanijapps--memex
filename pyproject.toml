@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "memex"
-version = "0.4.0"
+version = "0.5.0"
 description = "A durable, team-ready memory layer for AI coding agents."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -65,6 +65,7 @@ select = ["E", "F", "I", "B", "UP", "S", "SIM", "RUF"]
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["S101"]
 "src/memex/infrastructure/index_manager.py" = ["E501"]
+"src/memex/infrastructure/harness_installer.py" = ["E501"]
 "src/memex/infrastructure/transcript_hook.py" = ["E501"]
 "src/memex/infrastructure/workspace_context.py" = ["S603"]
 "src/memex/infrastructure/viz.py" = ["E501"]

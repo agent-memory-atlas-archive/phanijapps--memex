@@ -55,6 +55,11 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     write.add_argument("--title", required=True)
     write.add_argument("--body", required=True)
+    write.add_argument(
+        "--description",
+        default=None,
+        help="Optional one-sentence description (single line, <=512 UTF-8 bytes)",
+    )
     write.add_argument("--tags", default="", help="Comma-separated tags")
     write.add_argument("--importance", type=float, default=0.5)
     write.add_argument("--links", default="", help="Comma-separated slugs")
@@ -606,6 +611,7 @@ def _run(args: argparse.Namespace) -> int:
                     type=args.type,
                     title=args.title,
                     body=args.body,
+                    description=args.description or "",
                     tags=_csv(args.tags),
                     importance=args.importance,
                     links=_csv(args.links),
@@ -709,6 +715,7 @@ def _run(args: argparse.Namespace) -> int:
                 memex.wiki_store,
                 poll_interval=args.poll_interval,
                 link_mgr=memex.link_manager,
+                navigation=memex.navigation,
             )
             watcher.start_polling()
             print("watching for wiki edits; press Ctrl-C to stop", file=sys.stderr)

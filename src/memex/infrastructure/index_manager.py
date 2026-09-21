@@ -20,7 +20,7 @@ from typing import cast
 from memex.domain.errors import IndexManagerError
 from memex.domain.models import WikiNode, utc_now_iso
 
-SCHEMA_VERSION = "4"
+SCHEMA_VERSION = "5"
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS index_meta (
@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS wiki_index (
     project_label TEXT,
     file_path     TEXT UNIQUE NOT NULL,
     title         TEXT NOT NULL,
+    description   TEXT NOT NULL DEFAULT '',
     node_type     TEXT NOT NULL,
     importance    REAL NOT NULL DEFAULT 0.5,
     status        TEXT NOT NULL DEFAULT 'active',
@@ -60,6 +61,7 @@ CREATE TABLE IF NOT EXISTS wiki_index (
 CREATE VIRTUAL TABLE IF NOT EXISTS wiki_fts USING fts5(
     slug,
     title,
+    description,
     body,
     tags,
     content='wiki_index',
@@ -68,20 +70,20 @@ CREATE VIRTUAL TABLE IF NOT EXISTS wiki_fts USING fts5(
 );
 
 CREATE TRIGGER IF NOT EXISTS wiki_index_ai AFTER INSERT ON wiki_index BEGIN
-    INSERT INTO wiki_fts(rowid, slug, title, body, tags)
-    VALUES (new.rowid, new.slug, new.title, new.body, new.tags);
+    INSERT INTO wiki_fts(rowid, slug, title, description, body, tags)
+    VALUES (new.rowid, new.slug, new.title, new.description, new.body, new.tags);
 END;
 
 CREATE TRIGGER IF NOT EXISTS wiki_index_ad AFTER DELETE ON wiki_index BEGIN
-    INSERT INTO wiki_fts(wiki_fts, rowid, slug, title, body, tags)
-    VALUES ('delete', old.rowid, old.slug, old.title, old.body, old.tags);
+    INSERT INTO wiki_fts(wiki_fts, rowid, slug, title, description, body, tags)
+    VALUES ('delete', old.rowid, old.slug, old.title, old.description, old.body, old.tags);
 END;
 
 CREATE TRIGGER IF NOT EXISTS wiki_index_au AFTER UPDATE ON wiki_index BEGIN
-    INSERT INTO wiki_fts(wiki_fts, rowid, slug, title, body, tags)
-    VALUES ('delete', old.rowid, old.slug, old.title, old.body, old.tags);
-    INSERT INTO wiki_fts(rowid, slug, title, body, tags)
-    VALUES (new.rowid, new.slug, new.title, new.body, new.tags);
+    INSERT INTO wiki_fts(wiki_fts, rowid, slug, title, description, body, tags)
+    VALUES ('delete', old.rowid, old.slug, old.title, old.description, old.body, old.tags);
+    INSERT INTO wiki_fts(rowid, slug, title, description, body, tags)
+    VALUES (new.rowid, new.slug, new.title, new.description, new.body, new.tags);
 END;
 
 CREATE TABLE IF NOT EXISTS wiki_links (
@@ -106,11 +108,11 @@ _SAFE_SLUG = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 
 _UPSERT = """
 INSERT INTO wiki_index (
-    id, slug, scope, project_id, project_label, file_path, title, node_type, importance, tags, created, updated,
+    id, slug, scope, project_id, project_label, file_path, title, description, node_type, importance, tags, created, updated,
     access_count, last_access, expires_at, valid_from, valid_to,
     content_hash, transcript_ref, body, status, occurred_at, source, harness, confidence
 ) VALUES (
-    :id, :slug, :scope, :project_id, :project_label, :file_path, :title, :node_type, :importance, :tags, :created, :updated,
+    :id, :slug, :scope, :project_id, :project_label, :file_path, :title, :description, :node_type, :importance, :tags, :created, :updated,
     :access_count, :last_access, :expires_at, :valid_from, :valid_to,
     :content_hash, :transcript_ref, :body, :status, :occurred_at, :source, :harness, :confidence
 )
@@ -118,6 +120,7 @@ ON CONFLICT(scope, project_id, node_type, slug) DO UPDATE SET
     id = excluded.id,
     file_path = excluded.file_path,
     title = excluded.title,
+    description = excluded.description,
     node_type = excluded.node_type,
     importance = excluded.importance,
     tags = excluded.tags,
@@ -146,6 +149,7 @@ def node_record(node: WikiNode) -> dict[str, object]:
         "project_label": node.project_label,
         "file_path": node.file_path or "",
         "title": node.title,
+        "description": node.description,
         "node_type": node.type,
         "importance": node.importance,
         "tags": json.dumps(node.tags),
@@ -221,6 +225,7 @@ class IndexManager:
             "scope",
             "project_id",
             "project_label",
+            "description",
         }
         return self._needs_rebuild or not expected <= columns
 
@@ -254,14 +259,14 @@ class IndexManager:
             self._conn.commit()
 
     def _index_schema_is_incompatible(self) -> bool:
-        """Detect a disposable pre-namespace index before creating new indexes."""
+        """Detect a disposable pre-namespace or pre-description index."""
         row = self._conn.execute(
             "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'wiki_index'"
         ).fetchone()
         if row is None:
             return False
         columns = {row["name"] for row in self._conn.execute("PRAGMA table_info(wiki_index)")}
-        return not {"scope", "project_id", "project_label"} <= columns
+        return not {"scope", "project_id", "project_label", "description"} <= columns
 
     def _links_schema_is_incompatible(self) -> bool:
         row = self._conn.execute(

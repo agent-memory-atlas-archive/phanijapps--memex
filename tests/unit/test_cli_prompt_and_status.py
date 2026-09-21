@@ -175,10 +175,12 @@ class TestWatchCommand:
         from memex.infrastructure import watcher as watcher_mod
         from memex.infrastructure.index_manager import IndexManager
         from memex.infrastructure.link_manager import LinkManager
+        from memex.infrastructure.navigation import NavigationGenerator
         from memex.infrastructure.watcher import IndexWatcher
         from memex.infrastructure.wiki_store import WikiStore
 
         seen_link_managers: list[LinkManager | None] = []
+        seen_navigation: list[NavigationGenerator | None] = []
         started = []
         stopped = []
         monkeypatch.setenv("MEMEX_DATA_DIR", str(tmp_path))
@@ -191,8 +193,11 @@ class TestWatchCommand:
             wiki_store: WikiStore,
             poll_interval: int = 60,
             link_mgr: LinkManager | None = None,
+            *,
+            navigation: NavigationGenerator | None = None,
         ) -> None:
             seen_link_managers.append(link_mgr)
+            seen_navigation.append(navigation)
             original_init(
                 self,
                 wiki_dir,
@@ -200,6 +205,7 @@ class TestWatchCommand:
                 wiki_store,
                 poll_interval=poll_interval,
                 link_mgr=link_mgr,
+                navigation=navigation,
             )
 
         monkeypatch.setattr(watcher_mod.IndexWatcher, "__init__", capture_init)
@@ -217,5 +223,6 @@ class TestWatchCommand:
         monkeypatch.setattr("sys.argv", ["memex", "watch", "--poll-interval", "1"])
         assert cli.main() == 0
         assert seen_link_managers and seen_link_managers[0] is not None
+        assert seen_navigation and seen_navigation[0] is not None
         assert started == [1]
         assert stopped == [1]

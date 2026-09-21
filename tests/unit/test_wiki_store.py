@@ -27,6 +27,42 @@ class TestWriteRead:
         assert stored.file_path == str(data_dir / "docs/global/entities/ruff-linter.md")
         assert stored.content_hash == hash_body(stored.body)
 
+    def test_description_round_trips_through_front_matter(self, data_dir: Path) -> None:
+        store = WikiStore(data_dir)
+        store.write(make_node(description="What this page holds and when to use it"))
+        page = data_dir / "docs/global/entities/ruff-linter.md"
+        text = page.read_text(encoding="utf-8")
+        assert 'description: "What this page holds and when to use it"' in text
+
+        reread = store.read("ruff-linter")
+        assert reread is not None
+        assert reread.description == "What this page holds and when to use it"
+        assert reread.body == "Ruff is a fast Python linter."
+
+        # A direct Markdown edit of only the description survives read-back.
+        page.write_text(
+            text.replace(
+                'description: "What this page holds and when to use it"',
+                'description: "Hand-edited signpost"',
+            ),
+            encoding="utf-8",
+        )
+        edited = store.read("ruff-linter")
+        assert edited is not None
+        assert edited.description == "Hand-edited signpost"
+        assert edited.body == "Ruff is a fast Python linter."
+
+    def test_page_without_description_reads_as_empty(self, data_dir: Path) -> None:
+        store = WikiStore(data_dir)
+        store.write(make_node(description="temporary"))
+        page = data_dir / "docs/global/entities/ruff-linter.md"
+        text = page.read_text(encoding="utf-8")
+        page.write_text(text.replace('description: "temporary"\n', ""), encoding="utf-8")
+
+        reread = store.read("ruff-linter")
+        assert reread is not None
+        assert reread.description == ""
+
     def test_update_preserves_stored_fields(self, data_dir: Path) -> None:
         store = WikiStore(data_dir)
         store.write(make_node())
@@ -488,3 +524,27 @@ class TestFrontMatterValidation:
         )
         with pytest.raises(WikiStoreError, match="last_access"):
             WikiStore(data_dir).read("raw")
+
+
+class TestInvalidStoredDescriptionIsAMalformedPage:
+    """A hand-edited invalid description reports as a scan error, not a crash."""
+
+    def test_overlong_stored_description_reports_as_error(self, data_dir: Path) -> None:
+        store = WikiStore(data_dir)
+        node = WikiNode(
+            type="entity",
+            title="Edit me",
+            body="body",
+            id="id-edit-me",
+        )
+        stored = store.write(node)
+        path = Path(stored.file_path or "")
+        text = path.read_text(encoding="utf-8")
+        path.write_text(
+            text.replace('title: "Edit me"', f'title: "Edit me"\ndescription: "{"x" * 513}"'),
+            encoding="utf-8",
+        )
+        errors: list[str] = []
+        nodes = store.scan_all(errors)
+        assert [n.slug for n in nodes] == []
+        assert len(errors) == 1 and "description" in errors[0]

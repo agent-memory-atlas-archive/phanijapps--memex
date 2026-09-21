@@ -10,6 +10,7 @@ from memex.application.decay import RecencyDecay
 from memex.application.ports import LLMClient
 from memex.domain.errors import LLMError
 from memex.domain.models import (
+    DESCRIPTION_MAX_BYTES,
     FORGET_MODES,
     BackupReport,
     ConsolidateInput,
@@ -39,6 +40,7 @@ from memex.infrastructure.index_manager import IndexManager
 from memex.infrastructure.link_manager import LinkManager
 from memex.infrastructure.llm_clients import client_from_config
 from memex.infrastructure.logging import setup_logging
+from memex.infrastructure.navigation import NavigationGenerator
 from memex.infrastructure.run_log import append_run
 from memex.infrastructure.transcript_hook import TranscriptHook
 from memex.infrastructure.wiki_store import WikiStore, hash_body
@@ -75,12 +77,24 @@ class Memex:
             default_top_k=self.config.bm25.default_top_k,
         )
         self.transcript_hook = TranscriptHook(
-            self.data_dir, self.wiki_store, self.index_manager, self.link_manager
+            self.data_dir,
+            self.wiki_store,
+            self.index_manager,
+            self.link_manager,
+            on_page_written=self._on_page_written,
         )
         self.backup_restore = BackupRestore(self.data_dir, self.config.db_path)
-        self.import_export = ImportExport(self.wiki_store, self.index_manager, self.link_manager)
+        self.import_export = ImportExport(
+            self.wiki_store,
+            self.index_manager,
+            self.link_manager,
+            on_page_written=self._on_page_written,
+        )
+        self.navigation = NavigationGenerator(self.wiki_store.wiki_dir)
         if rebuild_on_open:
-            self.rebuild_index(force=True)
+            # Navigation regeneration never happens on open: the transparent
+            # index upgrade stays free of Markdown writes (spec AC-0015).
+            self.rebuild_index(force=True, regenerate_navigation=False)
 
     def close(self) -> None:
         self.retriever.close()
@@ -115,13 +129,24 @@ class Memex:
             raise ValueError(
                 f"body exceeds wiki.max_body_chars ({self.config.wiki.max_body_chars})"
             )
-        clean_body, scrub_kinds = scrub(input.body)
+        clean_body, body_kinds = scrub(input.body)
+        clean_description, description_kinds = scrub(input.description)
+        scrub_kinds = body_kinds + description_kinds
         if scrub_kinds:
             self.logger.warning("operation=write scrubbed=%s", ",".join(scrub_kinds))
+        if len(clean_description.encode("utf-8")) > DESCRIPTION_MAX_BYTES:
+            # AC-0002 budget applies to the stored value: redaction can grow
+            # an input that passed the WriteInput boundary, so the budget is
+            # re-checked on the scrubbed text with an honest message.
+            raise ValueError(
+                "description exceeds 512 UTF-8 bytes after secret redaction; "
+                "shorten the description"
+            )
         node = WikiNode(
             type=input.type,
             title=input.title,
             body=clean_body,
+            description=clean_description,
             id="",
             tags=input.tags,
             importance=input.importance,
@@ -139,6 +164,7 @@ class Memex:
         stored = self.wiki_store.write(node)
         self.index_manager.update_record(stored)
         self.link_manager.sync_node(stored)
+        self._refresh_navigation(stored.file_path)
         self.logger.info("operation=write slug=%s type=%s", stored.slug, stored.type)
         return stored
 
@@ -280,6 +306,7 @@ class Memex:
                 self.link_manager,
                 self._llm_client(),
                 self.config,
+                on_page_written=self._on_page_written,
             )
         report = self._consolidator.consolidate(input)
         append_run(
@@ -334,12 +361,15 @@ class Memex:
             node.status = "archived"
             stored = self.wiki_store.write(node)
             self.index_manager.update_record(stored)
+            self._refresh_navigation(stored.file_path)
             self.logger.info("operation=forget mode=archive slug=%s", slug)
             return ForgetResult(slug=slug, forgotten=True, mode=mode, file_path=stored.file_path)
         if mode == "hard":
+            page_path = node.file_path
             self.wiki_store.delete(slug)
             self.index_manager.remove_record(slug)
             self.link_manager.remove_slug(slug)
+            self._refresh_navigation(page_path)
             self.logger.info("operation=forget mode=hard slug=%s", slug)
             return ForgetResult(slug=slug, forgotten=True, mode=mode, file_path=None)
 
@@ -348,6 +378,7 @@ class Memex:
         setattr(node, field, timestamp)
         stored = self.wiki_store.write(node)
         self.index_manager.update_record(stored)
+        self._refresh_navigation(stored.file_path)
         self.logger.info("operation=forget mode=%s slug=%s", mode, slug)
         return ForgetResult(slug=slug, forgotten=True, mode=mode, file_path=stored.file_path)
 
@@ -396,7 +427,9 @@ class Memex:
         self.logger.info("operation=clear_transcripts count=%d", count)
         return count
 
-    def rebuild_index(self, *, force: bool = False) -> RebuildIndexReport:
+    def rebuild_index(
+        self, *, force: bool = False, regenerate_navigation: bool = True
+    ) -> RebuildIndexReport:
         """Rescan the wiki and refresh the secondary index and link graph.
 
         The wiki files are the truth: index rows for deleted pages are
@@ -413,7 +446,7 @@ class Memex:
         started = time.perf_counter()
         errors: list[str] = []
         nodes = self.wiki_store.scan_all(errors)
-        known_hashes: dict[tuple[str, str, str, str], str] = {}
+        known: dict[tuple[str, str, str, str], tuple[str, str]] = {}
         if not force:
             for row in self.index_manager.get_all_records():
                 key = (
@@ -422,7 +455,7 @@ class Memex:
                     str(row["node_type"]),
                     str(row["slug"]),
                 )
-                known_hashes[key] = str(row["content_hash"])
+                known[key] = (str(row["content_hash"]), str(row["description"] or ""))
 
         wiki_keys = {(node.scope, node.project_id or "", node.type, node.slug) for node in nodes}
         for row in self.index_manager.get_all_records():
@@ -447,7 +480,7 @@ class Memex:
                 # Externally edited page: refresh the stale front-matter hash.
                 node = self.wiki_store.write(node)
             key = (node.scope, node.project_id or "", node.type, node.slug)
-            if not force and known_hashes.get(key) == node.content_hash:
+            if not force and known.get(key) == (node.content_hash, node.description):
                 skipped += 1
                 continue
             self.index_manager.update_record(node)
@@ -455,12 +488,20 @@ class Memex:
         now = utc_now_iso()
         self.index_manager.set_meta("last_index_rebuild", now)
         self.index_manager.set_meta("wiki_file_count", str(len(nodes)))
+        navigation_defects: list[str] = []
+        if regenerate_navigation:
+            navigation_report = self.navigation.regenerate(nodes)
+            for change in navigation_report.by_category("collision"):
+                navigation_defects.append(f"navigation collision: {change.path}")
+            for change in navigation_report.by_category("write_failed"):
+                navigation_defects.append(f"navigation write_failed: {change.path}")
         duration_ms = (time.perf_counter() - started) * 1000
         self.logger.info(
-            "operation=rebuild_index nodes=%d skipped=%d errors=%d",
+            "operation=rebuild_index nodes=%d skipped=%d errors=%d navigation_defects=%d",
             len(nodes),
             skipped,
             len(errors),
+            len(navigation_defects),
         )
         return RebuildIndexReport(
             nodes_indexed=len(nodes) - skipped,
@@ -468,6 +509,7 @@ class Memex:
             nodes_errored=len(errors),
             duration_ms=round(duration_ms, 3),
             errors=errors,
+            navigation_defects=navigation_defects,
         )
 
     def backup(self, output_path: Path, *, include_mem_db: bool = True) -> BackupReport:
@@ -523,6 +565,7 @@ class Memex:
         node.status = "active"
         stored = self.wiki_store.write(node)
         self.index_manager.update_record(stored)
+        self._refresh_navigation(stored.file_path)
         self.logger.info("operation=approve slug=%s", slug)
         return {"slug": slug, "status": "active"}
 
@@ -545,8 +588,45 @@ class Memex:
         source_node.links = sorted({*source_node.links, target})
         source_node = self.wiki_store.write(source_node)
         self.index_manager.update_record(source_node)
+        self._refresh_navigation(target_node.file_path)
+        self._refresh_navigation(source_node.file_path)
         self.logger.info("operation=merge target=%s source=%s", target, source)
         return {"target": target, "source": source, "source_status": "superseded"}
+
+    def _on_page_written(self, path: Path) -> None:
+        """Shared post-write hook for component-driven page writes.
+
+        Transcript capture, consolidation, and import write pages directly;
+        this hook gives them the same navigation refresh the facade applies
+        to its own mutations. Never raises: refresh is best effort.
+        """
+        self._refresh_navigation(str(path))
+
+    def _refresh_navigation(self, file_path: str | None) -> None:
+        """Best-effort chain-scoped index refresh after a page mutation.
+
+        Takes the mutated page's path and refreshes its directory chain,
+        parsing only that chain's own pages. Navigation is disposable: a
+        failure here never fails or rolls back the mutation. ``memex verify``
+        derives and reports the defect, and a full rebuild repairs it.
+        """
+        if not file_path:
+            return
+        try:
+            report = self.navigation.refresh(Path(file_path).parent, self.wiki_store.scan_dir)
+        except Exception:
+            self.logger.warning("operation=navigation_refresh status=failed")
+            return
+        defects = {
+            category: count
+            for category, count in report.category_counts().items()
+            if count and category not in {"written", "removed"}
+        }
+        if defects:
+            self.logger.warning(
+                "operation=navigation_refresh status=partial %s",
+                " ".join(f"{category}={n}" for category, n in sorted(defects.items())),
+            )
 
     def get_provenance(self, slug: str) -> ProvenanceReport | None:
         return self.transcript_hook.get_provenance(slug)
@@ -568,7 +648,11 @@ class Memex:
                 project_id=node.project_id or "",
                 node_type=node.type,
             )
-            if row is None or str(row["content_hash"]) != hash_body(node.body):
+            if (
+                row is None
+                or str(row["content_hash"]) != hash_body(node.body)
+                or str(row["description"] or "") != node.description
+            ):
                 stale += 1
         runs = read_runs(self.data_dir)
         last_capture: dict[str, str | None] = {}

@@ -17,6 +17,7 @@ MAX_QUERY_BYTES = 1024
 MAX_QUERY_TOKENS = 64
 _WINNER_SEARCH_ENGINE = "semantic-and-fallback-fts5"
 _WINNER_BODY_WEIGHT = 2.0
+_WINNER_DESCRIPTION_WEIGHT = 1.0  # neutral: keeps slug/title/body/tags contributions fixed
 _QUERY_STOP_WORDS = frozenset(
     {
         "a",
@@ -42,19 +43,20 @@ _SEMANTIC_SCAFFOLDING_PHRASES = (
     ("switch", "from"),
 )
 
-# FTS column order: slug=0, title=1, body=2, tags=3. The spec's snippet
-# example used column 1 while documenting it as body; body is column 2.
-_SNIPPET_BODY_COLUMN = 2
+# FTS column order: slug=0, title=1, description=2, body=3, tags=4.
 _SNIPPET_TITLE_COLUMN = 1
+_SNIPPET_DESCRIPTION_COLUMN = 2
+_SNIPPET_BODY_COLUMN = 3
 _WINNER_SNIPPET_TOKENS = 12
 
 _LEGACY_BASE_SQL = """
 SELECT
-    w.slug, w.file_path, w.title, w.node_type, w.importance,
+    w.slug, w.file_path, w.title, w.description, w.node_type, w.importance,
     w.tags, w.created, w.updated, w.last_access, w.transcript_ref, w.status,
     w.scope, w.project_id, w.project_label,
     bm25(wiki_fts) AS score,
-    snippet(wiki_fts, 2, '<mark>', '</mark>', '...', 32) AS body_snippet,
+    snippet(wiki_fts, 3, '<mark>', '</mark>', '...', 32) AS body_snippet,
+    snippet(wiki_fts, 2, '<mark>', '</mark>', '...', 32) AS description_snippet,
     snippet(wiki_fts, 1, '<mark>', '</mark>', '...', 32) AS title_snippet
 FROM wiki_fts
 JOIN wiki_index w ON w.rowid = wiki_fts.rowid
@@ -62,12 +64,14 @@ WHERE wiki_fts MATCH :match
 """
 _WINNER_SELECT_SQL = """
 SELECT
-    w.slug, w.file_path, w.title, w.node_type, w.importance,
+    w.slug, w.file_path, w.title, w.description, w.node_type, w.importance,
     w.tags, w.created, w.updated, w.last_access, w.transcript_ref, w.status,
     w.scope, w.project_id, w.project_label,
-    bm25(wiki_fts, 1.0, 1.0, :body_weight, 1.0) AS score,
-    snippet(wiki_fts, 2, '<mark>', '</mark>', '...', :snippet_tokens)
+    bm25(wiki_fts, 1.0, 1.0, :description_weight, :body_weight, 1.0) AS score,
+    snippet(wiki_fts, 3, '<mark>', '</mark>', '...', :snippet_tokens)
         AS body_snippet,
+    snippet(wiki_fts, 2, '<mark>', '</mark>', '...', :snippet_tokens)
+        AS description_snippet,
     snippet(wiki_fts, 1, '<mark>', '</mark>', '...', :snippet_tokens)
         AS title_snippet
 FROM wiki_fts
@@ -160,6 +164,7 @@ def production_ranker_metadata() -> dict[str, object]:
         "column_weights": {
             "slug": 1.0,
             "title": 1.0,
+            "description": _WINNER_DESCRIPTION_WEIGHT,
             "body": _WINNER_BODY_WEIGHT,
             "tags": 1.0,
         },
@@ -334,6 +339,7 @@ class BM25Retriever:
             project_id=project_id,
             extra_params={
                 "body_weight": _WINNER_BODY_WEIGHT,
+                "description_weight": _WINNER_DESCRIPTION_WEIGHT,
                 "snippet_tokens": _WINNER_SNIPPET_TOKENS,
             },
         )
@@ -351,6 +357,7 @@ class BM25Retriever:
                 project_id=project_id,
                 extra_params={
                     "body_weight": _WINNER_BODY_WEIGHT,
+                    "description_weight": _WINNER_DESCRIPTION_WEIGHT,
                     "snippet_tokens": _WINNER_SNIPPET_TOKENS,
                 },
             )
@@ -507,11 +514,14 @@ class BM25Retriever:
 
     def _to_hit(self, row: sqlite3.Row, rank: int, links: list[str]) -> RecallHit:
         body_snippet = str(row["body_snippet"])
+        description_snippet = str(row["description_snippet"])
         title_snippet = str(row["title_snippet"])
         # FTS5 snippet() returns text even when the column itself has no
         # match, so "where did it match" is detected via the <mark> tags.
         if "<mark>" in body_snippet:
             snippet, source = body_snippet, "body"
+        elif "<mark>" in description_snippet:
+            snippet, source = description_snippet, "description"
         else:
             snippet, source = title_snippet, "title"
         try:
@@ -523,6 +533,7 @@ class BM25Retriever:
             status=status,
             file_path=str(row["file_path"]),
             title=str(row["title"]),
+            description=str(row["description"] or ""),
             node_type=str(row["node_type"]),
             importance=float(row["importance"]),
             score=float(row["score"]),

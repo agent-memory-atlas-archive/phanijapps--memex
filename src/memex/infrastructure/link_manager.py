@@ -8,6 +8,7 @@ from pathlib import Path
 from memex.domain.errors import IndexManagerError
 from memex.domain.links import parse_links
 from memex.domain.models import WikiNode
+from memex.domain.reserved import is_structural
 from memex.infrastructure.index_manager import check_slug
 
 
@@ -216,7 +217,7 @@ class LinkManager:
             check_slug(slug)
         except IndexManagerError:
             return False
-        return any(self._wiki_dir.rglob(f"{slug}.md"))
+        return any(not is_structural(path) for path in self._wiki_dir.rglob(f"{slug}.md"))
 
 
 def _source_namespace_complete(source_scope: str | None, source_project_id: str | None) -> bool:

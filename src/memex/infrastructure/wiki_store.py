@@ -14,6 +14,7 @@ from pathlib import Path
 from memex.domain.errors import WikiStoreError
 from memex.domain.frontmatter import parse_front_matter, serialize_front_matter
 from memex.domain.models import NODE_TYPES, PAGE_STATUSES, WikiNode, new_id, utc_now_iso
+from memex.domain.reserved import RESERVED_SLUGS, is_structural
 from memex.domain.slugs import derive_slug, unique_slug
 
 TYPE_DIRS: dict[str, str] = {
@@ -30,6 +31,7 @@ _FRONT_MATTER_KEYS: tuple[str, ...] = (
     "id",
     "type",
     "title",
+    "description",
     "tags",
     "importance",
     "created",
@@ -55,6 +57,7 @@ _FRONT_MATTER_KEYS: tuple[str, ...] = (
 
 _STR_FIELDS: tuple[str, ...] = (
     "title",
+    "description",
     "created",
     "updated",
     "last_access",
@@ -219,13 +222,40 @@ class WikiStore:
         nodes: NodeList = []
         for type_dir in TYPE_DIRS.values():
             for path in sorted(self.wiki_dir.rglob(f"{type_dir}/*.md")):
-                self._reject_unsafe_page_path(path)
+                if is_structural(path):
+                    continue  # generated index.md / optional OKF log.md
                 try:
+                    self._reject_unsafe_page_path(path)
                     nodes.append(self._read_path(path))
                 except WikiStoreError as exc:
                     if errors is None:
                         raise
                     errors.append(str(exc))
+        self._reject_duplicate_namespace_keys(nodes)
+        return nodes
+
+    def scan_dir(self, directory: Path, errors: StrList | None = None) -> NodeList:
+        """Parse only the pages whose parent is exactly ``directory``.
+
+        Same safeguards as :meth:`scan_all` (structural reserved files are
+        skipped, paths are confinement-checked, malformed pages raise or
+        append to ``errors``), at a cost bounded by one directory instead of
+        the whole store. Non-type directories never hold pages and return
+        an empty list without touching the filesystem.
+        """
+        if directory.name not in TYPE_DIRS.values() or not directory.is_dir():
+            return []
+        nodes: NodeList = []
+        for path in sorted(directory.glob("*.md")):
+            if is_structural(path):
+                continue  # generated index.md / optional OKF log.md
+            try:
+                self._reject_unsafe_page_path(path)
+                nodes.append(self._read_path(path))
+            except WikiStoreError as exc:
+                if errors is None:
+                    raise
+                errors.append(str(exc))
         self._reject_duplicate_namespace_keys(nodes)
         return nodes
 
@@ -293,8 +323,8 @@ class WikiStore:
         elif scope == "project" and project_id:
             root = self._project_dir(project_id, project_locator)
         else:
-            return set()
-        return {path.stem for path in root.rglob("*.md")}
+            return set(RESERVED_SLUGS)
+        return {path.stem for path in root.rglob("*.md")} | set(RESERVED_SLUGS)
 
     def _project_dir(self, project_id: str, project_locator: str | None) -> Path:
         if project_locator is not None:
@@ -358,6 +388,8 @@ class WikiStore:
         for path in sorted(self.wiki_dir.rglob(f"{slug}.md")):
             if path.stem != slug or path.parent.name not in TYPE_DIRS.values():
                 continue
+            if is_structural(path):
+                continue  # generated navigation is not a memory page
             node = self._read_path(path)
             if node_type is not None and node.type != node_type:
                 continue
@@ -382,7 +414,7 @@ class WikiStore:
             self._read_path(path)
             for root in roots
             for path in sorted(root.rglob("*.md"))
-            if path.parent.name in TYPE_DIRS.values()
+            if path.parent.name in TYPE_DIRS.values() and not is_structural(path)
         ]
         self._reject_duplicate_namespace_keys(
             [node for node in nodes if node.project_id == project_id]
@@ -406,6 +438,8 @@ class WikiStore:
             return None
         project_ids: set[str] = set()
         for path in sorted(project_dir.rglob("*.md")):
+            if is_structural(path):
+                continue
             node = self._read_path(path)
             if node.scope == "project" and node.project_id:
                 project_ids.add(node.project_id)
@@ -447,13 +481,14 @@ class WikiStore:
         self._reject_unsafe_page_path(path)
         try:
             text = path.read_text(encoding="utf-8")
-        except OSError as exc:
-            raise WikiStoreError(f"cannot read wiki page: {exc.strerror}") from exc
+        except (OSError, UnicodeDecodeError) as exc:
+            reason = exc.strerror if isinstance(exc, OSError) else "not valid UTF-8"
+            raise WikiStoreError(f"cannot read wiki page: {reason}") from exc
         try:
             data, body = parse_front_matter(text)
+            node = _node_from_dict(data, body)
         except Exception as exc:
             raise WikiStoreError(f"{path.name}: {exc}") from exc
-        node = _node_from_dict(data, body)
         node.slug = path.stem
         node.file_path = str(path)
         return node
@@ -507,6 +542,7 @@ def _node_to_dict(node: WikiNode) -> dict[str, object]:
         "id": node.id,
         "type": node.type,
         "title": node.title,
+        "description": node.description,
         "tags": node.tags,
         "importance": node.importance,
         "created": node.created,
@@ -579,6 +615,7 @@ def _node_from_dict(data: dict[str, object], body: str) -> WikiNode:
         title=_require_str(data, "title"),
         body=body,
         id=_require_str(data, "id"),
+        description=_str_value(data, "description") or "",
         tags=_list_value(data, "tags"),
         importance=float(importance),
         created=_require_str(data, "created"),

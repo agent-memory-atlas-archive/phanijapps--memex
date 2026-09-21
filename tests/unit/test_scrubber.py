@@ -1,13 +1,18 @@
 """T4: secret scrubber at every write boundary (AC-0009)."""
 
+import io
+import json
 from pathlib import Path
 
 import pytest
 
 from memex import Memex
-from memex.domain.models import WriteInput
+from memex.domain.models import ConsolidateInput, WikiNode, WriteInput
 from memex.domain.scrub import scrub
-from memex.infrastructure.config import MemexConfig
+from memex.infrastructure.config import ConfigLoader, MemexConfig
+from memex.infrastructure.index_manager import IndexManager
+from memex.infrastructure.link_manager import LinkManager
+from memex.infrastructure.wiki_store import WikiStore
 
 SECRETS = [
     "sk-proj-abcdefghijklmnopqrstuv0123456789abcdefghijklmnopqrstuv",  # OpenAI
@@ -61,7 +66,9 @@ class TestBoundaryIntegration:
             ]
         )
         assert code == 0
-        page = next((data_dir / "docs/global/entities").glob("*.md"))
+        page = next(
+            p for p in (data_dir / "docs/global/entities").glob("*.md") if p.name != "index.md"
+        )
         assert secret not in page.read_text(encoding="utf-8")
         assert "[REDACTED:" in page.read_text(encoding="utf-8")
 
@@ -84,3 +91,211 @@ class TestBoundaryIntegration:
                 content = path.read_text(encoding="utf-8", errors="replace")
                 for secret in SECRETS:
                     assert secret not in content, f"{secret} leaked into {path}"
+
+
+DESCRIPTION_SECRET = SECRETS[0]
+
+
+class TestDescriptionScrub:
+    """AC-0013: secret-shaped descriptions are scrubbed at every persisting
+    write boundary before any file, index, backup, or export can hold them."""
+
+    def test_facade_scrubs_description(self, data_dir: Path) -> None:
+        memex = Memex(MemexConfig(data_dir=data_dir))
+        stored = memex.write(
+            WriteInput(
+                type="entity",
+                title="Desc leak",
+                body="clean body",
+                description=f"key was {DESCRIPTION_SECRET}",
+            )
+        )
+        read_back = memex.wiki_store.read(stored.slug)
+        assert read_back is not None
+        assert DESCRIPTION_SECRET not in read_back.description
+        assert "[REDACTED:openai_key]" in read_back.description
+        memex.close()
+
+    def test_cli_scrubs_description(self, data_dir: Path) -> None:
+        from memex import cli
+
+        code = cli.main(
+            [
+                "--data-dir",
+                str(data_dir),
+                "write",
+                "--type",
+                "entity",
+                "--title",
+                "Desc leak",
+                "--body",
+                "clean body",
+                "--description",
+                f"key was {DESCRIPTION_SECRET}",
+            ]
+        )
+        assert code == 0
+        page = next(
+            p for p in (data_dir / "docs/global/entities").glob("*.md") if p.name != "index.md"
+        )
+        text = page.read_text(encoding="utf-8")
+        assert DESCRIPTION_SECRET not in text
+        assert "[REDACTED:openai_key]" in text
+
+    def test_mcp_scrubs_description(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        from memex import mcp_server
+        from memex.mcp_server import memex_write
+
+        monkeypatch.setenv("MEMEX_DATA_DIR", str(tmp_path / "mcp-scrub-home"))
+        mcp_server._reset()
+        try:
+            result = memex_write(
+                type="entity",
+                title="MCP desc leak",
+                body="clean body",
+                scope="global",
+                description=f"tok {DESCRIPTION_SECRET}",
+            )
+        finally:
+            mcp_server._reset()
+        assert "error" not in result
+        page = Path(str(result["file_path"]))
+        text = page.read_text(encoding="utf-8")
+        assert DESCRIPTION_SECRET not in text
+        assert "[REDACTED:openai_key]" in text
+
+    def test_consolidation_scrubs_description(self, data_dir: Path) -> None:
+        import json
+
+        from memex.application.ports import LLMResponse
+        from memex.infrastructure.consolidator import WikiConsolidator
+
+        store = WikiStore(data_dir)
+        index = IndexManager(data_dir / "mem.db")
+        links = LinkManager(index.connection, store.wiki_dir)
+        store.write(
+            WikiNode(
+                type="episode",
+                title="Session scrub",
+                body="The user prefers ruff over flake8.",
+                id="",
+                session_id="sess-scrub",
+            )
+        )
+
+        class SecretLLM:
+            def complete(self, system: str, user: str, *, max_tokens: int) -> LLMResponse:
+                return LLMResponse(
+                    text=json.dumps(
+                        [
+                            {
+                                "type": "entity",
+                                "title": "Scrubbed fact",
+                                "body": "clean consolidated body",
+                                "description": f"deploy token {DESCRIPTION_SECRET}",
+                                "importance": 0.8,
+                            }
+                        ]
+                    ),
+                    prompt_tokens=1,
+                    completion_tokens=1,
+                )
+
+        consolidator = WikiConsolidator(
+            store, index, links, SecretLLM(), ConfigLoader().load(data_dir=data_dir)
+        )
+        consolidator.consolidate(ConsolidateInput(mode="full"))
+        node = store.read("scrubbed-fact")
+        assert node is not None
+        assert DESCRIPTION_SECRET not in node.description
+        assert "[REDACTED:openai_key]" in node.description
+
+    def test_scrubbed_description_never_reaches_derived_outputs(
+        self, data_dir: Path, tmp_path: Path
+    ) -> None:
+        import tarfile
+
+        memex = Memex(MemexConfig(data_dir=data_dir))
+        memex.write(
+            WriteInput(
+                type="entity",
+                title="Outputs leak",
+                body="clean body",
+                description=f"canary {DESCRIPTION_SECRET}",
+            )
+        )
+
+        result = memex.recall("canary")
+        assert result.hits
+        for hit in result.hits:
+            assert DESCRIPTION_SECRET not in hit.description
+            assert DESCRIPTION_SECRET not in hit.snippet
+
+        export_path = tmp_path / "nodes.json"
+        document = memex.import_export.export(export_path)
+        assert DESCRIPTION_SECRET not in json.dumps(document)
+        assert DESCRIPTION_SECRET not in export_path.read_text(encoding="utf-8")
+
+        archive = tmp_path / "backup.tar.gz"
+        memex.backup(archive)
+        memex.close()
+        with tarfile.open(archive, "r:gz") as tar:
+            members = tar.getmembers()
+            assert members
+            for member in members:
+                if not member.isfile():
+                    continue
+                payload = (tar.extractfile(member) or io.BytesIO()).read()
+                assert DESCRIPTION_SECRET not in payload.decode("utf-8", errors="replace"), (
+                    f"{DESCRIPTION_SECRET} leaked into archive member {member.name}"
+                )
+
+        for path in data_dir.rglob("*"):
+            if path.is_file():
+                content = path.read_text(encoding="utf-8", errors="replace")
+                assert DESCRIPTION_SECRET not in content, f"leaked into {path}"
+
+    def test_scrub_warning_logs_categories_only(
+        self, data_dir: Path, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import logging
+
+        memex = Memex(MemexConfig(data_dir=data_dir))
+        monkeypatch.setattr(logging.getLogger("memex"), "propagate", True)
+        with caplog.at_level(logging.WARNING, logger="memex"):
+            memex.write(
+                WriteInput(
+                    type="entity",
+                    title="Log check",
+                    body="clean body",
+                    description=f"tok {DESCRIPTION_SECRET}",
+                )
+            )
+        memex.close()
+        warning = caplog.records[-1].getMessage()
+        assert "openai_key" in warning
+        assert DESCRIPTION_SECRET not in warning
+
+    def test_boundary_description_without_secrets_writes(self, data_dir: Path) -> None:
+        # AC-0002 acceptance composed with AC-0013: exactly 512 UTF-8 bytes
+        # on one line, no secrets, persists unchanged.
+        memex = Memex(MemexConfig(data_dir=data_dir))
+        limit = "é" * 256
+        assert len(limit.encode("utf-8")) == 512
+        stored = memex.write(
+            WriteInput(type="entity", title="Boundary", body="b", description=limit)
+        )
+        assert stored.description == limit
+        memex.close()
+
+    def test_redaction_growth_over_boundary_rejected_with_clear_error(self, data_dir: Path) -> None:
+        # A 512-byte description whose legacy-key token grows past the byte
+        # budget once redacted: the write is rejected with a message that
+        # names the redaction interaction instead of the generic limit.
+        memex = Memex(MemexConfig(data_dir=data_dir))
+        legacy_key = "sk-AAAAAAAAAAAAAAAAAAAA"  # 23 bytes -> 28-byte marker
+        description = "a" * (512 - len(legacy_key)) + legacy_key
+        assert len(description.encode("utf-8")) == 512
+        with pytest.raises(ValueError, match="after secret redaction"):
+            memex.write(WriteInput(type="entity", title="Grows", body="b", description=description))
+        memex.close()

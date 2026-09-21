@@ -16,6 +16,7 @@ from pathlib import Path
 
 from memex.domain.errors import BackupError
 from memex.domain.models import BackupReport, RestoreReport, utc_now_iso
+from memex.domain.reserved import RESERVED_FILENAMES
 
 ARCHIVE_VERSION = "1.0"
 _ALLOWED_PREFIXES = ("docs/", "wiki/", "transcripts/")  # wiki/: pre-0.2 archives
@@ -169,9 +170,14 @@ class BackupRestore:
 
     @staticmethod
     def _count_files(directory: Path, pattern: str) -> int:
+        """Count memory pages: generated navigation is not wiki content."""
         if not directory.is_dir():
             return 0
-        return sum(1 for path in directory.rglob(pattern) if path.is_file())
+        return sum(
+            1
+            for path in directory.rglob(pattern)
+            if path.is_file() and path.name not in RESERVED_FILENAMES
+        )
 
     @staticmethod
     def _add_text(archive: tarfile.TarFile, name: str, text: str) -> None:

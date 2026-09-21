@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import logging
 import re
+from collections.abc import Callable
+from pathlib import Path
 
 from memex.application.ports import LLMClient
 from memex.domain.errors import LLMError
@@ -15,6 +17,7 @@ from memex.domain.models import (
     WikiNode,
     WriteInput,
 )
+from memex.domain.scrub import scrub
 from memex.infrastructure.config import MemexConfig
 from memex.infrastructure.index_manager import IndexManager
 from memex.infrastructure.link_manager import LinkManager
@@ -45,12 +48,16 @@ and/or summary nodes that should be permanently stored in the wiki memory.
    Only link to nodes listed in "Existing nodes in the knowledge base" below.
 6. Node bodies should be 2-5 sentences. Be specific.
 7. tags should be lowercase, kebab-case: ["preference", "python", "tooling"]
+8. Give each node a "description": one short sentence on a single line
+   (at most 512 UTF-8 bytes) stating what the node contains. It is optional
+   but recommended.
 
 ## OUTPUT FORMAT
 Return a JSON array of node objects. Each object:
 {{
   "type": "entity" | "preference" | "procedure" | "summary",
   "title": "kebab-case-title",
+  "description": "optional one-sentence summary, single line",
   "body": "2-5 sentence description. May include [[wiki-link]] references.",
   "tags": ["tag1", "tag2"],
   "importance": 0.0-1.0,
@@ -95,6 +102,8 @@ class WikiConsolidator:
         link_mgr: LinkManager,
         llm_client: LLMClient,
         config: MemexConfig,
+        *,
+        on_page_written: Callable[[Path], None] | None = None,
     ) -> None:
         self._store = wiki_store
         self._index = index_mgr
@@ -102,6 +111,7 @@ class WikiConsolidator:
         self._llm = llm_client
         self._config = config
         self._approval = config.governance.approval
+        self._on_page_written = on_page_written
 
     def consolidate(self, input: ConsolidateInput) -> ConsolidationReport:
         episodes = self._select_episodes(input)
@@ -177,6 +187,7 @@ class WikiConsolidator:
                     WriteInput(
                         type=str(item.get("type", "")),
                         title=str(item.get("title", "")),
+                        description=self._model_description(item),
                         body=str(item.get("body", "")),
                         tags=[str(tag) for tag in item.get("tags", [])],
                         importance=float(item.get("importance", 0.5)),
@@ -187,10 +198,22 @@ class WikiConsolidator:
                 logger.warning("operation=consolidate status=invalid-node-skipped")
         return candidates
 
+    @staticmethod
+    def _model_description(item: dict[str, object]) -> str:
+        """Scrub the model's optional description; the WriteInput validator
+        remains the enforcement boundary for shape and size."""
+        value = item.get("description")
+        if value is None:
+            return ""
+        if not isinstance(value, str):
+            raise ValueError("description must be a string")
+        return scrub(value)[0]
+
     def _store_node(self, candidate: WriteInput, report: ConsolidationReport) -> None:
         node = WikiNode(
             type=candidate.type,
             title=candidate.title,
+            description=candidate.description,
             body=candidate.body,
             id="",
             tags=candidate.tags,
@@ -205,5 +228,7 @@ class WikiConsolidator:
         self._index.update_record(stored)
         links = self._links.sync_node(stored)
         report.links_added += len(links)
+        if self._on_page_written is not None and stored.file_path:
+            self._on_page_written(Path(stored.file_path))
         if updating:
             report.nodes_updated.append(stored.slug)

@@ -4,7 +4,7 @@ import pytest
 
 from memex.domain.errors import IndexManagerError
 from memex.domain.models import WikiNode
-from memex.infrastructure.index_manager import IndexManager, check_slug
+from memex.infrastructure.index_manager import SCHEMA_VERSION, IndexManager, check_slug
 
 
 def _node(**overrides: object) -> WikiNode:
@@ -17,7 +17,45 @@ def test_initialize_is_idempotent(data_dir: Path) -> None:
     index = IndexManager(data_dir / "mem.db")
     index.initialize()
     index.initialize()
-    assert index.get_meta("schema_version") == "4"
+    assert index.get_meta("schema_version") == SCHEMA_VERSION
+
+
+def test_description_column_is_created_and_mirrored(data_dir: Path) -> None:
+    index = IndexManager(data_dir / "mem.db")
+    columns = {row["name"] for row in index.connection.execute("PRAGMA table_info(wiki_index)")}
+    assert "description" in columns
+
+    index.update_record(_node(slug="d", description="signpost text", body="body words", id="x"))
+    row = index.get("d")
+    assert row is not None
+    assert row["description"] == "signpost text"
+    fts_row = index.connection.execute(
+        "SELECT description FROM wiki_fts WHERE wiki_fts MATCH 'signpost'"
+    ).fetchone()
+    assert fts_row is not None and fts_row["description"] == "signpost text"
+
+
+def test_pre_description_index_is_detected_and_rebuilt(data_dir: Path) -> None:
+    import sqlite3
+
+    index = IndexManager(data_dir / "mem.db")
+    index.update_record(_node(slug="t", file_path=str(data_dir / "t.md"), id="x"))
+    index.close()
+
+    connection = sqlite3.connect(data_dir / "mem.db")
+    for trigger in ("wiki_index_ai", "wiki_index_ad", "wiki_index_au"):
+        connection.execute(f"DROP TRIGGER IF EXISTS {trigger}")
+    connection.execute("ALTER TABLE wiki_index DROP COLUMN description")
+    connection.commit()
+    connection.close()
+
+    reopened = IndexManager(data_dir / "mem.db")
+    assert reopened.needs_rebuild() is True  # column-shape check, not meta stamp
+    reopened.drop_for_rebuild()
+    assert reopened.needs_rebuild() is False
+    columns = {row["name"] for row in reopened.connection.execute("PRAGMA table_info(wiki_index)")}
+    assert "description" in columns
+    assert reopened.get_meta("schema_version") == SCHEMA_VERSION
 
 
 def test_initialize_replaces_a_pre_namespace_disposable_index(data_dir: Path) -> None:

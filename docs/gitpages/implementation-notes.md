@@ -56,6 +56,26 @@ rule, and the OpenAI SDK is the single LLM client.
 
 ## Behavioral notes
 
+- **Descriptions and directory navigation (agentic front matter search).**
+  Two deliberate scope readings from the 2026-09-21 spec
+  (`docs/specs/agentic-frontmatter-search/`): (a) `memex rebuild-index`
+  regenerates navigation by default — AC-0015's "explicit rebuild path" is
+  the rebuild command, while the transparent on-open schema-v5 upgrade still
+  never writes Markdown; (b) an empty store generates no root `index.md` by
+  design, so `memex verify` stays green on fresh stores (AC-0015 read
+  literally would create navigation merely by opening an empty store).
+  Descriptions mirror into the disposable index only; existing pages keep an
+  empty description until edited.
+- **Downgrade behavior (same feature).** A pre-description binary opening a
+  v5 store treats the schema as compatible, but its recall degrades silently:
+  SQLite FTS5 accepts fewer `bm25()` weights than columns, so the old
+  four-weight call runs against the five-column table with the old body
+  weight landing on the description column and old snippet column indexes
+  reading the wrong column — delete `mem.db` (it rebuilds on next open) to
+  restore correct ranking. The old scanner also reports generated body-only
+  `index.md` files and pages carrying a `description` key as malformed pages.
+  Markdown is never touched by the upgrade; recovery from a downgrade is
+  deleting `mem.db`, removing generated indexes, and stripping descriptions.
 - Change detection hashes body text on read: a hand-edited page keeps a stale
   front-matter `content_hash`, so the watcher and `rebuild_index` compare a
   freshly computed hash against the index row and refresh the front matter

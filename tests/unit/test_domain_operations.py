@@ -14,6 +14,7 @@ from memex.domain.models import (
     ConsolidationReport,
     ForgetResult,
     ProvenanceReport,
+    RecallHit,
     RecallResult,
     TaskRecallResult,
     TranscriptLinkReport,
@@ -25,6 +26,7 @@ from memex.domain.operations import (
     ConsolidateResultDict,
     ForgetResultDict,
     ProvenanceDict,
+    RecallHitDict,
     RecallResultDict,
     TaskRecallResultDict,
     TranscriptReportDict,
@@ -53,6 +55,11 @@ def model_fields(model: type) -> set[str]:
 
 def test_turn_dict_mirrors_turn_stream_entry() -> None:
     assert typed_keys(TurnDict) == model_fields(TurnStreamEntry)
+
+
+def test_hit_dict_mirrors_recall_hit() -> None:
+    """Serialized recall hits carry exactly the domain hit fields."""
+    assert typed_keys(RecallHitDict) == model_fields(RecallHit)
 
 
 @pytest.mark.parametrize(("wire", "twin"), RESULT_TWINS)

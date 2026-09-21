@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import logging
 import threading
 from pathlib import Path
 
 from memex.domain.models import WikiNode
 from memex.infrastructure.index_manager import IndexManager
 from memex.infrastructure.link_manager import LinkManager
+from memex.infrastructure.navigation import NavigationGenerator
 from memex.infrastructure.wiki_store import WikiStore, hash_body
+
+logger = logging.getLogger("memex")
 
 ChangeKey = tuple[str, str, str, str]
 
@@ -28,11 +32,14 @@ class IndexWatcher:
         wiki_store: WikiStore,
         poll_interval: int = 60,
         link_mgr: LinkManager | None = None,
+        *,
+        navigation: NavigationGenerator | None = None,
     ) -> None:
         self._wiki_dir = wiki_dir
         self._index = index_mgr
         self._store = wiki_store
         self._links = link_mgr
+        self._navigation = navigation
         self.poll_interval = poll_interval
         self._mtimes: dict[ChangeKey, float] = {}
         self._stop = threading.Event()
@@ -64,6 +71,7 @@ class IndexWatcher:
         """
         count = 0
         changed = self._changed_keys()
+        changed_dirs: list[Path] = []
         for scope, project_id, node_type, slug in changed:
             row = self._index.get(slug, scope=scope, project_id=project_id, node_type=node_type)
             node = self._store.read(slug, node_type, scope=scope, project_id=project_id or None)
@@ -76,15 +84,35 @@ class IndexWatcher:
                         self._links.remove_slug(
                             slug, source_scope=scope, source_project_id=project_id
                         )
+                    if row["file_path"]:
+                        changed_dirs.append(Path(str(row["file_path"])).parent)
                 continue
-            if row is not None and str(row["content_hash"]) == hash_body(node.body):
+            if (
+                row is not None
+                and str(row["content_hash"]) == hash_body(node.body)
+                and str(row["description"] or "") == node.description
+            ):
                 continue  # touched but not edited
+            changed_dirs.append(Path(str(node.file_path)).parent)
             stored = self._store.write(node)  # refresh stale front-matter hash
             self._index.update_record(stored)
             if self._links is not None:
                 self._links.sync_node(stored)
             count += 1
+        self._refresh_navigation(changed_dirs)
         return count
+
+    def _refresh_navigation(self, changed_dirs: list[Path]) -> None:
+        """Best-effort navigation refresh; never fails re-indexing."""
+        if self._navigation is None or not changed_dirs:
+            return
+        for directory in dict.fromkeys(changed_dirs):
+            try:
+                self._navigation.refresh(directory, self._store.scan_dir)
+            except Exception:
+                # Navigation is disposable: verification reports the drift;
+                # a bounded log keeps the poll loop alive through any failure.
+                logger.warning("operation=watch_navigation_refresh status=failed")
 
     def _changed_keys(self) -> list[ChangeKey]:
         current = self._current_mtimes()

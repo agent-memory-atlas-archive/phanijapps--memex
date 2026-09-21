@@ -63,12 +63,15 @@ for what each adapter installs and how it captures sessions.
 
 ```bash
 memex write --type preference --title "Deploy on Fridays" \
-    --body "The team deploys to production on Fridays only." --tags deploy
+    --body "The team deploys to production on Fridays only." \
+    --description "Production deploys happen on Fridays only." --tags deploy
 memex recall "deploy"
 ```
 
 The page is a plain file at
-`~/.memex/docs/global/preferences/deploy-on-fridays.md`. For repository
+`~/.memex/docs/global/preferences/deploy-on-fridays.md`. The optional
+`--description` stores a one-sentence signpost that is searched and returned
+with every hit. For repository
 architecture, conventions, and decisions, use `--scope project`; Memex can
 derive the project identity from the working directory. See
 [project memory](docs/gitpages/guide.md#project-memory-and-dashboard) for scope details.
@@ -76,7 +79,10 @@ derive the project identity from the working directory. See
 ### Explore your memory
 
 Run `memex viz` to open the local, read-only dashboard. It shows memory pages,
-projects, sessions, token usage, and index health.
+projects, sessions, token usage, and index health. Generated `index.md`
+files also list titles and descriptions one directory at a time under
+`~/.memex/docs/`, so agents can descend the store with plain file reads —
+disposable views that `memex rebuild-index` restores from the pages.
 
 ![Memex dashboard overview with memory counts, search, and recent pages](docs/gitpages/assets/dashboard-overview.png)
 
@@ -106,7 +112,7 @@ directory separately.
 | `consolidate` | Distill session episodes into durable memories |
 | `viz` | Browse memories and sessions in the local dashboard |
 | `verify` | Check store health and optional recall/write activity in CI |
-| `rebuild-index` / `watch` | Pick up hand edits to Markdown pages |
+| `rebuild-index` / `watch` | Pick up hand edits to Markdown pages; regenerate directory indexes |
 | `backup` / `restore` / `export` / `import` | Archive the store or move JSON nodes |
 
 The [user guide](docs/gitpages/guide.md) covers commands, transcripts,

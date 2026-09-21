@@ -163,3 +163,4 @@ Repository sources in this section were reviewed at Git commit
 | Spec | Status |
 | --- | --- |
 | `quality-gated-retrieval` | |
+| `agentic-frontmatter-search` | Shipped |

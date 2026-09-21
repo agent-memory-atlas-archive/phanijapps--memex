@@ -20,7 +20,7 @@ def test_healthy_store_passes(memex: Memex) -> None:
     report = verify(memex)
 
     assert report.ok is True
-    assert [check["ok"] for check in report.checks] == [True, True, True]
+    assert [check["ok"] for check in report.checks] == [True, True, True, True]
 
 
 def test_malformed_page_fails_health(memex: Memex, data_dir: Path) -> None:
@@ -41,6 +41,27 @@ def test_broken_link_fails_health(memex: Memex) -> None:
     assert report.ok is False
     links_check = next(check for check in report.checks if check["check"] == "links-resolve")
     assert links_check["ok"] is False
+
+
+def test_index_fresh_fails_on_description_only_mismatch(memex: Memex) -> None:
+    memex.write(
+        WriteInput(type="entity", title="Fresh desc", body="b", description="indexed signpost")
+    )
+    page = memex.data_dir / "docs/global/entities/fresh-desc.md"
+    page.write_text(
+        page.read_text().replace(
+            'description: "indexed signpost"', 'description: "edited signpost"'
+        ),
+        encoding="utf-8",
+    )
+
+    report = verify(memex)
+    fresh_check = next(check for check in report.checks if check["check"] == "index-fresh")
+    assert fresh_check["ok"] is False
+    assert "1 stale" in str(fresh_check["detail"])
+
+    memex.rebuild_index()
+    assert verify(memex).ok is True
 
 
 def test_require_recall_fails_without_activity(memex: Memex) -> None:

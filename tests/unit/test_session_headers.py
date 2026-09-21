@@ -152,7 +152,9 @@ class TestTranscriptWriter:
         )
         meta = json.loads(Path(report.meta_file).read_text())
         assert meta["token_usage"]["input_tokens"] == 90000
-        episodes = list((data_dir / "docs/global/episodes").glob("*.md"))
+        episodes = [
+            p for p in (data_dir / "docs/global/episodes").glob("*.md") if p.name != "index.md"
+        ]
         assert len(episodes) == 1  # idempotent, no duplicate episode
 
 

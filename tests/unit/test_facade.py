@@ -24,6 +24,70 @@ def test_write_updates_index_and_links(memex: Memex) -> None:
     assert memex.link_manager.get_backlinks("python-3-12") == [node.slug]
 
 
+def test_write_persists_description_and_returns_it_on_recall(memex: Memex) -> None:
+    memex.write(
+        WriteInput(
+            type="entity",
+            title="Kubernetes probes",
+            body="ordinary body words",
+            description="liveness and readiness probe settings",
+        )
+    )
+    row = memex.index_manager.get("kubernetes-probes")
+    assert row is not None
+    assert row["description"] == "liveness and readiness probe settings"
+
+    result = memex.recall("liveness")
+    assert [hit.slug for hit in result.hits] == ["kubernetes-probes"]
+    assert result.hits[0].description == "liveness and readiness probe settings"
+    assert result.hits[0].snippet_source == "description"
+
+
+def test_rebuild_index_picks_up_description_only_edit(memex: Memex) -> None:
+    memex.write(
+        WriteInput(
+            type="entity",
+            title="Rebuildable",
+            body="same body",
+            description="before-edit signpost",
+        )
+    )
+    page = Path("docs/global/entities/rebuildable.md")
+    page = memex.data_dir / page
+    page.write_text(
+        page.read_text().replace(
+            'description: "before-edit signpost"', 'description: "after-edit signpost"'
+        ),
+        encoding="utf-8",
+    )
+
+    report = memex.rebuild_index()
+
+    assert report.nodes_indexed == 1
+    row = memex.index_manager.get("rebuildable")
+    assert row is not None
+    assert row["description"] == "after-edit signpost"
+    result = memex.recall("after-edit")
+    assert [hit.slug for hit in result.hits] == ["rebuildable"]
+
+
+def test_status_counts_description_mismatch_as_stale(memex: Memex) -> None:
+    memex.write(
+        WriteInput(type="entity", title="Stale desc", body="b", description="original signpost")
+    )
+    page = memex.data_dir / "docs/global/entities/stale-desc.md"
+    page.write_text(
+        page.read_text().replace(
+            'description: "original signpost"', 'description: "edited signpost"'
+        ),
+        encoding="utf-8",
+    )
+
+    assert memex.status()["index_stale_rows"] == 1
+    memex.rebuild_index()
+    assert memex.status()["index_stale_rows"] == 0
+
+
 def test_write_rejects_oversized_body(data_dir: Path) -> None:
     import dataclasses
 
@@ -107,6 +171,28 @@ def test_export_import_roundtrip_preserves_project_scope(memex: Memex, data_dir:
     assert restored.project_id == "a" * 24
 
 
+def test_import_scrubs_secret_shaped_description(memex: Memex, data_dir: Path) -> None:
+    secret = "sk-proj-1234567890abcdefghij"  # noqa: S105 - fixture, never real
+    document: dict[str, object] = {
+        "nodes": [
+            {
+                "slug": "imported-secret",
+                "type": "entity",
+                "title": "Imported secret",
+                "body": "clean body",
+                "description": f"token {secret} here",
+            }
+        ]
+    }
+    result = memex.import_export.import_data(document)
+    assert result["imported"] == 1
+    node = memex.wiki_store.read("imported-secret")
+    assert node is not None and node.file_path
+    assert secret not in node.description
+    assert "[REDACTED:openai_key]" in node.description
+    assert secret not in Path(node.file_path).read_text(encoding="utf-8")
+
+
 def test_rebuild_after_manual_edit(memex: Memex) -> None:
     memex.write(WriteInput(type="entity", title="Manual edit", body="original"))
     page = data_dir_page(memex)
@@ -120,7 +206,9 @@ def test_rebuild_after_manual_edit(memex: Memex) -> None:
 
 
 def data_dir_page(memex: Memex) -> Path:
-    return next((memex.data_dir / "docs/global/entities").glob("*.md"))
+    return next(
+        p for p in (memex.data_dir / "docs/global/entities").glob("*.md") if p.name != "index.md"
+    )
 
 
 def test_apply_decay_via_facade(memex: Memex) -> None:

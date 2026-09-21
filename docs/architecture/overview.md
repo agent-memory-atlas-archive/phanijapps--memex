@@ -61,7 +61,8 @@ trust-boundary rules live in [dashboard security](security.md).
    outgoing links.
 
 The page write justifies every index mutation. A failed or deleted index can be
-rebuilt from the pages.
+rebuilt from the pages. After the page commits, the affected directory
+indexes refresh as a best-effort follow-up that never fails the write.
 
 ### Recall and injection
 
@@ -76,8 +77,12 @@ rebuilt from the pages.
 Production recall uses the `semantic-and-fallback-fts5` ranker. It caps the
 safe-token query at 64 tokens and 1,024 UTF-8 bytes, then first runs a strict
 `AND` FTS5 query over the safe tokens with column weights
-`slug=1, title=1, body=2, tags=1`, then broadens to an `OR` query only when the
-strict query returns zero rows. Snippets are capped at 12 tokens. Filters are
+`slug=1, title=1, description=1, body=2, tags=1` — the description column is
+searched at a neutral weight, so the pre-existing column contributions are
+unchanged — then broadens to an `OR` query only when the
+strict query returns zero rows. Snippets are capped at 12 tokens and are
+selected from the matching column: body first, then description, then title,
+with `snippet_source` reporting the match origin. Filters are
 applied before each limit, returned slugs are unique, links and access
 statistics are loaded once after ranking, and ascending slug is the final
 tie-break. The ranker is local SQLite FTS5 only: no embeddings, network service,
@@ -137,18 +142,35 @@ Remote OpenAI-compatible providers and local harness CLI providers implement
 the same port. Failures return a partial report and do not block the harness
 hook.
 
+### Generated directory navigation
+
+`NavigationGenerator` derives one deterministic `index.md` per directory that
+contains pages: the memory-root index declares `okf_version: "0.2"` and
+descendants are body-only listings of titles, descriptions, and child links.
+These files are disposable views of the pages, exactly like `mem.db`: the
+explicit `rebuild-index` path regenerates them, and a failed refresh never
+fails an authoritative page write. The filenames `index.md` and `log.md` are
+reserved at every level — structural files never enter the store scan, so
+they cannot become `WikiNode`s, FTS rows, links, export entries,
+consolidation input, or watcher lifecycle events. A valid legacy page at a
+reserved name is preserved byte-for-byte; generation skips the colliding
+path and verification reports it. Opening a store never writes navigation.
+
 ### Verification and maintenance
 
-`memex verify` checks page parsing, index freshness, links, and optional
-recall/write activity evidence. `rebuild-index` reconstructs derived SQLite
-state. Backup and restore validate archive paths and links; restore preserves
-the previous store in a timestamped directory before replacement.
+`memex verify` checks page parsing, index freshness (including the mirrored
+description), links, optional recall/write activity evidence, and that
+generated navigation matches the page tree. `rebuild-index` reconstructs
+derived SQLite state and regenerates directory indexes. Backup and restore
+validate archive paths and links; restore preserves the previous store in a
+timestamped directory before replacement.
 
 ## Durable state
 
 ```text
 ~/.memex/                         # overridden by MEMEX_DATA_DIR
 ├── memex.toml                    # user-owned configuration
+├── docs/index.md                 # generated disposable navigation (root)
 ├── docs/global/<type>/<slug>.md  # global authoritative memory pages
 ├── docs/projects/git-<repo>/<type>/<slug>.md    # project pages from a Git origin
 ├── docs/projects/<folder>/<type>/<slug>.md      # project pages without a usable origin
@@ -165,6 +187,10 @@ an isolated `MEMEX_DATA_DIR` rather than the developer's real store.
 ## Invariants
 
 - Markdown pages remain sufficient to rebuild the searchable memory store.
+- Generated `index.md` navigation files are disposable views rebuilt from the
+  pages; `index.md` and `log.md` are reserved filenames excluded from every
+  memory surface, and navigation refresh failures never fail an authoritative
+  page write.
 - Page front matter carries scope. Project identifiers are opaque hashes and
   remain the namespace authority; readable project directories are locators
   only.
