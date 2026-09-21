@@ -422,3 +422,28 @@ class TestImportReservedSlugAndErrorContainment:
         assert len(cast(list[str], report["errors"])) == 1
         assert target.wiki_store.read("after-collision") is not None
         target.close()
+
+    def test_import_contains_write_time_failures_per_item(self, tmp_path: Path) -> None:
+        target = MemexFacade(MemexConfig(data_dir=tmp_path / "home"))
+        document = {
+            "version": "1.0",
+            "nodes": [
+                {
+                    "type": "entity",
+                    "title": "Bad slug",
+                    "slug": "Bad Slug",
+                    "body": "body",
+                },
+                {
+                    "type": "entity",
+                    "title": "Valid after bad",
+                    "slug": "valid-after-bad",
+                    "body": "body",
+                },
+            ],
+        }
+        report = target.import_export.import_data(cast(dict[str, object], document))
+        assert report["imported"] == 1
+        assert len(cast(list[str], report["errors"])) == 1
+        assert target.wiki_store.read("valid-after-bad") is not None
+        target.close()

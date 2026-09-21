@@ -7,7 +7,7 @@ import logging
 from collections.abc import Callable
 from pathlib import Path
 
-from memex.domain.errors import WikiStoreError
+from memex.domain.errors import IndexManagerError, WikiStoreError
 from memex.domain.models import NODE_TYPES, WikiNode, utc_now_iso
 from memex.domain.reserved import RESERVED_SLUGS
 from memex.domain.scrub import scrub
@@ -74,9 +74,13 @@ class ImportExport:
             if not slug:
                 skipped.append(str(item.get("title", "<untitled>")))
                 continue
-            stored = self._store.write(node)
-            self._index.update_record(stored)
-            self._links.sync_node(stored)
+            try:
+                stored = self._store.write(node)
+                self._index.update_record(stored)
+                self._links.sync_node(stored)
+            except (ValueError, WikiStoreError, IndexManagerError) as exc:
+                errors.append(str(exc))
+                continue
             if self._on_page_written is not None and stored.file_path:
                 self._on_page_written(Path(stored.file_path))
             imported += 1
