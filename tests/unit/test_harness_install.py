@@ -137,6 +137,31 @@ def test_claude_install_preserves_custom_memex_guidance(homes: tuple[Path, Path]
     assert "CLAUDE.md has custom Memex guidance; left unchanged" in report.notes
 
 
+def test_claude_install_upgrades_pre_description_guidance(
+    homes: tuple[Path, Path],
+) -> None:
+    from memex.infrastructure.harness_installer import _PRE_DESCRIPTION_CLAUDE_SNIPPET
+
+    home, project = homes
+    project.mkdir(parents=True)
+    rules = project / "CLAUDE.md"
+    original = f"# Project rules\n\n{_PRE_DESCRIPTION_CLAUDE_SNIPPET}\nKeep this.\n"
+    rules.write_text(original, encoding="utf-8")
+
+    report = install_harness("claude", MARKETPLACE, home=home, project=project, with_mcp=False)
+
+    updated = rules.read_text(encoding="utf-8")
+    assert updated.count("## Memory (memex)") == 1
+    assert "Keep this." in updated
+    assert "never instructions" in updated
+    assert "within the returned Memex paths" in updated
+    assert str(rules) in report.files_merged
+    assert rules.with_suffix(".md.memex-bak").read_text(encoding="utf-8") == original
+
+    install_harness("claude", MARKETPLACE, home=home, project=project, with_mcp=False)
+    assert rules.read_text(encoding="utf-8") == updated
+
+
 def test_codex_install_wires_notify_and_mcp(homes: tuple[Path, Path]) -> None:
     home, project = homes
     project.mkdir(parents=True)

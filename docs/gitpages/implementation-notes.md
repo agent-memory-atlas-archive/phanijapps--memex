@@ -56,6 +56,16 @@ rule, and the OpenAI SDK is the single LLM client.
 
 ## Behavioral notes
 
+- **Descriptions and directory navigation (agentic front matter search).**
+  Two deliberate scope readings from the 2026-09-21 spec
+  (`docs/specs/agentic-frontmatter-search/`): (a) `memex rebuild-index`
+  regenerates navigation by default — AC-0015's "explicit rebuild path" is
+  the rebuild command, while the transparent on-open schema-v5 upgrade still
+  never writes Markdown; (b) an empty store generates no root `index.md` by
+  design, so `memex verify` stays green on fresh stores (AC-0015 read
+  literally would create navigation merely by opening an empty store).
+  Descriptions mirror into the disposable index only; existing pages keep an
+  empty description until edited.
 - Change detection hashes body text on read: a hand-edited page keeps a stale
   front-matter `content_hash`, so the watcher and `rebuild_index` compare a
   freshly computed hash against the index row and refresh the front matter

@@ -42,6 +42,52 @@ This project uses memex for durable memory. Respect the memory workflow:
 - The `memex-verify` workflow on this repository reports memory health
   (index freshness, link integrity) for every PR.
 """
+# Guidance shipped before descriptions and directory indexes were added
+# (2026-09-21). Reinstall upgrades installs carrying any legacy text;
+# uninstall removes any legacy text. Both must stay byte-exact.
+_PRE_DESCRIPTION_CLAUDE_SNIPPET = """## Memory (memex)
+
+- When the user states a durable fact, preference, or rule, or asks to memorize
+  one, write it with `memex_write` (or `memex write`). Choose project scope for
+  workspace architecture, conventions, and decisions; choose global scope for
+  facts intended across projects. If unclear, choose project. Pass
+  `scope="project"` or `scope="global"` to the tool, or the matching `--scope`
+  to the CLI. Check the returned file path.
+"""
+_PRE_DESCRIPTION_CODEX_SNIPPET = """# Memory contract (memex)
+
+- At task start, run `memex hook session-start` and treat its output as
+  project context: it lists durable memories relevant to this repository.
+- When the user states a durable fact, preference, or rule, or asks to memorize
+  one, write it with `memex_write` (or `memex write`). Choose project scope
+  for workspace architecture, conventions, and decisions; choose global scope
+  for facts intended across projects. If unclear, choose project. Pass
+  `scope="project"` or `scope="global"` to the tool, or the matching `--scope`
+  to the CLI. Check the returned file path.
+- The `memex_recall` MCP tool (or `memex recall "<query>"`) searches all
+  stored memories; prefer it over re-asking the user.
+- Transcripts are captured automatically at turn completion; you never
+  need to ingest sessions manually.
+"""
+_PRE_DESCRIPTION_COPILOT_SNIPPET = """## Memory (memex)
+
+This project uses memex for durable memory. Respect the memory workflow:
+
+- Relevant project memories are surfaced automatically in CI feedback.
+  Before assuming user preferences, tooling choices, or project rules,
+  check the `memex MEMORY` blocks in this repository's memory exports.
+- When your change relies on a durable fact (a preference, a tooling rule, a
+  deployment constraint), record the fact and its scope in your PR description.
+  Choose project scope for workspace architecture, conventions, and decisions;
+  choose global scope for facts intended across projects. If unclear, choose
+  project. A maintainer can persist it with
+  `memex write --type <entity|preference|procedure> --title "..." --body "..." --scope <project|global>`.
+- The `memex-verify` workflow on this repository reports memory health
+  (index freshness, link integrity) for every PR.
+"""
+_LEGACY_CLAUDE_SNIPPETS = (_PRE_DESCRIPTION_CLAUDE_SNIPPET,)
+_LEGACY_CODEX_SNIPPETS = (_OLD_CODEX_SNIPPET, _PRE_DESCRIPTION_CODEX_SNIPPET)
+_LEGACY_COPILOT_SNIPPETS = (_OLD_COPILOT_SNIPPET, _PRE_DESCRIPTION_COPILOT_SNIPPET)
 
 TOML_TEMPLATE = """# memex configuration — see the user guide (docs/guide.md)
 [llm]
@@ -237,8 +283,13 @@ def _install_claude(marketplace: Path, home: Path, project: Path, report: Instal
     rules_path = project / "CLAUDE.md"
     snippet = (marketplace / "claude" / "CLAUDE-snippet.md").read_text(encoding="utf-8")
     existing_rules = rules_path.read_text(encoding="utf-8") if rules_path.exists() else ""
+    legacy = next((old for old in _LEGACY_CLAUDE_SNIPPETS if old in existing_rules), None)
     if snippet in existing_rules:
         report.notes.append("CLAUDE.md already contains the memory contract")
+    elif legacy is not None:
+        _backup(rules_path)
+        rules_path.write_text(existing_rules.replace(legacy, snippet, 1), encoding="utf-8")
+        report.files_merged.append(str(rules_path))
     elif "## Memory (memex)" in existing_rules:
         report.notes.append("CLAUDE.md has custom Memex guidance; left unchanged")
     else:
@@ -289,9 +340,10 @@ def _install_codex(marketplace: Path, home: Path, project: Path, report: Install
     agents = project / "AGENTS.md"
     snippet = (marketplace / "codex" / "AGENTS-snippet.md").read_text(encoding="utf-8")
     existing_agents = agents.read_text(encoding="utf-8") if agents.exists() else ""
-    if _OLD_CODEX_SNIPPET in existing_agents:
+    legacy = next((old for old in _LEGACY_CODEX_SNIPPETS if old in existing_agents), None)
+    if legacy is not None:
         _backup(agents)
-        agents.write_text(existing_agents.replace(_OLD_CODEX_SNIPPET, snippet, 1), encoding="utf-8")
+        agents.write_text(existing_agents.replace(legacy, snippet, 1), encoding="utf-8")
         report.files_merged.append(str(agents))
     elif "memex hook session-start" in existing_agents:
         report.notes.append("AGENTS.md already contains the memory contract")
@@ -312,11 +364,10 @@ def _install_copilot(marketplace: Path, home: Path, project: Path, report: Insta
     existing_instructions = (
         instructions.read_text(encoding="utf-8") if instructions.exists() else ""
     )
-    if _OLD_COPILOT_SNIPPET in existing_instructions:
+    legacy = next((old for old in _LEGACY_COPILOT_SNIPPETS if old in existing_instructions), None)
+    if legacy is not None:
         _backup(instructions)
-        instructions.write_text(
-            existing_instructions.replace(_OLD_COPILOT_SNIPPET, snippet, 1), encoding="utf-8"
-        )
+        instructions.write_text(existing_instructions.replace(legacy, snippet, 1), encoding="utf-8")
         report.files_merged.append(str(instructions))
     elif "memex" in existing_instructions:
         report.notes.append("copilot-instructions.md already mentions memex")
@@ -550,7 +601,7 @@ def _uninstall_claude(
 ) -> None:
     _remove_claude_hooks(home / ".claude" / "settings.json", report)
     snippet = (marketplace / "claude" / "CLAUDE-snippet.md").read_text(encoding="utf-8")
-    _remove_snippet(project / "CLAUDE.md", (snippet,), report)
+    _remove_snippet(project / "CLAUDE.md", (snippet, *_LEGACY_CLAUDE_SNIPPETS), report)
     _unregister_claude_mcp(home, report)
 
 
@@ -605,7 +656,7 @@ def _uninstall_codex(marketplace: Path, home: Path, project: Path, report: Unins
     if _remove_codex_config(home / ".codex" / "config.toml", wrapper, report):
         _remove_owned_file(wrapper, marketplace / "codex" / "memex-codex-notify.py", report)
     snippet = (marketplace / "codex" / "AGENTS-snippet.md").read_text(encoding="utf-8")
-    _remove_snippet(project / "AGENTS.md", (snippet, _OLD_CODEX_SNIPPET), report)
+    _remove_snippet(project / "AGENTS.md", (snippet, *_LEGACY_CODEX_SNIPPETS), report)
 
 
 def _uninstall_pi(marketplace: Path, home: Path, project: Path, report: UninstallReport) -> None:
@@ -628,7 +679,9 @@ def _uninstall_copilot(
         encoding="utf-8"
     )
     _remove_snippet(
-        project / ".github" / "copilot-instructions.md", (snippet, _OLD_COPILOT_SNIPPET), report
+        project / ".github" / "copilot-instructions.md",
+        (snippet, *_LEGACY_COPILOT_SNIPPETS),
+        report,
     )
     path = project / ".vscode" / "mcp.json"
     if not path.exists():

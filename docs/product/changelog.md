@@ -9,6 +9,15 @@ unreleased until a release tag is created.
 
 ### Added
 
+- Searchable page descriptions: an optional single-line `description` (≤512
+  UTF-8 bytes) on every write path (`--description` / MCP `description` /
+  Python), searched at a neutral FTS weight, returned on recall hits, scrubbed
+  for credentials, and preserved through edit, backup/restore, and
+  export/import. Generated OKF-style `index.md` directory navigation lists
+  titles and descriptions one directory at a time (root index declares
+  `okf_version: "0.2"`); `index` and `log` are reserved slugs for new writes,
+  pre-existing pages at those names are preserved, and stale SQLite indexes
+  rebuild transparently at schema v5 without touching Markdown.
 - Token-budgeted recall and hook injection, a weak-match injection floor, page
   status lifecycle, manual approval, provenance fields, write-boundary secret
   scrubbing, `memex status`, and zero-yield verification warnings.
