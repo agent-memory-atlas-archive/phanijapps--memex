@@ -7,6 +7,7 @@ import pytest
 from memex.domain.errors import BackupError
 from memex.domain.models import (
     TurnStreamEntry,
+    WikiNode,
     WriteInput,
 )
 from memex.infrastructure.backup import BackupRestore
@@ -56,6 +57,11 @@ def test_turn_entry_from_dict_requires_fields() -> None:
         {"type": "entity", "session_id": " "},
         {"expires_at": "tomorrow"},
         {"valid_from": "2026-13-99T00:00:00Z"},
+        {"description": "line\nbreak"},
+        {"description": "line\rbreak"},
+        {"description": "null\x00byte"},
+        {"description": "escape\x1bseq"},
+        {"description": "x" * 513},
     ],
 )
 def test_write_input_validation(overrides: dict[str, object]) -> None:
@@ -63,6 +69,27 @@ def test_write_input_validation(overrides: dict[str, object]) -> None:
     fields.update(overrides)
     with pytest.raises(ValueError):
         WriteInput(**fields)  # type: ignore[arg-type]
+
+
+def test_description_defaults_and_boundary_acceptance() -> None:
+    import memex.domain.models as models
+
+    empty = WriteInput(type="entity", title="t", body="b")
+    assert empty.description == ""
+    # Exactly 512 UTF-8 bytes on one line is accepted; multibyte counts.
+    limit = "é" * 256
+    assert len(limit.encode("utf-8")) == 512
+    accepted = WriteInput(type="entity", title="t", body="b", description=limit)
+    assert accepted.description == limit
+    node = models.WikiNode(type="entity", title="t", body="b", id="i", description=limit)
+    assert node.description == limit
+    assert models.WikiNode(type="entity", title="t", body="b", id="i").description == ""
+
+
+def test_wiki_node_description_validation() -> None:
+    for bad in ("a\nb", "a\rb", "a\x00b", "x" * 513):
+        with pytest.raises(ValueError):
+            WikiNode(type="entity", title="t", body="b", id="i", description=bad)
 
 
 def test_consolidate_input_validation() -> None:

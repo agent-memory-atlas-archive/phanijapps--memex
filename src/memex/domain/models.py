@@ -8,6 +8,7 @@ boundary.
 from __future__ import annotations
 
 import re
+import unicodedata
 import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -47,6 +48,14 @@ def _check_iso(value: str, field_name: str) -> None:
         datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ")
     except ValueError as exc:
         raise ValueError(f"{field_name} is not a valid date: {value}") from exc
+
+
+def _check_description(description: str) -> None:
+    """One line, no control characters, at most 512 UTF-8 bytes (spec AC-0002)."""
+    if len(description.encode("utf-8")) > 512:
+        raise ValueError("description must stay within 512 UTF-8 bytes")
+    if any(unicodedata.category(character) == "Cc" for character in description):
+        raise ValueError("description must be a single line without control characters")
 
 
 def _check_project_metadata(scope: str, project_id: str | None, project_label: str | None) -> None:
@@ -164,6 +173,7 @@ class WriteInput:
     type: str
     title: str
     body: str
+    description: str = ""
     tags: list[str] = field(default_factory=list)
     importance: float = 0.5
     links: list[str] = field(default_factory=list)
@@ -188,6 +198,7 @@ class WriteInput:
             raise ValueError(f"type must be one of {NODE_TYPES}, got {self.type!r}")
         if not self.title.strip():
             raise ValueError("title must be non-empty")
+        _check_description(self.description)
         if not 0.0 <= self.importance <= 1.0:
             raise ValueError("importance must be within [0.0, 1.0]")
         self.tags = _norm_tags(self.tags)
@@ -225,6 +236,7 @@ class WikiNode:
     id: str
     slug: str = ""
     file_path: str | None = None
+    description: str = ""
     tags: list[str] = field(default_factory=list)
     importance: float = 0.5
     created: str = field(default_factory=utc_now_iso)
@@ -253,6 +265,7 @@ class WikiNode:
             raise ValueError(f"type must be one of {NODE_TYPES}, got {self.type!r}")
         if not self.title.strip():
             raise ValueError("title must be non-empty")
+        _check_description(self.description)
         if not 0.0 <= self.importance <= 1.0:
             raise ValueError("importance must be within [0.0, 1.0]")
         if self.status not in PAGE_STATUSES:
@@ -287,6 +300,7 @@ class RecallHit:
     last_access: str | None
     transcript_ref: str | None
     links: list[str]
+    description: str = ""
     status: str = "active"
     scope: str = "global"
     project_id: str | None = None

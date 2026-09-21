@@ -106,6 +106,43 @@ class TestSchemaV2AutoRebuild:
         assert [hit.slug for hit in result.hits] == ["stale"]  # rebuilt from wiki
         reopened.close()
 
+    def test_pre_description_index_upgrades_without_markdown_writes(self, data_dir: Path) -> None:
+        import sqlite3
+
+        memex = Memex(Config(data_dir=data_dir))
+        memex.write(
+            WriteInput(
+                type="entity",
+                title="Upgrade witness",
+                body="body words",
+                description="zygoma signpost term",
+            )
+        )
+        memex.close()
+        pages = {
+            path: path.read_text(encoding="utf-8") for path in (data_dir / "docs").rglob("*.md")
+        }
+
+        connection = sqlite3.connect(data_dir / "mem.db")
+        for trigger in ("wiki_index_ai", "wiki_index_ad", "wiki_index_au"):
+            connection.execute(f"DROP TRIGGER IF EXISTS {trigger}")
+        connection.execute("ALTER TABLE wiki_index DROP COLUMN description")
+        connection.commit()
+        connection.close()
+
+        reopened = Memex(Config(data_dir=data_dir))
+        try:
+            assert reopened.index_manager.get_meta("schema_version") == SCHEMA_VERSION
+            result = reopened.recall("zygoma")
+            assert [hit.slug for hit in result.hits] == ["upgrade-witness"]
+            assert result.hits[0].snippet_source == "description"
+        finally:
+            reopened.close()
+
+        assert {
+            path: path.read_text(encoding="utf-8") for path in (data_dir / "docs").rglob("*.md")
+        } == pages
+
 
 class TestRunLog:
     def test_append_read_round_trip(self, tmp_path: Path) -> None:

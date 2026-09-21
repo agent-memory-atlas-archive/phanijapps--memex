@@ -50,7 +50,11 @@ def verify(
             project_id=node.project_id or "",
             node_type=node.type,
         )
-        if row is None or str(row["content_hash"]) != hash_body(node.body):
+        if (
+            row is None
+            or str(row["content_hash"]) != hash_body(node.body)
+            or str(row["description"] or "") != node.description
+        ):
             stale += 1
     checks.append(_check("index-fresh", stale == 0, f"{stale} stale or missing rows"))
 

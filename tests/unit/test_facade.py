@@ -24,6 +24,70 @@ def test_write_updates_index_and_links(memex: Memex) -> None:
     assert memex.link_manager.get_backlinks("python-3-12") == [node.slug]
 
 
+def test_write_persists_description_and_returns_it_on_recall(memex: Memex) -> None:
+    memex.write(
+        WriteInput(
+            type="entity",
+            title="Kubernetes probes",
+            body="ordinary body words",
+            description="liveness and readiness probe settings",
+        )
+    )
+    row = memex.index_manager.get("kubernetes-probes")
+    assert row is not None
+    assert row["description"] == "liveness and readiness probe settings"
+
+    result = memex.recall("liveness")
+    assert [hit.slug for hit in result.hits] == ["kubernetes-probes"]
+    assert result.hits[0].description == "liveness and readiness probe settings"
+    assert result.hits[0].snippet_source == "description"
+
+
+def test_rebuild_index_picks_up_description_only_edit(memex: Memex) -> None:
+    memex.write(
+        WriteInput(
+            type="entity",
+            title="Rebuildable",
+            body="same body",
+            description="before-edit signpost",
+        )
+    )
+    page = Path("docs/global/entities/rebuildable.md")
+    page = memex.data_dir / page
+    page.write_text(
+        page.read_text().replace(
+            'description: "before-edit signpost"', 'description: "after-edit signpost"'
+        ),
+        encoding="utf-8",
+    )
+
+    report = memex.rebuild_index()
+
+    assert report.nodes_indexed == 1
+    row = memex.index_manager.get("rebuildable")
+    assert row is not None
+    assert row["description"] == "after-edit signpost"
+    result = memex.recall("after-edit")
+    assert [hit.slug for hit in result.hits] == ["rebuildable"]
+
+
+def test_status_counts_description_mismatch_as_stale(memex: Memex) -> None:
+    memex.write(
+        WriteInput(type="entity", title="Stale desc", body="b", description="original signpost")
+    )
+    page = memex.data_dir / "docs/global/entities/stale-desc.md"
+    page.write_text(
+        page.read_text().replace(
+            'description: "original signpost"', 'description: "edited signpost"'
+        ),
+        encoding="utf-8",
+    )
+
+    assert memex.status()["index_stale_rows"] == 1
+    memex.rebuild_index()
+    assert memex.status()["index_stale_rows"] == 0
+
+
 def test_write_rejects_oversized_body(data_dir: Path) -> None:
     import dataclasses
 

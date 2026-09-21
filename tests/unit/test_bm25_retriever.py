@@ -14,8 +14,16 @@ from memex.infrastructure.index_manager import IndexManager
 from memex.infrastructure.wiki_store import WikiStore
 
 
-def _node(title: str, body: str, *, slug: str = "") -> WikiNode:
-    return WikiNode(type="entity", title=title, body=body, id=slug, slug=slug)
+def _node(
+    title: str,
+    body: str,
+    *,
+    slug: str = "",
+    description: str = "",
+) -> WikiNode:
+    return WikiNode(
+        type="entity", title=title, body=body, id=slug, slug=slug, description=description
+    )
 
 
 def _index_nodes(data_dir: Path, nodes: list[WikiNode]) -> IndexManager:
@@ -104,10 +112,79 @@ def test_production_ranker_metadata_reports_promoted_strategy() -> None:
     assert metadata["column_weights"] == {
         "slug": 1.0,
         "title": 1.0,
+        "description": 1.0,
         "body": 2.0,
         "tags": 1.0,
     }
     assert metadata["snippet_tokens"] == 12
+
+
+def test_description_only_match_returns_description_snippet(data_dir: Path) -> None:
+    index = _index_nodes(
+        data_dir,
+        [
+            _node(
+                "Plain page",
+                "ordinary body words",
+                slug="plain-page",
+                description="quilting pattern archive for agents",
+            )
+        ],
+    )
+    retriever = BM25Retriever(data_dir / "mem.db")
+
+    result = retriever.retrieve("quilting", top_k=5)
+
+    assert [hit.slug for hit in result.hits] == ["plain-page"]
+    hit = result.hits[0]
+    assert hit.snippet_source == "description"
+    assert "<mark>quilting</mark>" in hit.snippet
+    assert hit.description == "quilting pattern archive for agents"
+    retriever.close()
+    index.close()
+
+
+def test_body_match_still_wins_snippet_over_description(data_dir: Path) -> None:
+    index = _index_nodes(
+        data_dir,
+        [
+            _node(
+                "Mixed page",
+                "body carries xylophone",
+                slug="mixed-page",
+                description="xylophone also in description",
+            )
+        ],
+    )
+    retriever = BM25Retriever(data_dir / "mem.db")
+
+    result = retriever.retrieve("xylophone", top_k=5)
+
+    assert [hit.slug for hit in result.hits] == ["mixed-page"]
+    assert result.hits[0].snippet_source == "body"
+    retriever.close()
+    index.close()
+
+
+def test_empty_description_pages_keep_existing_ranking(data_dir: Path) -> None:
+    # Same fixture shape as the pre-description winner tests: identical
+    # titles/bodies with no descriptions must keep the deterministic order.
+    index = _index_nodes(
+        data_dir,
+        [
+            _node("Beta only", "beta", slug="beta-only"),
+            _node("Exact", "alpha beta", slug="exact"),
+            _node("Alpha only", "alpha", slug="alpha-only"),
+        ],
+    )
+    retriever = BM25Retriever(data_dir / "mem.db")
+
+    result = retriever.retrieve("alpha beta", top_k=10)
+
+    assert [hit.slug for hit in result.hits] == ["exact"]
+    assert result.hits[0].description == ""
+    retriever.close()
+    index.close()
 
 
 def test_retrieve_removes_semantic_scaffolding_and_deduplicates_tokens(

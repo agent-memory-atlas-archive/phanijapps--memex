@@ -122,6 +122,7 @@ class Memex:
             type=input.type,
             title=input.title,
             body=clean_body,
+            description=input.description,
             id="",
             tags=input.tags,
             importance=input.importance,
@@ -413,7 +414,7 @@ class Memex:
         started = time.perf_counter()
         errors: list[str] = []
         nodes = self.wiki_store.scan_all(errors)
-        known_hashes: dict[tuple[str, str, str, str], str] = {}
+        known: dict[tuple[str, str, str, str], tuple[str, str]] = {}
         if not force:
             for row in self.index_manager.get_all_records():
                 key = (
@@ -422,7 +423,7 @@ class Memex:
                     str(row["node_type"]),
                     str(row["slug"]),
                 )
-                known_hashes[key] = str(row["content_hash"])
+                known[key] = (str(row["content_hash"]), str(row["description"] or ""))
 
         wiki_keys = {(node.scope, node.project_id or "", node.type, node.slug) for node in nodes}
         for row in self.index_manager.get_all_records():
@@ -447,7 +448,7 @@ class Memex:
                 # Externally edited page: refresh the stale front-matter hash.
                 node = self.wiki_store.write(node)
             key = (node.scope, node.project_id or "", node.type, node.slug)
-            if not force and known_hashes.get(key) == node.content_hash:
+            if not force and known.get(key) == (node.content_hash, node.description):
                 skipped += 1
                 continue
             self.index_manager.update_record(node)
@@ -568,7 +569,11 @@ class Memex:
                 project_id=node.project_id or "",
                 node_type=node.type,
             )
-            if row is None or str(row["content_hash"]) != hash_body(node.body):
+            if (
+                row is None
+                or str(row["content_hash"]) != hash_body(node.body)
+                or str(row["description"] or "") != node.description
+            ):
                 stale += 1
         runs = read_runs(self.data_dir)
         last_capture: dict[str, str | None] = {}

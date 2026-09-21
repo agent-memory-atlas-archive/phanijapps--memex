@@ -68,6 +68,39 @@ def test_reindexes_external_link_changes(data_dir: Path) -> None:
     assert memex.link_manager.link_exists("watched", "target")
 
 
+def test_reindexes_description_only_edit(data_dir: Path) -> None:
+    from memex.infrastructure.watcher import IndexWatcher
+
+    memex = make_memex(data_dir)
+    memex.write(
+        WriteInput(
+            type="entity",
+            title="Watched",
+            body="unchanged body",
+            description="old signpost",
+        )
+    )
+    watcher = IndexWatcher(
+        memex.wiki_store.wiki_dir,
+        memex.index_manager,
+        memex.wiki_store,
+        link_mgr=memex.link_manager,
+    )
+
+    page = data_dir / "docs/global/entities/watched.md"
+    page.write_text(
+        page.read_text().replace('description: "old signpost"', 'description: "new signpost"'),
+        encoding="utf-8",
+    )
+    os.utime(page, None)
+
+    assert watcher.reindex_changed() == 1
+    row = memex.index_manager.get("watched")
+    assert row is not None
+    assert row["description"] == "new signpost"
+    assert "unchanged body" in str(row["body"])
+
+
 def test_touched_but_unchanged_skipped(data_dir: Path) -> None:
     from memex.infrastructure.watcher import IndexWatcher
 

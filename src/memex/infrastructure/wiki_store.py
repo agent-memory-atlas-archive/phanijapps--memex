@@ -30,6 +30,7 @@ _FRONT_MATTER_KEYS: tuple[str, ...] = (
     "id",
     "type",
     "title",
+    "description",
     "tags",
     "importance",
     "created",
@@ -55,6 +56,7 @@ _FRONT_MATTER_KEYS: tuple[str, ...] = (
 
 _STR_FIELDS: tuple[str, ...] = (
     "title",
+    "description",
     "created",
     "updated",
     "last_access",
@@ -507,6 +509,7 @@ def _node_to_dict(node: WikiNode) -> dict[str, object]:
         "id": node.id,
         "type": node.type,
         "title": node.title,
+        "description": node.description,
         "tags": node.tags,
         "importance": node.importance,
         "created": node.created,
@@ -579,6 +582,7 @@ def _node_from_dict(data: dict[str, object], body: str) -> WikiNode:
         title=_require_str(data, "title"),
         body=body,
         id=_require_str(data, "id"),
+        description=_str_value(data, "description") or "",
         tags=_list_value(data, "tags"),
         importance=float(importance),
         created=_require_str(data, "created"),

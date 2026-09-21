@@ -77,7 +77,11 @@ class IndexWatcher:
                             slug, source_scope=scope, source_project_id=project_id
                         )
                 continue
-            if row is not None and str(row["content_hash"]) == hash_body(node.body):
+            if (
+                row is not None
+                and str(row["content_hash"]) == hash_body(node.body)
+                and str(row["description"] or "") == node.description
+            ):
                 continue  # touched but not edited
             stored = self._store.write(node)  # refresh stale front-matter hash
             self._index.update_record(stored)

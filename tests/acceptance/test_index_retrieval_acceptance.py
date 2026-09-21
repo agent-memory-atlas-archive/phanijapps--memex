@@ -9,7 +9,7 @@ import pytest
 
 from memex.domain.models import WikiNode
 from memex.infrastructure.bm25_retriever import BM25Retriever
-from memex.infrastructure.index_manager import IndexManager
+from memex.infrastructure.index_manager import SCHEMA_VERSION, IndexManager
 from memex.infrastructure.link_manager import LinkManager
 from memex.infrastructure.wiki_store import WikiStore
 
@@ -115,7 +115,7 @@ def test_index_rebuild_from_wiki(components: dict[str, object]) -> None:
     assert count == 5
     assert fresh_index.count() == 5
     assert fresh_index.get_meta("last_index_rebuild") == "2026-09-15T00:00:00Z"
-    assert fresh_index.get_meta("schema_version") == "4"
+    assert fresh_index.get_meta("schema_version") == SCHEMA_VERSION
 
 
 def test_bm25_scoring(components: dict[str, object]) -> None:
@@ -227,3 +227,59 @@ def test_recall_snippet_source(components: dict[str, object]) -> None:
     result = retriever.retrieve("probe")
     assert len(result.hits) == 1
     assert result.hits[0].snippet_source == "title"
+
+
+def test_recall_finds_project_page_by_description_only(components: dict[str, object]) -> None:
+    store = components["store"]
+    assert isinstance(store, WikiStore)
+    index = components["index"]
+    assert isinstance(index, IndexManager)
+    retriever = components["retriever"]
+    assert isinstance(retriever, BM25Retriever)
+
+    node = _write_indexed(
+        store,
+        index,
+        title="Release notes",
+        body="ordinary body with no rare words",
+        id="d1",
+        description="quilting retrospectives across releases",
+        scope="project",
+        project_id="a" * 24,
+    )
+
+    result = retriever.retrieve("quilting retrospective", scope="project", project_id="a" * 24)
+
+    assert [hit.slug for hit in result.hits] == [node.slug]
+    hit = result.hits[0]
+    assert hit.snippet_source == "description"
+    assert "<mark>quilting</mark>" in hit.snippet
+    assert hit.description == "quilting retrospectives across releases"
+
+
+def test_forced_rebuild_reproduces_description_hit(components: dict[str, object]) -> None:
+    store = components["store"]
+    assert isinstance(store, WikiStore)
+    index = components["index"]
+    assert isinstance(index, IndexManager)
+    retriever = components["retriever"]
+    assert isinstance(retriever, BM25Retriever)
+
+    _write_indexed(
+        store,
+        index,
+        title="Onboarding flow",
+        body="body text",
+        id="d2",
+        description="xylophone onboarding checklist",
+    )
+    assert [hit.slug for hit in retriever.retrieve("xylophone").hits] == ["onboarding-flow"]
+
+    index.reset()
+    assert retriever.retrieve("xylophone").hits == []
+
+    rebuilt = index.build(store.scan_all())
+    assert rebuilt == 1
+    second = retriever.retrieve("xylophone")
+    assert [hit.slug for hit in second.hits] == ["onboarding-flow"]
+    assert second.hits[0].snippet_source == "description"
