@@ -524,3 +524,27 @@ class TestFrontMatterValidation:
         )
         with pytest.raises(WikiStoreError, match="last_access"):
             WikiStore(data_dir).read("raw")
+
+
+class TestInvalidStoredDescriptionIsAMalformedPage:
+    """A hand-edited invalid description reports as a scan error, not a crash."""
+
+    def test_overlong_stored_description_reports_as_error(self, data_dir: Path) -> None:
+        store = WikiStore(data_dir)
+        node = WikiNode(
+            type="entity",
+            title="Edit me",
+            body="body",
+            id="id-edit-me",
+        )
+        stored = store.write(node)
+        path = Path(stored.file_path or "")
+        text = path.read_text(encoding="utf-8")
+        path.write_text(
+            text.replace('title: "Edit me"', f'title: "Edit me"\ndescription: "{"x" * 513}"'),
+            encoding="utf-8",
+        )
+        errors: list[str] = []
+        nodes = store.scan_all(errors)
+        assert [n.slug for n in nodes] == []
+        assert len(errors) == 1 and "description" in errors[0]

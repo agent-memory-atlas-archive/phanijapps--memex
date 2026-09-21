@@ -7,7 +7,9 @@ import logging
 from collections.abc import Callable
 from pathlib import Path
 
+from memex.domain.errors import WikiStoreError
 from memex.domain.models import NODE_TYPES, WikiNode, utc_now_iso
+from memex.domain.reserved import RESERVED_SLUGS
 from memex.domain.scrub import scrub
 from memex.infrastructure.index_manager import IndexManager
 from memex.infrastructure.link_manager import LinkManager
@@ -65,7 +67,7 @@ class ImportExport:
                 continue
             try:
                 node = self._node_from_json(item)
-            except ValueError as exc:
+            except (ValueError, WikiStoreError) as exc:
                 errors.append(str(exc))
                 continue
             slug = node.slug
@@ -111,6 +113,8 @@ class ImportExport:
         if not isinstance(importance, int | float):
             raise ValueError("importance must be numeric")
         slug = item.get("slug")
+        if isinstance(slug, str) and slug in RESERVED_SLUGS:
+            raise ValueError(f"reserved slug {slug!r} cannot be imported; rename the page first")
         description = item.get("description")
         transcript_ref = item.get("transcript_ref")
         scope = item.get("scope", "global")

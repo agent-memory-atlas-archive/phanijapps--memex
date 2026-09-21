@@ -362,3 +362,63 @@ class _FakeLLM:
     def complete(self, system: str, user: str, *, max_tokens: int) -> LLMResponse:
         self.last_prompt = user
         return LLMResponse(text=self.text, prompt_tokens=10, completion_tokens=10)
+
+
+class TestImportReservedSlugAndErrorContainment:
+    """AC-0019 boundary + per-item import error containment (round-2 review)."""
+
+    def test_import_rejects_reserved_slug_and_continues(self, tmp_path: Path) -> None:
+        target = MemexFacade(MemexConfig(data_dir=tmp_path / "home"))
+        document = {
+            "version": "1.0",
+            "nodes": [
+                {
+                    "type": "entity",
+                    "title": "Reserved name",
+                    "slug": "index",
+                    "body": "body",
+                },
+                {
+                    "type": "entity",
+                    "title": "Ordinary import",
+                    "slug": "ordinary-import",
+                    "body": "body",
+                },
+            ],
+        }
+        payload = cast(dict[str, object], document)
+        report = target.import_export.import_data(payload)
+        assert report["imported"] == 1
+        errors = cast(list[str], report["errors"])
+        assert len(errors) == 1
+        assert "reserved slug" in errors[0]
+        assert target.wiki_store.read("ordinary-import") is not None
+        target.close()
+
+    def test_import_survives_structural_collision_per_item(self, tmp_path: Path) -> None:
+        target = MemexFacade(MemexConfig(data_dir=tmp_path / "home"))
+        target.write(WriteInput(type="entity", title="Seed", body="seed body"))
+        target.rebuild_index(force=True)  # generates docs/global/entities/index.md
+        document = {
+            "version": "1.0",
+            "nodes": [
+                {
+                    "type": "entity",
+                    "title": "Colliding import",
+                    "slug": "index",
+                    "body": "body",
+                },
+                {
+                    "type": "entity",
+                    "title": "After collision",
+                    "slug": "after-collision",
+                    "body": "body",
+                },
+            ],
+        }
+        payload = cast(dict[str, object], document)
+        report = target.import_export.import_data(payload)
+        assert report["imported"] == 1
+        assert len(cast(list[str], report["errors"])) == 1
+        assert target.wiki_store.read("after-collision") is not None
+        target.close()

@@ -702,3 +702,21 @@ def test_navigation_report_only_contains_bounded_fields(data_dir: Path) -> None:
         assert ".." not in rel.parts
         assert "\\" not in change.path
     assert json.dumps([asdict(change) for change in report.changes[:1]])
+
+
+def test_undecodable_reserved_file_is_untouchable_collision(
+    data_dir: Path,
+) -> None:
+    """A non-UTF-8 reserved file never classifies structural (no overwrite)."""
+    from memex.domain.reserved import classify_reserved
+
+    memex = _memex(data_dir)
+    _write(memex, "Alpha entity")
+    target = _page_dir(memex, "alpha-entity") / "index.md"
+    target.write_bytes(b"\xff\xfe not utf8")
+    assert classify_reserved(target) == "not_reserved"
+    errors: list[str] = []
+    report = memex.navigation.regenerate(memex.wiki_store.scan_all(errors))
+    assert errors  # reported as a malformed page, never a crash
+    assert report.by_category("collision")
+    assert target.read_bytes() == b"\xff\xfe not utf8"

@@ -8,6 +8,7 @@ are body-only. ``log.md`` is never generated, never modified, never removed.
 
 from __future__ import annotations
 
+import itertools
 import os
 import posixpath
 from collections.abc import Callable
@@ -66,6 +67,7 @@ class NavigationGenerator:
 
     def __init__(self, wiki_dir: Path) -> None:
         self._wiki_dir = wiki_dir
+        self._tmp_seq = itertools.count()
 
     def regenerate(self, nodes: list[WikiNode]) -> NavigationReport:
         """Rewrite every needed index; remove obsolete generated ones.
@@ -204,9 +206,9 @@ class NavigationGenerator:
         if target.exists() and not is_structural(target):
             report.changes.append(NavigationChange("collision", rel))
             return
-        # Process-unique temp name: concurrent index writes in one directory
-        # cannot interleave each other's write/replace pair.
-        tmp = target.with_name(f"{target.name}.{os.getpid()}.tmp")
+        # Process- and thread-unique temp name: concurrent index writes in
+        # one directory cannot interleave each other's write/replace pair.
+        tmp = target.with_name(f"{target.name}.{os.getpid()}.{next(self._tmp_seq)}.tmp")
         try:
             directory.mkdir(parents=True, exist_ok=True)
             tmp.write_text(text, encoding="utf-8")

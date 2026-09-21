@@ -481,13 +481,14 @@ class WikiStore:
         self._reject_unsafe_page_path(path)
         try:
             text = path.read_text(encoding="utf-8")
-        except OSError as exc:
-            raise WikiStoreError(f"cannot read wiki page: {exc.strerror}") from exc
+        except (OSError, UnicodeDecodeError) as exc:
+            reason = exc.strerror if isinstance(exc, OSError) else "not valid UTF-8"
+            raise WikiStoreError(f"cannot read wiki page: {reason}") from exc
         try:
             data, body = parse_front_matter(text)
+            node = _node_from_dict(data, body)
         except Exception as exc:
             raise WikiStoreError(f"{path.name}: {exc}") from exc
-        node = _node_from_dict(data, body)
         node.slug = path.stem
         node.file_path = str(path)
         return node

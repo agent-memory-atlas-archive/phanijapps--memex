@@ -49,7 +49,9 @@ def classify_reserved(path: Path) -> str:
         return "not_reserved"
     try:
         text = path.read_text(encoding="utf-8")
-    except OSError:
+    except (OSError, UnicodeDecodeError):
+        # Undecodable reserved files stay "not_reserved" so every consumer
+        # treats them as untouchable collisions, never generator-owned.
         return "not_reserved"
     if not text.startswith("---\n"):
         return "structural"

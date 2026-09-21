@@ -325,8 +325,10 @@ keeps one `index.md` per directory that contains pages:
   rebuild path does.
 - Refresh after a page mutation is best effort: a navigation refresh failure
   never fails the page write. `memex verify` reports stale, missing, or
-collision-blocked navigation as a `navigation-consistent` defect, and
-  regeneration repairs it.
+  orphaned navigation as a `navigation-consistent` defect, and regeneration
+  repairs it. A reserved-name collision is surfaced in the check's detail
+  output instead: resolve it manually (rename or remove the colliding page),
+  since regeneration never overwrites a legacy memory.
 - `index.md` and `log.md` are reserved filenames at every level: they are
   never memory pages and never enter the search index, links, export,
   consolidation, or task recall. A valid pre-existing page at one of those

@@ -170,7 +170,8 @@ def memex_recall(
 
     Returns:
         RecallResult as JSON — hits ranked best-first (slug, title,
-        snippet, importance, file_path), total_indexed, search_time_ms.
+        description, snippet, snippet_source, importance, file_path),
+        total_indexed, search_time_ms.
         Empty hits is a normal outcome, not an error. Recall bumps
         access_count and last_access for returned hits (read telemetry
         only; memory files are untouched).
