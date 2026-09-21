@@ -1,0 +1,433 @@
+{
+  "source_revision": "ec105a3fad1aa5fb479125543451ff07a1b0fcb6",
+  "source_hashes": {
+    "docs/CONVENTIONS.md": "9f00bed2b4a79cc2aeb4fc5330a2b9902e4d45a9ad7b93c247234d0e80aff9af",
+    "docs/architecture/overview.md": "af7df9bf6de5556de770b25f1acad2c6a2f4c0678df6de37769f2ee8a3a91f7d",
+    "docs/architecture/security.md": "02709273da49249a9703e80ae1d817fb4d51d30f2174944e47d8efb091087929",
+    "docs/gitpages/guide.md": "f7ac776f3b9181626b0794b38a3815b83fb929a7469adc7f869aa7cb72faea62"
+  },
+  "project_id": "aaaaaaaaaaaaaaaaaaaaaaaa",
+  "other_project_id": "bbbbbbbbbbbbbbbbbbbbbbbb",
+  "memories": [
+    {
+      "title": "Backup includes three stores",
+      "type": "procedure",
+      "body": "The backup command writes pages, transcripts, and a mem.db snapshot to a tar.gz archive.",
+      "source": "docs/gitpages/guide.md",
+      "scope": "project"
+    },
+    {
+      "title": "Restore validates archive members",
+      "type": "procedure",
+      "body": "Restore validates archive members against path traversal and symlinks before extraction.",
+      "source": "docs/gitpages/guide.md",
+      "scope": "project"
+    },
+    {
+      "title": "Restore preserves previous store",
+      "type": "procedure",
+      "body": "Restore moves the existing data into a pre-restore-<timestamp>/ directory instead of deleting it.",
+      "source": "docs/gitpages/guide.md",
+      "scope": "project"
+    },
+    {
+      "title": "Restore rebuilds search index",
+      "type": "procedure",
+      "body": "The restore command rebuilds the index after replacing the store.",
+      "source": "docs/gitpages/guide.md",
+      "scope": "project"
+    },
+    {
+      "title": "Project folder from git origin",
+      "type": "procedure",
+      "body": "With a usable Git origin, including enterprise or self-hosted GitLab, the readable project folder uses the repository basename with a git- prefix.",
+      "source": "docs/gitpages/guide.md",
+      "scope": "project"
+    },
+    {
+      "title": "Project folder fallback",
+      "type": "procedure",
+      "body": "A local Git repository without a usable origin and a non-Git workspace use the workspace folder name.",
+      "source": "docs/gitpages/guide.md",
+      "scope": "project"
+    },
+    {
+      "title": "Project identity in front matter",
+      "type": "procedure",
+      "body": "Project front matter is authoritative for the opaque project_id and safe display label; the folder is a readable locator, not the identity.",
+      "source": "docs/gitpages/guide.md",
+      "scope": "project"
+    },
+    {
+      "title": "Project folder collision fails closed",
+      "type": "procedure",
+      "body": "If two folders contain the same project_id, node type, and slug, lookup and force rebuild fail closed instead of choosing one page.",
+      "source": "docs/gitpages/guide.md",
+      "scope": "project"
+    },
+    {
+      "title": "Transcript dated storage",
+      "type": "procedure",
+      "body": "Transcript JSONL and metadata use dated directories under ~/.memex/transcripts/YYYY-MM-DD/.",
+      "source": "docs/gitpages/guide.md",
+      "scope": "project"
+    },
+    {
+      "title": "Transcript sidecar usage",
+      "type": "procedure",
+      "body": "Token counts are metadata, not transcript content. The session .meta.json sidecar carries session totals and per-turn usage, using the latest reported values rather than summing cumulative records.",
+      "source": "docs/gitpages/guide.md",
+      "scope": "project"
+    },
+    {
+      "title": "Transcript episode provenance",
+      "type": "procedure",
+      "body": "Ingestion writes a JSONL transcript and .meta.json, creates a global episode page with transcript_ref, and indexes the episode.",
+      "source": "docs/gitpages/guide.md",
+      "scope": "project"
+    },
+    {
+      "title": "Repeated Codex capture",
+      "type": "procedure",
+      "body": "Repeated Codex captures merge by stable session identity so compaction and shutdown events remain idempotent.",
+      "source": "docs/architecture/overview.md",
+      "scope": "project"
+    },
+    {
+      "title": "Viz loopback read boundary",
+      "type": "procedure",
+      "body": "The optional memex viz process binds only to loopback. Every dashboard GET is read-only and must not write pages, transcripts, metadata, the index, or access counters.",
+      "source": "docs/architecture/security.md",
+      "scope": "project"
+    },
+    {
+      "title": "Viz untrusted rendering",
+      "type": "procedure",
+      "body": "Stored memories, transcript turns, session metadata, and URL parameters are untrusted. Rendered values are escaped except AI Markdown through the existing safe renderer.",
+      "source": "docs/architecture/security.md",
+      "scope": "project"
+    },
+    {
+      "title": "Viz transcript path confinement",
+      "type": "procedure",
+      "body": "Session IDs are validated before lookup, and resolved transcript and metadata paths must stay inside the transcript root.",
+      "source": "docs/architecture/security.md",
+      "scope": "project"
+    },
+    {
+      "title": "Viz fragments same rules",
+      "type": "procedure",
+      "body": "Scope and project IDs select existing namespaces rather than creating paths. Direct /view/ URLs and HTMX fragments follow the same read and rendering rules.",
+      "source": "docs/architecture/security.md",
+      "scope": "project"
+    },
+    {
+      "title": "Verify page and index checks",
+      "type": "procedure",
+      "body": "memex verify always checks that every page parses, the index matches content hashes, and every link resolves.",
+      "source": "docs/gitpages/guide.md",
+      "scope": "project"
+    },
+    {
+      "title": "Verify since activity",
+      "type": "procedure",
+      "body": "With --since, memex verify reports recall activity from access telemetry and write activity from updated timestamps since the cutoff.",
+      "source": "docs/gitpages/guide.md",
+      "scope": "project"
+    },
+    {
+      "title": "Verify required evidence exit",
+      "type": "procedure",
+      "body": "--require-recall and --require-write turn missing activity evidence into exit code 1.",
+      "source": "docs/gitpages/guide.md",
+      "scope": "project"
+    },
+    {
+      "title": "Copilot proof workflow",
+      "type": "procedure",
+      "body": "The GitHub Copilot adapter supplies a memex verify workflow for every pull request because its hosted environment has no local hooks or stdio.",
+      "source": "docs/gitpages/guide.md",
+      "scope": "project"
+    },
+    {
+      "title": "Recall safe query tokens",
+      "type": "procedure",
+      "body": "Recall reduces the query to safe alphanumeric tokens and removes known scaffolding phrases before searching.",
+      "source": "docs/gitpages/guide.md",
+      "scope": "project"
+    },
+    {
+      "title": "Recall strict then fallback",
+      "type": "procedure",
+      "body": "The production semantic-and-fallback-fts5 ranker tries strict AND matching first and uses a broad OR fallback only if strict matching has no hits.",
+      "source": "docs/gitpages/guide.md",
+      "scope": "project"
+    },
+    {
+      "title": "Recall column weights",
+      "type": "procedure",
+      "body": "Production SQLite FTS5 search weights slug=1, title=1, body=2, tags=1 and caps the safe query at 64 tokens and 1,024 UTF-8 bytes.",
+      "source": "docs/architecture/overview.md",
+      "scope": "project"
+    },
+    {
+      "title": "Recall ordering and counters",
+      "type": "procedure",
+      "body": "Filters apply before limiting; returned slugs are unique, ascending slug breaks final ties, and recall hits bump access counters.",
+      "source": "docs/gitpages/guide.md",
+      "scope": "project"
+    },
+    {
+      "title": "Adapter install backup",
+      "type": "procedure",
+      "body": "memex install <name> ships its marketplace assets in the package. Installs are idempotent and back up existing configs.",
+      "source": "docs/gitpages/guide.md",
+      "scope": "project"
+    },
+    {
+      "title": "Adapter MCP registration",
+      "type": "procedure",
+      "body": "Claude Code registers MCP with claude mcp add --scope user, Codex uses config.toml [mcp_servers], and Copilot uses .vscode/mcp.json; --no-mcp skips registration.",
+      "source": "docs/gitpages/guide.md",
+      "scope": "project"
+    },
+    {
+      "title": "Adapter uninstall boundaries",
+      "type": "procedure",
+      "body": "memex uninstall <name> removes Memex hooks, MCP registration, copied adapter files, and exact guidance snippets. Unrelated settings and modified files stay in place and are reported.",
+      "source": "docs/gitpages/guide.md",
+      "scope": "project"
+    },
+    {
+      "title": "Adapter uninstall keeps data",
+      "type": "procedure",
+      "body": "Removing adapters keeps ~/.memex memories, transcripts, and configuration. Removing the CLI later with uv tool uninstall memex also leaves ~/.memex data.",
+      "source": "docs/gitpages/guide.md",
+      "scope": "project"
+    },
+    {
+      "title": "Docs living versus frozen",
+      "type": "procedure",
+      "body": "Current architecture, product, and user-guide documents are living and must match current reality. Accepted ADRs and shipped specs are frozen history.",
+      "source": "docs/CONVENTIONS.md",
+      "scope": "project"
+    },
+    {
+      "title": "Approved spec plan pinned",
+      "type": "procedure",
+      "body": "At plan approval, a spec and plan are pinned in substance; only lifecycle bookkeeping can change. Execution observations belong in notes/verification-ledger.md.",
+      "source": "docs/CONVENTIONS.md",
+      "scope": "project"
+    },
+    {
+      "title": "Frozen supersession status",
+      "type": "procedure",
+      "body": "A later decision that partly supersedes a frozen spec is recorded in its Status field with the superseding ADR and affected part. The frozen body is not changed.",
+      "source": "docs/CONVENTIONS.md",
+      "scope": "project"
+    },
+    {
+      "title": "ADR revision by successor",
+      "type": "procedure",
+      "body": "An accepted ADR is not edited when reversed. A new ADR supersedes it, and the old record changes status while its text remains history.",
+      "source": "docs/CONVENTIONS.md",
+      "scope": "project"
+    },
+    {
+      "title": "Wiki pages are durable source",
+      "type": "summary",
+      "body": "Every memory is a Markdown page under ~/.memex/docs with YAML front matter and Markdown body; mem.db is a disposable BM25 index.",
+      "source": "docs/gitpages/guide.md",
+      "scope": "project"
+    },
+    {
+      "title": "Memory node categories",
+      "type": "entity",
+      "body": "Memex node types are entity, preference, procedure, summary, and episode.",
+      "source": "docs/gitpages/guide.md",
+      "scope": "project"
+    },
+    {
+      "title": "Memory write collision",
+      "type": "procedure",
+      "body": "Slugs derive from titles, collisions receive -2 or -3 suffixes, and an existing slug update preserves id, created, and access counters.",
+      "source": "docs/gitpages/guide.md",
+      "scope": "project"
+    },
+    {
+      "title": "Memory status approval",
+      "type": "procedure",
+      "body": "Recall and injection see active pages only unless include_inactive is selected; manual governance approval leaves consolidation-created pages pending until approved.",
+      "source": "docs/gitpages/guide.md",
+      "scope": "project"
+    },
+    {
+      "title": "Secret scrub boundaries",
+      "type": "procedure",
+      "body": "CLI, MCP, transcript ingest, and consolidation writes redact credential patterns before storage and log only redaction categories.",
+      "source": "docs/gitpages/guide.md",
+      "scope": "project"
+    },
+    {
+      "title": "Consolidation explicit operation",
+      "type": "procedure",
+      "body": "Consolidation is the only LLM-calling operation and runs only on explicit request; it proposes durable nodes from recent episodes.",
+      "source": "docs/gitpages/guide.md",
+      "scope": "project"
+    },
+    {
+      "title": "Injection token packing",
+      "type": "procedure",
+      "body": "Hook injection has a 4096-token default budget, skips hits that do not fit, always includes the top hit whole, and stays silent below the relevance floor.",
+      "source": "docs/gitpages/guide.md",
+      "scope": "project"
+    },
+    {
+      "title": "Dashboard paging",
+      "type": "procedure",
+      "body": "The Memories view presents 20 newest-first cards per page and preserves type and scope in Previous and Next URLs.",
+      "source": "docs/gitpages/guide.md",
+      "scope": "project"
+    },
+    {
+      "title": "Dashboard search mode",
+      "type": "procedure",
+      "body": "Best match searches the selected project first and then falls back to all memory; Search everywhere searches all namespaces without updating access counters.",
+      "source": "docs/gitpages/guide.md",
+      "scope": "project"
+    },
+    {
+      "title": "MCP tool inventory",
+      "type": "entity",
+      "body": "The MCP server exposes five typed tools: memex_write, memex_recall, memex_consolidate, memex_forget, and memex_provenance.",
+      "source": "docs/gitpages/guide.md",
+      "scope": "project"
+    },
+    {
+      "title": "Application facade ownership",
+      "type": "summary",
+      "body": "Memex is the public Python API and composition root; adapters call the facade or shared application services.",
+      "source": "docs/architecture/overview.md",
+      "scope": "project"
+    },
+    {
+      "title": "Source document audience",
+      "type": "summary",
+      "body": "The documentation hierarchy separates internal contributor material from external user material and distinguishes living, frozen, and governance lifecycles.",
+      "source": "docs/CONVENTIONS.md",
+      "scope": "project"
+    },
+    {
+      "title": "Retired recall metadata note",
+      "type": "procedure",
+      "body": "The first transcript line may be an optional session header with session id, CLI version, provider, working directory, Git branch and commit, model details, timestamps, and duration.",
+      "source": "docs/gitpages/guide.md",
+      "scope": "project",
+      "archive": true
+    },
+    {
+      "title": "Retired page status note",
+      "type": "procedure",
+      "body": "memex forget with archive mode retires a page in place instead of deleting it.",
+      "source": "docs/gitpages/guide.md",
+      "scope": "project",
+      "archive": true
+    },
+    {
+      "title": "Foreign workspace backup note",
+      "type": "procedure",
+      "body": "Backups carry pages and transcripts along with a mem.db snapshot.",
+      "source": "docs/gitpages/guide.md",
+      "scope": "other_project"
+    },
+    {
+      "title": "Foreign workspace route note",
+      "type": "procedure",
+      "body": "The optional viz process binds to loopback and renders stored records as untrusted data.",
+      "source": "docs/architecture/security.md",
+      "scope": "other_project"
+    }
+  ],
+  "tasks": [
+    {
+      "name": "restoration-check",
+      "goal": "A contributor is adding a disaster-recovery check to the CLI. Determine the contents of a backup and the safeguards and index step that a restore check must verify.",
+      "required": [
+        "backup-includes-three-stores",
+        "restore-validates-archive-members",
+        "restore-preserves-previous-store",
+        "restore-rebuilds-search-index"
+      ]
+    },
+    {
+      "name": "project-folder-diagnosis",
+      "goal": "A repository changes its Git remote and a maintainer asks whether existing project pages should move. Explain how the folder is selected, where identity lives, and what happens if duplicate pages appear.",
+      "required": [
+        "project-folder-from-git-origin",
+        "project-folder-fallback",
+        "project-identity-in-front-matter",
+        "project-folder-collision-fails-closed"
+      ]
+    },
+    {
+      "name": "session-capture-audit",
+      "goal": "Trace a coding session through automatic capture and explain how a diagnostic should handle repeat captures, token accounting, storage, and provenance.",
+      "required": [
+        "transcript-dated-storage",
+        "transcript-sidecar-usage",
+        "transcript-episode-provenance",
+        "repeated-codex-capture"
+      ]
+    },
+    {
+      "name": "dashboard-route-hardening",
+      "goal": "A new HTMX session fragment is planned for the local dashboard. Identify the read, rendering, path, and scope constraints its route must preserve.",
+      "required": [
+        "viz-loopback-read-boundary",
+        "viz-untrusted-rendering",
+        "viz-transcript-path-confinement",
+        "viz-fragments-same-rules"
+      ]
+    },
+    {
+      "name": "ci-evidence-gate",
+      "goal": "Prepare a Copilot pull-request check that proves stored memory health and recent read and write use. Determine which checks run by default, how to set the cutoff, and what makes the job fail.",
+      "required": [
+        "verify-page-and-index-checks",
+        "verify-since-activity",
+        "verify-required-evidence-exit",
+        "copilot-proof-workflow"
+      ]
+    },
+    {
+      "name": "recall-behavior-review",
+      "goal": "Review a change to search ranking that broadens all queries and changes tie ordering. Identify the current query normalization, two-stage match behavior, weighting, and result-side effects.",
+      "required": [
+        "recall-safe-query-tokens",
+        "recall-strict-then-fallback",
+        "recall-column-weights",
+        "recall-ordering-and-counters"
+      ]
+    },
+    {
+      "name": "adapter-lifecycle-test",
+      "goal": "A maintainer is writing an install/uninstall regression scenario for coding-agent adapters. Specify config backup and MCP behavior, then define what uninstall removes and what it must preserve.",
+      "required": [
+        "adapter-install-backup",
+        "adapter-mcp-registration",
+        "adapter-uninstall-boundaries",
+        "adapter-uninstall-keeps-data"
+      ]
+    },
+    {
+      "name": "decision-document-update",
+      "goal": "A shipped design decision has been partly reversed. Plan the documentation update so current behavior stays accurate without rewriting approved history or execution notes.",
+      "required": [
+        "docs-living-versus-frozen",
+        "approved-spec-plan-pinned",
+        "frozen-supersession-status",
+        "adr-revision-by-successor"
+      ]
+    }
+  ]
+}

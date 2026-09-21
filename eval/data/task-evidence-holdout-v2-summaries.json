@@ -1,0 +1,36 @@
+{
+  "summaries": [
+    {
+      "task": "restoration-check",
+      "body": "A backup archive contains Markdown pages, transcripts, and a mem.db snapshot [[backup-includes-three-stores]]. A restore check should reject path traversal and symlink archive members, retain the prior store in a pre-restore timestamped directory, and rebuild the search index after replacement [[restore-validates-archive-members]] [[restore-preserves-previous-store]] [[restore-rebuilds-search-index]]."
+    },
+    {
+      "task": "project-folder-diagnosis",
+      "body": "A usable Git origin gives the project folder a git- prefix and repository basename; without one, the workspace folder name is used [[project-folder-from-git-origin]] [[project-folder-fallback]]. The authoritative project_id and display label live in page front matter, so a folder is only a locator. If two folders contain the same project_id, node type, and slug, lookup and forced rebuild fail rather than choosing a page [[project-identity-in-front-matter]] [[project-folder-collision-fails-closed]]."
+    },
+    {
+      "task": "session-capture-audit",
+      "body": "Repeated Codex capture merges by stable session identity, keeping compaction and shutdown captures idempotent [[repeated-codex-capture]]. Transcript JSONL and its .meta.json sidecar live in dated transcript directories; the sidecar holds session and per-turn token usage, taking the latest reported cumulative values rather than summing them [[transcript-dated-storage]] [[transcript-sidecar-usage]]. Ingestion creates and indexes a global episode whose transcript_ref preserves provenance back to the stored transcript [[transcript-episode-provenance]]."
+    },
+    {
+      "task": "dashboard-route-hardening",
+      "body": "The local dashboard binds to loopback, and every GET, including a new HTMX fragment, must leave pages, transcripts, metadata, the index, and access counters unchanged [[viz-loopback-read-boundary]] [[viz-fragments-same-rules]]. Treat memory, transcript, metadata, and URL values as untrusted: escape rendered values except AI Markdown passed through the existing safe renderer. Validate session IDs and keep resolved transcript and metadata paths inside the transcript root; scope and project IDs select existing namespaces, with direct views and fragments following the same rules [[viz-untrusted-rendering]] [[viz-transcript-path-confinement]] [[viz-fragments-same-rules]]."
+    },
+    {
+      "task": "ci-evidence-gate",
+      "body": "The Copilot adapter's pull-request workflow runs memex verify because its hosted environment lacks local hooks and stdio [[copilot-proof-workflow]]. Verify always checks page parsing, index content hashes, and links; --since sets the cutoff for recall access telemetry and page update timestamps [[verify-page-and-index-checks]] [[verify-since-activity]]. Add --require-recall and --require-write when both forms of recent use are required; missing evidence makes the command exit 1 [[verify-required-evidence-exit]]."
+    },
+    {
+      "task": "recall-behavior-review",
+      "body": "Recall removes known scaffolding phrases and searches with safe alphanumeric tokens, capped at 64 tokens and 1,024 UTF-8 bytes [[recall-safe-query-tokens]] [[recall-column-weights]]. The production FTS5 ranker first uses strict AND matching and broadens to OR only when that has no hits; its column weights are slug=1, title=1, body=2, and tags=1 [[recall-strict-then-fallback]] [[recall-column-weights]]. Filters run before the result limit, returned slugs are unique, ascending slug breaks final ties, and returned hits increment access counters [[recall-ordering-and-counters]]."
+    },
+    {
+      "task": "adapter-lifecycle-test",
+      "body": "Installing a packaged adapter is idempotent and backs up existing configuration. MCP registration uses Claude Code's user-scope command, Codex's config.toml [mcp_servers], or Copilot's .vscode/mcp.json; --no-mcp skips it [[adapter-install-backup]] [[adapter-mcp-registration]]. Uninstall removes Memex hooks, registration, copied files, and exact guidance snippets while retaining unrelated settings and modified files, which it reports. Memories, transcripts, and configuration under ~/.memex remain even after adapter or CLI removal [[adapter-uninstall-boundaries]] [[adapter-uninstall-keeps-data]]."
+    },
+    {
+      "task": "decision-document-update",
+      "body": "Update living architecture, product, and user-guide documents to describe current behavior [[docs-living-versus-frozen]]. Record the partial reversal in a new superseding ADR and change the old ADR's status while retaining its accepted text. Mark the affected part and successor ADR in the frozen spec's Status field without rewriting its body or approved plan; keep execution observations in notes/verification-ledger.md [[adr-revision-by-successor]] [[frozen-supersession-status]] [[approved-spec-plan-pinned]]."
+    }
+  ]
+}

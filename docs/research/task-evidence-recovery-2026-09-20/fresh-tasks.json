@@ -1,0 +1,188 @@
+{
+  "source_revision": "ec105a3fad1aa5fb479125543451ff07a1b0fcb6",
+  "status": "complete",
+  "model_id": "zai-coding-cn/glm-5.3-flash",
+  "blocked_reason": null,
+  "tasks": [
+    {
+      "task": "restoration-check",
+      "complete": true,
+      "hits": [
+        "restore-preserves-previous-store",
+        "restore-rebuilds-search-index",
+        "restore-validates-archive-members",
+        "verify-page-and-index-checks",
+        "verify-required-evidence-exit",
+        "viz-fragments-same-rules",
+        "approved-spec-plan-pinned",
+        "backup-includes-three-stores"
+      ],
+      "missing": [],
+      "calls": 3,
+      "rendered_tokens": 543,
+      "latency_ms": 5.4455299832625315,
+      "inactive_hits": 0,
+      "other_project_hits": 0,
+      "model_prompt_tokens": 565,
+      "model_completion_tokens": 35,
+      "model_catalog_estimate_usd": 5.1124999999999996e-05
+    },
+    {
+      "task": "project-folder-diagnosis",
+      "complete": true,
+      "hits": [
+        "project-identity-in-front-matter",
+        "adapter-uninstall-boundaries",
+        "project-folder-fallback",
+        "viz-fragments-same-rules",
+        "project-folder-collision-fails-closed",
+        "project-folder-from-git-origin"
+      ],
+      "missing": [],
+      "calls": 3,
+      "rendered_tokens": 422,
+      "latency_ms": 5.7833059981931,
+      "inactive_hits": 0,
+      "other_project_hits": 0,
+      "model_prompt_tokens": 572,
+      "model_completion_tokens": 48,
+      "model_catalog_estimate_usd": 5.489999999999999e-05
+    },
+    {
+      "task": "session-capture-audit",
+      "complete": false,
+      "hits": [
+        "repeated-codex-capture",
+        "transcript-sidecar-usage",
+        "adr-revision-by-successor",
+        "viz-fragments-same-rules",
+        "verify-required-evidence-exit",
+        "copilot-proof-workflow"
+      ],
+      "missing": [
+        "transcript-dated-storage",
+        "transcript-episode-provenance"
+      ],
+      "calls": 3,
+      "rendered_tokens": 408,
+      "latency_ms": 6.595138998818584,
+      "inactive_hits": 0,
+      "other_project_hits": 0,
+      "model_prompt_tokens": 562,
+      "model_completion_tokens": 45,
+      "model_catalog_estimate_usd": 5.34e-05
+    },
+    {
+      "task": "dashboard-route-hardening",
+      "complete": false,
+      "hits": [
+        "viz-fragments-same-rules",
+        "viz-untrusted-rendering",
+        "docs-living-versus-frozen",
+        "viz-transcript-path-confinement",
+        "recall-ordering-and-counters",
+        "approved-spec-plan-pinned",
+        "copilot-proof-workflow"
+      ],
+      "missing": [
+        "viz-loopback-read-boundary"
+      ],
+      "calls": 3,
+      "rendered_tokens": 490,
+      "latency_ms": 6.819509013439529,
+      "inactive_hits": 0,
+      "other_project_hits": 0,
+      "model_prompt_tokens": 564,
+      "model_completion_tokens": 58,
+      "model_catalog_estimate_usd": 5.679999999999999e-05
+    },
+    {
+      "task": "ci-evidence-gate",
+      "complete": true,
+      "hits": [
+        "copilot-proof-workflow",
+        "verify-page-and-index-checks",
+        "adapter-uninstall-keeps-data",
+        "verify-required-evidence-exit",
+        "verify-since-activity",
+        "viz-fragments-same-rules",
+        "viz-loopback-read-boundary",
+        "approved-spec-plan-pinned"
+      ],
+      "missing": [],
+      "calls": 3,
+      "rendered_tokens": 523,
+      "latency_ms": 5.767189009930007,
+      "inactive_hits": 0,
+      "other_project_hits": 0,
+      "model_prompt_tokens": 575,
+      "model_completion_tokens": 37,
+      "model_catalog_estimate_usd": 5.237499999999999e-05
+    },
+    {
+      "task": "recall-behavior-review",
+      "complete": false,
+      "hits": [
+        "docs-living-versus-frozen",
+        "recall-safe-query-tokens",
+        "dashboard-search-mode",
+        "recall-column-weights",
+        "viz-fragments-same-rules",
+        "recall-ordering-and-counters",
+        "approved-spec-plan-pinned"
+      ],
+      "missing": [
+        "recall-strict-then-fallback"
+      ],
+      "calls": 3,
+      "rendered_tokens": 483,
+      "latency_ms": 6.576465981197543,
+      "inactive_hits": 0,
+      "other_project_hits": 0,
+      "model_prompt_tokens": 1140,
+      "model_completion_tokens": 120,
+      "model_catalog_estimate_usd": 0.00011549999999999999
+    },
+    {
+      "task": "adapter-lifecycle-test",
+      "complete": true,
+      "hits": [
+        "adapter-install-backup",
+        "adapter-mcp-registration",
+        "adapter-uninstall-keeps-data",
+        "adapter-uninstall-boundaries"
+      ],
+      "missing": [],
+      "calls": 3,
+      "rendered_tokens": 278,
+      "latency_ms": 6.5468530083308,
+      "inactive_hits": 0,
+      "other_project_hits": 0,
+      "model_prompt_tokens": 569,
+      "model_completion_tokens": 49,
+      "model_catalog_estimate_usd": 5.492499999999999e-05
+    },
+    {
+      "task": "decision-document-update",
+      "complete": true,
+      "hits": [
+        "adr-revision-by-successor",
+        "frozen-supersession-status",
+        "docs-living-versus-frozen",
+        "approved-spec-plan-pinned",
+        "viz-fragments-same-rules",
+        "memory-status-approval",
+        "restore-rebuilds-search-index"
+      ],
+      "missing": [],
+      "calls": 3,
+      "rendered_tokens": 461,
+      "latency_ms": 5.966848999378271,
+      "inactive_hits": 0,
+      "other_project_hits": 0,
+      "model_prompt_tokens": 560,
+      "model_completion_tokens": 52,
+      "model_catalog_estimate_usd": 5.4999999999999995e-05
+    }
+  ]
+}

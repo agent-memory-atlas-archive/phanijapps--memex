@@ -429,13 +429,13 @@ def _strategy_report(tasks: list[TaskSpec], results: list[TaskStrategyResult]) -
 def _evaluate_strategies(
     memex: Memex,
     fixture: Fixture,
-    query_plan: dict[str, list[str]],
+    query_plan: dict[str, list[str]] | None,
     inactive: set[str],
     other_project: set[str],
 ) -> dict[str, StrategyReport]:
     tasks = fixture["tasks"]
     project_id = fixture["project_id"]
-    return {
+    strategies = {
         "current_injection": _strategy_report(
             tasks,
             [
@@ -450,7 +450,9 @@ def _evaluate_strategies(
                 for task in tasks
             ],
         ),
-        "human_focused": _strategy_report(
+    }
+    if query_plan is not None:
+        strategies["human_focused"] = _strategy_report(
             tasks,
             [
                 _focused_result(
@@ -463,17 +465,25 @@ def _evaluate_strategies(
                 )
                 for task in tasks
             ],
-        ),
-    }
+        )
+    return strategies
 
 
 def run_benchmark() -> BenchmarkReport:
     """Recall task evidence from a fresh isolated store and report all misses."""
-    fixture = load_fixture()
+    return run_benchmark_for_fixture(
+        load_fixture(), load_linked_summaries(), load_human_focused_queries()
+    )
+
+
+def run_benchmark_for_fixture(
+    fixture: Fixture,
+    linked_summaries: LinkedSummaryFixture,
+    human_queries: HumanFocusedQueryFixture | None = None,
+) -> BenchmarkReport:
+    """Measure a supplied workflow corpus in a fresh isolated store."""
     _validate_fixture(fixture)
-    linked_summaries = load_linked_summaries()
-    human_queries = load_human_focused_queries()
-    query_plan = _human_query_plan(fixture, human_queries)
+    query_plan = _human_query_plan(fixture, human_queries) if human_queries is not None else None
     with tempfile.TemporaryDirectory(prefix="memex-agent-workflow-") as directory:
         memex = Memex(MemexConfig(data_dir=Path(directory)))
         try:

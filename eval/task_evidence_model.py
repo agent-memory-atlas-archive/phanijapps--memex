@@ -9,13 +9,14 @@ import shutil
 import subprocess
 import tempfile
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Literal, Protocol, TypedDict, cast
 
 from eval.agent_workflow import (
     BenchmarkReport,
     Fixture,
+    LinkedSummaryFixture,
     StrategyReport,
     _focused_result,
     _populate,
@@ -23,6 +24,7 @@ from eval.agent_workflow import (
     _validate_fixture,
     load_fixture,
     run_benchmark,
+    run_benchmark_for_fixture,
 )
 from memex.application.context_injection import estimate_tokens
 from memex.application.memory import Memex
@@ -34,9 +36,14 @@ PROMOTION_MARGIN_POINTS = 10.0
 _run_command = subprocess.run
 
 _QUESTION_PROMPT = """\
-You are choosing memory-recall questions before a coding task.
+You are choosing memory-recall questions before a coding task. You cannot see
+the memory pages and must not answer the task.
 Return JSON only, with this shape: {{"queries": ["...", "..."]}}.
-Use one to three focused questions. Do not include explanations.
+Use one to three short, distinct search questions. Together they should look
+for the current behavior and owner, prerequisites or scope constraints that
+could change the implementation, and relevant verification or recovery rules.
+Ground each question in nouns from the task and plausible adjacent concepts.
+Do not repeat the broad goal, invent exact code symbols, or include explanations.
 
 Task name: {name}
 Goal: {goal}
@@ -61,6 +68,26 @@ class TaskEvidenceSnapshot(TypedDict):
     model_prompt_tokens: int
     model_completion_tokens: int
     model_catalog_estimate_usd: float
+
+
+class BaselineTaskEvidenceSnapshot(TypedDict):
+    task: str
+    complete: bool
+    hits: list[str]
+    missing: list[str]
+    calls: int
+    rendered_tokens: int
+    latency_ms: float
+    inactive_hits: int
+    other_project_hits: int
+
+
+class RecoveryBudget(TypedDict):
+    wall_limit: int
+    spend_limit: float
+    wall_used: float
+    spend_used: float
+    status: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,6 +155,20 @@ class ModelComparisonReport:
     question_run: QuestionRun
     candidate: StrategyReport | None
     promotion_gate: PromotionGate
+
+
+@dataclass(frozen=True, slots=True)
+class RecoveryHoldout:
+    fixture: Fixture
+    linked_summaries: LinkedSummaryFixture
+    evidence_dir: Path
+
+
+@dataclass(frozen=True, slots=True)
+class RecoveryComparisonReport:
+    question_run: QuestionRun
+    previous: ModelComparisonReport
+    holdout: ModelComparisonReport
 
 
 class QuestionPlanner(Protocol):
@@ -257,18 +298,187 @@ def run_model_comparison(
     active_planner = planner or pi_question_planner()
     active_limits = limits or ModelRunLimits()
     question_run = active_planner.plan(_label_blind_tasks(fixture), active_limits)
+    report = _comparison_report(fixture, baseline, question_run)
+    if evidence_path is not None:
+        _write_task_evidence(evidence_path, report)
+    return report
+
+
+def run_recovery_comparison(
+    planner: QuestionPlanner,
+    limits: ModelRunLimits,
+    holdout: RecoveryHoldout,
+) -> RecoveryComparisonReport:
+    """Score prior and fresh tasks after one bounded, label-blind model run."""
+    holdout.evidence_dir.mkdir(parents=True, exist_ok=True)
+    lock_path = holdout.evidence_dir / ".budget.lock"
+    descriptor = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    os.close(descriptor)
+    try:
+        return _run_recovery_under_budget(planner, limits, holdout)
+    finally:
+        lock_path.unlink(missing_ok=True)
+
+
+def _run_recovery_under_budget(
+    planner: QuestionPlanner, limits: ModelRunLimits, holdout: RecoveryHoldout
+) -> RecoveryComparisonReport:
+    budget_path = holdout.evidence_dir / "budget.json"
+    budget = _load_budget(budget_path, limits)
+    budget["status"] = "reserved"
+    _write_json(budget_path, budget)
+    started = time.monotonic()
+    previous_fixture = load_fixture()
+    _validate_fixture(previous_fixture)
+    _validate_fixture(holdout.fixture)
+    previous_tasks = _label_blind_tasks(previous_fixture)
+    holdout_tasks = _label_blind_tasks(holdout.fixture)
+    if {task["name"] for task in previous_tasks} & {task["name"] for task in holdout_tasks}:
+        raise ValueError("recovery task names must be distinct across cohorts")
+    previous_baseline = run_benchmark()
+    holdout_baseline = run_benchmark_for_fixture(holdout.fixture, holdout.linked_summaries)
+    _write_baseline_evidence(holdout.evidence_dir / "previous-baselines.json", previous_baseline)
+    _write_baseline_evidence(holdout.evidence_dir / "fresh-baselines.json", holdout_baseline)
+    remaining_seconds = math.floor(
+        limits.wall_seconds - budget["wall_used"] - (time.monotonic() - started)
+    )
+    remaining_spend = limits.spend_limit_usd - budget["spend_used"]
+    if remaining_seconds <= 0 or remaining_spend <= 0:
+        question_run = QuestionRun(
+            status="blocked",
+            harness="not-started",
+            model_id=None,
+            billing_mode="unknown",
+            cost_source=None,
+            wall_limit_seconds=limits.wall_seconds,
+            spend_limit_usd=limits.spend_limit_usd,
+            elapsed_seconds=time.monotonic() - started,
+            usage=ModelUsage(),
+            plans=[],
+            blocked_reason="comparison time" if remaining_seconds <= 0 else "comparison spend",
+        )
+    else:
+        question_run = planner.plan(
+            previous_tasks + holdout_tasks,
+            ModelRunLimits(wall_seconds=remaining_seconds, spend_limit_usd=remaining_spend),
+        )
+        question_run = replace(
+            question_run,
+            wall_limit_seconds=limits.wall_seconds,
+            elapsed_seconds=time.monotonic() - started,
+        )
+    previous_plans: list[QuestionPlan] = []
+    holdout_plans: list[QuestionPlan] = []
+    if question_run.status == "complete":
+        previous_plans = question_run.plans[: len(previous_tasks)]
+        holdout_plans = question_run.plans[len(previous_tasks) :]
+    previous_run = replace(
+        question_run,
+        plans=previous_plans,
+        usage=_plan_usage(previous_plans),
+    )
+    holdout_run = replace(
+        question_run,
+        plans=holdout_plans,
+        usage=_plan_usage(holdout_plans),
+    )
+    previous_report = _comparison_report(previous_fixture, previous_baseline, previous_run)
+    holdout_report = _comparison_report(holdout.fixture, holdout_baseline, holdout_run)
+    _write_task_evidence(holdout.evidence_dir / "previous-tasks.json", previous_report)
+    _write_task_evidence(holdout.evidence_dir / "fresh-tasks.json", holdout_report)
+    if question_run.status in {"complete", "blocked"} or question_run.blocked_reason in {
+        "prompt bound",
+        "time",
+        "spend reserve",
+        "usage bound",
+        "spend",
+    }:
+        _settle_budget(
+            budget_path,
+            budget,
+            replace(question_run, elapsed_seconds=time.monotonic() - started),
+        )
+    return RecoveryComparisonReport(
+        question_run=question_run,
+        previous=previous_report,
+        holdout=holdout_report,
+    )
+
+
+def _load_budget(path: Path, limits: ModelRunLimits) -> RecoveryBudget:
+    if (
+        not isinstance(limits.wall_seconds, int)
+        or isinstance(limits.wall_seconds, bool)
+        or limits.wall_seconds <= 0
+        or not _finite_positive_number(limits.spend_limit_usd)
+    ):
+        raise ValueError("recovery comparison requires finite positive limits")
+    if not path.exists():
+        return {
+            "wall_limit": limits.wall_seconds,
+            "spend_limit": limits.spend_limit_usd,
+            "wall_used": 0.0,
+            "spend_used": 0.0,
+            "status": "ready",
+        }
+    budget = json.loads(path.read_text(encoding="utf-8"))
+    if (
+        not isinstance(budget, dict)
+        or budget.get("wall_limit") != limits.wall_seconds
+        or budget.get("spend_limit") != limits.spend_limit_usd
+        or budget.get("status") != "ready"
+        or not _finite_nonnegative_number(budget.get("wall_used"))
+        or not _finite_nonnegative_number(budget.get("spend_used"))
+    ):
+        raise ValueError(
+            "recovery budget is changed, invalid, closed, or has an unresolved reservation"
+        )
+    return cast(RecoveryBudget, budget)
+
+
+def _finite_nonnegative_number(value: object) -> bool:
+    return (
+        isinstance(value, int | float)
+        and not isinstance(value, bool)
+        and math.isfinite(value)
+        and value >= 0
+    )
+
+
+def _settle_budget(path: Path, budget: RecoveryBudget, question_run: QuestionRun) -> None:
+    spend = max(question_run.usage.spend_usd, question_run.usage.catalog_estimate_usd)
+    elapsed = question_run.elapsed_seconds
+    if not _finite_nonnegative_number(elapsed) or not _finite_nonnegative_number(spend):
+        raise ValueError("recovery run returned invalid budget usage")
+    budget["wall_used"] += elapsed
+    budget["spend_used"] += spend
+    budget["status"] = "closed" if question_run.status == "complete" else "ready"
+    _write_json(path, budget)
+
+
+def _plan_usage(plans: list[QuestionPlan]) -> ModelUsage:
+    return ModelUsage(
+        prompt_tokens=sum(plan.usage.prompt_tokens for plan in plans),
+        completion_tokens=sum(plan.usage.completion_tokens for plan in plans),
+        spend_usd=sum(plan.usage.spend_usd for plan in plans),
+        catalog_estimate_usd=sum(plan.usage.catalog_estimate_usd for plan in plans),
+    )
+
+
+def _comparison_report(
+    fixture: Fixture,
+    baseline: BenchmarkReport,
+    question_run: QuestionRun,
+) -> ModelComparisonReport:
     candidate: StrategyReport | None = None
     if question_run.status == "complete":
         candidate = _evaluate_query_plan(fixture, _candidate_query_plan(question_run, fixture))
-    report = ModelComparisonReport(
+    return ModelComparisonReport(
         baseline=baseline,
         question_run=question_run,
         candidate=candidate,
         promotion_gate=_promotion_gate(baseline, candidate, question_run),
     )
-    if evidence_path is not None:
-        _write_task_evidence(evidence_path, report)
-    return report
 
 
 def sanitized_task_evidence(report: ModelComparisonReport) -> list[TaskEvidenceSnapshot]:
@@ -298,6 +508,26 @@ def sanitized_task_evidence(report: ModelComparisonReport) -> list[TaskEvidenceS
     return rows
 
 
+def _write_baseline_evidence(path: Path, baseline: BenchmarkReport) -> None:
+    strategies: dict[str, list[BaselineTaskEvidenceSnapshot]] = {}
+    for name, report in baseline.strategies.items():
+        strategies[name] = [
+            {
+                "task": task.name,
+                "complete": task.complete,
+                "hits": task.hits,
+                "missing": task.missing,
+                "calls": task.cost.calls,
+                "rendered_tokens": task.cost.rendered_tokens,
+                "latency_ms": task.cost.latency_ms,
+                "inactive_hits": len(task.inactive_hits),
+                "other_project_hits": len(task.other_project_hits),
+            }
+            for task in report.tasks
+        ]
+    _write_json(path, {"source_revision": baseline.source_revision, "strategies": strategies})
+
+
 def _write_task_evidence(path: Path, report: ModelComparisonReport) -> None:
     """Replace a previous task trace, including when the new run is blocked."""
     export = {
@@ -307,13 +537,17 @@ def _write_task_evidence(path: Path, report: ModelComparisonReport) -> None:
         "blocked_reason": report.question_run.blocked_reason,
         "tasks": sanitized_task_evidence(report),
     }
+    _write_json(path, export)
+
+
+def _write_json(path: Path, value: object) -> None:
     temporary_path: Path | None = None
     try:
         with tempfile.NamedTemporaryFile(
             mode="w", encoding="utf-8", dir=path.parent, prefix=f".{path.name}.", delete=False
         ) as temporary:
             temporary_path = Path(temporary.name)
-            json.dump(export, temporary, indent=2)
+            json.dump(value, temporary, indent=2)
             temporary.write("\n")
         os.replace(temporary_path, path)
     finally:
