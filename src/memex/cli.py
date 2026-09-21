@@ -640,7 +640,7 @@ def _run(args: argparse.Namespace) -> int:
                             goal=args.query,
                             questions=args.question,
                             project_id=project_id,
-                            max_hits=min(args.top_k, 8) if args.top_k is not None else 8,
+                            max_hits=min(args.top_k, 36) if args.top_k is not None else 36,
                             max_tokens=args.max_tokens if args.max_tokens is not None else 4096,
                             node_type=args.type,
                             tags=args.tag,

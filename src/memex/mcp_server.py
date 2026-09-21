@@ -106,7 +106,9 @@ def memex_write(
             ingestion through a harness hook or the CLI.
         title: Human-readable; the slug derives from it.
         description: Optional one-sentence signpost (single line, at most
-            512 UTF-8 bytes); searchable and returned with recall hits.
+            512 UTF-8 bytes) stating WHEN the page is useful — the situation
+            or question it answers, in a searcher's words, not copied from
+            the body; searchable and returned with recall hits.
         body: Markdown; ``[[slug]]`` references become wiki links, merged
             with ``links``.
         scope: Required namespace choice: global or project.
@@ -186,7 +188,7 @@ def memex_recall(
                 goal=query,
                 questions=questions,
                 project_id=project_id,
-                max_hits=min(top_k, 8),
+                max_hits=min(top_k, 36),
                 node_type=node_type,
             )
             return cast(RecallWireDict, to_jsonable(_get_memex().recall_task(task)))

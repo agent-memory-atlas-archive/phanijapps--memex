@@ -41,6 +41,24 @@ second run.
 | Human-written focused queries | 12/24 | 73.44% | 72 | 14,559 | 189.4 | 0 | 0 |
 | Linked task summary | 11/24 | 70.31% | 24 | 4,485 | 1,051.7 | 0 | 0 |
 
+**Amendment (2026-09-21).** Two owner-directed changes landed after the
+original baseline. First, the agentic-frontmatter-search follow-up added
+purpose-style descriptions to every fixture card and raised the description
+BM25 weight to 2.0. Second, the task-recall contract widened from eight
+distinct pages to a 36-page pack fed by twelve hits per question, with the
+4,096-token context budget unchanged (the packed context renders paths,
+titles, and snippets, so budget compliance is unaffected). The strategies
+then re-measured as follows; these rows are the values the committed
+benchmark now pins, and the table above preserves the original 2026-09-20
+baseline for comparison.
+
+| Strategy | Complete tasks | Fact recall | Calls | Rendered tokens | Latency ms | Inactive hits | Other-project hits |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Current hook injection | 5/24 | 51.56% | 24 | 15,002 | 97.4 | 0 | 0 |
+| One broad query | 17/24 | 87.50% | 24 | 72,180 | 112.9 | 0 | 0 |
+| Human-written focused queries | 22/24 | 96.88% | 72 | 52,593 | 189.4 | 0 | 0 |
+| Linked task summary | 11/24 | 70.31% | 24 | 4,485 | 1,051.7 | 0 | 0 |
+
 Each task strategy keeps at most eight distinct evidence hits and validates the
 per-task rendered context budget at 4,096 estimated tokens. The linked-summary
 baseline retrieves one summary page with one broad query, does not force the

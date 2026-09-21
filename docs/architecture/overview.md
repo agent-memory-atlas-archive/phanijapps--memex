@@ -77,9 +77,10 @@ indexes refresh as a best-effort follow-up that never fails the write.
 Production recall uses the `semantic-and-fallback-fts5` ranker. It caps the
 safe-token query at 64 tokens and 1,024 UTF-8 bytes, then first runs a strict
 `AND` FTS5 query over the safe tokens with column weights
-`slug=1, title=1, description=1, body=2, tags=1` — the description column is
-searched at a neutral weight, so the pre-existing column contributions are
-unchanged — then broadens to an `OR` query only when the
+`slug=1, title=1, description=2, body=2, tags=1` — a purpose-written
+description match ranks like a body match, because a query hitting the
+signpost is as strong a relevance signal as a body hit; stores without
+descriptions are unaffected — then broadens to an `OR` query only when the
 strict query returns zero rows. Snippets are capped at 12 tokens and are
 selected from the matching column: body first, then description, then title,
 with `snippet_source` reporting the match origin. Filters are

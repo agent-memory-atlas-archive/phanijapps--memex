@@ -132,17 +132,34 @@ def test_task_recall_distributes_pages_across_questions_and_reports_budget(data_
         memex.close()
 
 
-def test_task_recall_reports_ninth_eligible_page_without_accessing_it(data_dir: Path) -> None:
+def test_task_recall_reports_page_over_the_cap_without_accessing_it(data_dir: Path) -> None:
     memex = Memex(MemexConfig(data_dir=data_dir))
     try:
-        slugs = [_write(memex, f"Alpha page {number}", "alpha evidence") for number in range(9)]
+        total = 13  # one past the twelve-per-question retrieval depth
+        slugs = [_write(memex, f"Alpha page {number}", "alpha evidence") for number in range(total)]
         result = memex.recall_task(
             TaskRecallInput(goal="Inspect alpha", questions=["alpha"], project_id=PROJECT)
         )
         counts = [_access_count(memex, slug) for slug in slugs]
-        assert len(result.sources) == 8
+        assert len(result.sources) == 12  # per-question retrieval depth
+        assert sorted(counts) == [0] + [1] * 12  # the unseen page is never accessed
+    finally:
+        memex.close()
+
+
+def test_task_recall_explicit_page_cap_omits_without_accessing(data_dir: Path) -> None:
+    memex = Memex(MemexConfig(data_dir=data_dir))
+    try:
+        slugs = [_write(memex, f"Alpha page {number}", "alpha evidence") for number in range(4)]
+        result = memex.recall_task(
+            TaskRecallInput(
+                goal="Inspect alpha", questions=["alpha"], project_id=PROJECT, max_hits=3
+            )
+        )
+        counts = [_access_count(memex, slug) for slug in slugs]
+        assert len(result.sources) == 3
         assert result.omitted_questions == ["alpha"]
-        assert sorted(counts) == [0] + [1] * 8
+        assert sorted(counts) == [0] + [1] * 3
     finally:
         memex.close()
 

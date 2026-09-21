@@ -5,6 +5,17 @@ Notable user-visible changes are recorded here. The format follows
 through 0.2.4 are reconstructed from the version-bump commits; later work remains
 unreleased until a release tag is created.
 
+## [Unreleased]
+
+### Changed
+
+- Task recall evidence pack widened from 8 to 36 distinct pages (12 hits per
+  question) with the 4,096-token context budget unchanged; multi-part coding
+  tasks now surface far more of their required evidence (goal-shaped
+  benchmark 12/24 → 22/24 tasks). Descriptions are weighted like body text in
+  BM25, and every write surface teaches purpose-style ("when is this page
+  useful") description authoring.
+
 ## [memex][0.5.0] — 2026-09-21
 
 ### Added

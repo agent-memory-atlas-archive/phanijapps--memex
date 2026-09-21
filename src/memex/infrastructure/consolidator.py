@@ -49,8 +49,9 @@ and/or summary nodes that should be permanently stored in the wiki memory.
 6. Node bodies should be 2-5 sentences. Be specific.
 7. tags should be lowercase, kebab-case: ["preference", "python", "tooling"]
 8. Give each node a "description": one short sentence on a single line
-   (at most 512 UTF-8 bytes) stating what the node contains. It is optional
-   but recommended.
+   (at most 512 UTF-8 bytes) stating WHEN the node is useful — the situation
+   or question it answers, phrased in a searcher's words rather than copied
+   from the body. It is optional but recommended.
 
 ## OUTPUT FORMAT
 Return a JSON array of node objects. Each object:
