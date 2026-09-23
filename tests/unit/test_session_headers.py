@@ -8,7 +8,7 @@ import pytest
 from memex import Memex
 from memex.domain.models import IngestTranscriptInput, TranscriptLinkReport, TurnStreamEntry
 from memex.infrastructure.config import MemexConfig as Config
-from memex.infrastructure.harness_transcripts import (
+from memex.infrastructure.harness.transcripts import (
     parse_codex_rollout,
     parse_transcript,
     read_transcript_turns,

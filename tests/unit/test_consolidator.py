@@ -3,15 +3,15 @@ from pathlib import Path
 
 import pytest
 
+from memex.application.consolidator import WikiConsolidator
 from memex.application.ports import LLMResponse
 from memex.domain.errors import LLMError
 from memex.domain.models import ConsolidateInput, WikiNode
 from memex.infrastructure.config import ConfigLoader
-from memex.infrastructure.consolidator import WikiConsolidator
-from memex.infrastructure.index_manager import IndexManager
-from memex.infrastructure.link_manager import LinkManager
 from memex.infrastructure.llm_clients import OpenAICompatClient, client_from_config
-from memex.infrastructure.wiki_store import WikiStore
+from memex.infrastructure.search.index_manager import IndexManager
+from memex.infrastructure.search.link_manager import LinkManager
+from memex.infrastructure.store.wiki_store import WikiStore
 
 VALID_LLM_OUTPUT = json.dumps(
     [

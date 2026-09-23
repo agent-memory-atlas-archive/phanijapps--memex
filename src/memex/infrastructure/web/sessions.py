@@ -6,8 +6,8 @@ import json
 from dataclasses import dataclass
 from urllib.parse import quote
 
-from memex.infrastructure.markdown import render_markdown
-from memex.infrastructure.viz_components import escape
+from memex.infrastructure.web.components import escape
+from memex.infrastructure.web.markdown import render_markdown
 
 TOOL_PREVIEW_CHARS = 500
 TOOL_DISPLAY_CHARS = 2000

@@ -10,10 +10,10 @@ from pathlib import Path
 import pytest
 
 from memex import cli
-from memex.infrastructure.harness_transcripts import parse_codex_rollout, read_transcript_turns
+from memex.infrastructure.harness.transcripts import parse_codex_rollout, read_transcript_turns
 
 FIXTURES = Path(__file__).parent.parent / "fixtures"
-WRAPPER = Path(__file__).parent.parent.parent / "marketplace/codex/memex-codex-notify.py"
+WRAPPER = Path(__file__).parent.parent.parent / "src/memex/marketplace/codex/memex-codex-notify.py"
 
 
 class TestParserToolsAndCompaction:

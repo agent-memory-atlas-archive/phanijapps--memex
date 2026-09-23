@@ -4,8 +4,8 @@ import pytest
 
 from memex.domain.errors import IndexManagerError
 from memex.domain.models import WikiNode
-from memex.infrastructure.index_manager import IndexManager
-from memex.infrastructure.link_manager import LinkManager
+from memex.infrastructure.search.index_manager import IndexManager
+from memex.infrastructure.search.link_manager import LinkManager
 
 
 def _link_manager(data_dir: Path) -> LinkManager:

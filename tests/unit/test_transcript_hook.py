@@ -4,10 +4,10 @@ from pathlib import Path
 import pytest
 
 from memex.domain.models import IngestTranscriptInput, TurnStreamEntry, WikiNode
-from memex.infrastructure.index_manager import IndexManager
-from memex.infrastructure.link_manager import LinkManager
-from memex.infrastructure.transcript_hook import TranscriptHook
-from memex.infrastructure.wiki_store import WikiStore
+from memex.infrastructure.harness.transcript_hook import TranscriptHook
+from memex.infrastructure.search.index_manager import IndexManager
+from memex.infrastructure.search.link_manager import LinkManager
+from memex.infrastructure.store.wiki_store import WikiStore
 
 
 def _input(session_id: str, turns: int = 2) -> IngestTranscriptInput:

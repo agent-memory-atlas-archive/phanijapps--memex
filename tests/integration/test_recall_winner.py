@@ -8,7 +8,7 @@ import pytest
 from memex.application.memory import Memex
 from memex.domain.models import WriteInput
 from memex.infrastructure.config import MemexConfig
-from memex.infrastructure.index_manager import IndexManager
+from memex.infrastructure.search.index_manager import IndexManager
 
 WINNER_QUERY = "atlas risk integration"
 WINNER_SLUG = "atlas-risk-integration"

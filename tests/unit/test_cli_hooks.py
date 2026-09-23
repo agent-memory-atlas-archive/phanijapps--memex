@@ -8,8 +8,8 @@ import pytest
 from memex import cli
 from memex.application.memory import Memex
 from memex.domain.models import WriteInput
-from memex.infrastructure.bm25_retriever import MAX_QUERY_BYTES, MAX_QUERY_TOKENS
 from memex.infrastructure.config import MemexConfig
+from memex.infrastructure.search.bm25_retriever import MAX_QUERY_BYTES, MAX_QUERY_TOKENS
 
 FIXTURES = Path(__file__).parent.parent / "fixtures"
 

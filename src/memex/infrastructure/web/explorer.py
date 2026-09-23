@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from urllib.parse import urlencode
 
 from memex.domain.models import WikiNode
-from memex.infrastructure.viz_components import escape
+from memex.infrastructure.web.components import escape
 
 MEMORY_PAGE_SIZE = 20
 

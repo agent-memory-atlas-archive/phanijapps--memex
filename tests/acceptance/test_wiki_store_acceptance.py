@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from memex.domain.models import WikiNode
-from memex.infrastructure.wiki_store import WikiStore
+from memex.infrastructure.store.wiki_store import WikiStore
 
 
 def _node(**overrides: object) -> WikiNode:

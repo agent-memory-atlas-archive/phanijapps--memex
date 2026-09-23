@@ -19,7 +19,7 @@ from typing import ClassVar
 from memex.domain.errors import MemexError
 from memex.domain.models import NODE_TYPES, WikiNode
 from memex.domain.reserved import OKF_VERSION, is_structural
-from memex.infrastructure.wiki_store import TYPE_DIRS
+from memex.infrastructure.store.wiki_store import TYPE_DIRS
 
 _INDEX_NAME = "index.md"
 _ESCAPE_CHARS = frozenset("\\`*_[]<>")

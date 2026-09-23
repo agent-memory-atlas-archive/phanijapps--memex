@@ -12,7 +12,7 @@ The filesystem is the memory · the index is disposable · every session is prov
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-3776AB.svg)](pyproject.toml)
 [![Docs site](https://img.shields.io/website?url=https%3A%2F%2Fphanijapps.github.io%2Fmemex%2F&label=docs)](https://phanijapps.github.io/memex/)
 
-[Documentation](https://phanijapps.github.io/memex/) · [User guide](docs/gitpages/guide.md) · [Harness adapters](marketplace/)
+[Documentation](https://phanijapps.github.io/memex/) · [User guide](docs/gitpages/guide.md) · [Harness adapters](src/memex/marketplace/)
 
 </div>
 
@@ -152,7 +152,7 @@ links resolve. Add a time cutoff to require memory activity in CI:
 memex verify --since "$PR_CREATED" --require-recall --require-write
 ```
 
-The [Copilot workflow](marketplace/copilot/memex-verify.yml) is a ready-made example.
+The [Copilot workflow](src/memex/marketplace/copilot/memex-verify.yml) is a ready-made example.
 </details>
 
 ## Development

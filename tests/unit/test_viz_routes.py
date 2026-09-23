@@ -17,7 +17,7 @@ import pytest
 from memex import Memex
 from memex.domain.models import WikiNode, WriteInput
 from memex.infrastructure.config import MemexConfig as Config
-from memex.infrastructure.viz import VizHandler, serve
+from memex.infrastructure.web.server import VizHandler, serve
 
 
 @pytest.fixture(scope="module")
@@ -181,7 +181,7 @@ class TestShellPage:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setenv("MEMEX_DATA_DIR", str(tmp_path))
-        with patch("memex.infrastructure.viz.ThreadingHTTPServer") as server_type:
+        with patch("memex.infrastructure.web.server.ThreadingHTTPServer") as server_type:
             with patch("webbrowser.open"):
                 server_type.return_value.serve_forever.side_effect = KeyboardInterrupt
                 serve(port=7172)

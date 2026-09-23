@@ -8,10 +8,10 @@ from pathlib import Path
 import pytest
 
 from memex.domain.models import WikiNode
-from memex.infrastructure.bm25_retriever import BM25Retriever
-from memex.infrastructure.index_manager import SCHEMA_VERSION, IndexManager
-from memex.infrastructure.link_manager import LinkManager
-from memex.infrastructure.wiki_store import WikiStore
+from memex.infrastructure.search.bm25_retriever import BM25Retriever
+from memex.infrastructure.search.index_manager import SCHEMA_VERSION, IndexManager
+from memex.infrastructure.search.link_manager import LinkManager
+from memex.infrastructure.store.wiki_store import WikiStore
 
 
 def _node(**overrides: object) -> WikiNode:

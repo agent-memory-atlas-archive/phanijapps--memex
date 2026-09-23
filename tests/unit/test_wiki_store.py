@@ -4,7 +4,7 @@ import pytest
 
 from memex.domain.errors import WikiStoreError
 from memex.domain.models import WikiNode
-from memex.infrastructure.wiki_store import WikiStore, hash_body
+from memex.infrastructure.store.wiki_store import WikiStore, hash_body
 
 
 def make_node(**overrides: object) -> WikiNode:

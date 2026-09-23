@@ -7,8 +7,31 @@ unreleased until a release tag is created.
 
 ## [Unreleased]
 
+### Removed
+
+- `packaged_marketplace()` from the installer module. `default_marketplace()`
+  is the single resolver: it honours an explicit `--from` path and otherwise
+  reads the harness assets shipped inside the package. A checkout's
+  `./marketplace` directory no longer overrides the installed copy.
+- `NodeExtractor` (`memex.infrastructure.extractor`), the rule-based
+  cue-phrase extractor from specification §7 Utility 6. It was never wired
+  into capture, consolidation, or any command, so no shipped behavior changes.
+  Extraction is `memex consolidate`, as the specification always intended for
+  anything beyond simple cues.
+
 ### Changed
 
+- Harness install assets moved from the repository root to
+  `src/memex/marketplace/`, inside the package that reads them at runtime.
+  Wheels are unchanged — the files still land at `memex/marketplace` — and
+  `pyproject.toml` no longer needs a `force-include` section.
+- Infrastructure modules are grouped by concern: `infrastructure/store/`
+  (Markdown persistence), `infrastructure/search/` (the disposable SQLite
+  index), `infrastructure/harness/` (coding-agent integration), and
+  `infrastructure/web/` (the local dashboard). `WikiConsolidator` moved to
+  `memex.application.consolidator`. Import paths change for anyone importing
+  these modules directly; the `Memex` facade, CLI, and MCP tools are
+  unaffected.
 - **Breaking — pages are OKF v0.2 concepts.** Front matter declares
   `okf_version: "0.2"` and carries the Open Knowledge Format field set first,
   in the order the OKF reference implementation writes it, followed by the

@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from memex.domain.models import TurnStreamEntry
-from memex.infrastructure.harness_transcripts import (
+from memex.infrastructure.harness.transcripts import (
     normalize_ts,
     parse_claude_transcript,
     parse_codex_rollout,

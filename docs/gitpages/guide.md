@@ -548,7 +548,7 @@ every link resolves; generated navigation matches the page tree. With
 `--since`, memex additionally reports recall
 activity (access telemetry) and write activity (updated timestamps) since
 the cutoff; `--require-*` turns missing evidence into exit code 1. The
-Copilot adapter ships a ready-made workflow (`marketplace/copilot/
+Copilot adapter ships a ready-made workflow (`src/memex/marketplace/copilot/
 memex-verify.yml`).
 
 ## Data portability

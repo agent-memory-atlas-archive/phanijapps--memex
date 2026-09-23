@@ -161,7 +161,7 @@ flowchart TB
 
 ```mermaid
 flowchart TB
-    lib["<b>Memex Library</b><br>Python package — WikiStore · IndexManager · BM25Retriever<br>LinkManager · WikiConsolidator · NodeExtractor<br>TranscriptHook · RecencyDecay · IndexWatcher"]
+    lib["<b>Memex Library</b><br>Python package — WikiStore · IndexManager · BM25Retriever<br>LinkManager · WikiConsolidator<br>TranscriptHook · RecencyDecay · IndexWatcher"]
     cli["<b>CLI</b><br>write · recall · consolidate · forget<br>ingest-transcript · rebuild-index<br>backup · restore · export · import"]
     mcp["<b>MCP Server</b><br>optional stdio<br>exposes memex operations<br>as MCP tools"]
 
@@ -207,7 +207,6 @@ flowchart TB
         bm25["<b>BM25Retriever</b><br>bm25_retriever.py<br>FTS5 MATCH, bm25() scoring,<br>ranked RecallHits"]
         links["<b>LinkManager</b><br>link_manager.py<br>[[slug]] adjacency, backlinks"]
         cons["<b>WikiConsolidator</b><br>consolidator.py<br>LLM consolidation: episodes →<br>entity/summary nodes (§11 prompt)"]
-        ext["<b>NodeExtractor</b><br>extractor.py<br>rule-based cue-phrase extraction,<br>no LLM"]
         hook["<b>TranscriptHook</b><br>transcript_hook.py<br>transcript storage, episode nodes,<br>provenance tracing"]
         decay["<b>RecencyDecay</b><br>decay.py<br>importance × exp(−λ·days)"]
         watcher["<b>IndexWatcher</b><br>watcher.py<br>mtime polling, incremental re-index"]
@@ -970,36 +969,14 @@ options; OpenAI/Anthropic require their respective pip packages.
 
 ---
 
-### Utility 6: NodeExtractor
+### Utility 6: NodeExtractor — retired
 
-**Purpose:** Rule-based extraction from conversation turns. No LLM required.
-
-**Interface:**
-
-```python
-class NodeExtractor:
-    def __init__(self, wiki_store: WikiStore) -> None: ...
-    def extract(self, turns: list[TurnStreamEntry]) -> list[WriteInput]: ...
-    def extract_from_turn(self, turn: TurnStreamEntry) -> list[WriteInput]: ...
-```
-
-**Implementation:** Pattern-matched cue phrases:
-
-| Cue pattern (case-insensitive) | Node type | Title derivation |
-|---|---|---|
-| `I prefer`, `I like`, `my preference`, `I always use` | preference | `"User preference: {extracted preference}"` |
-| `remember that`, `remember to`, `you should know`, `important:` | entity | `"User fact: {content}"` |
-| `always use`, `never do`, `the rule is`, `use {tool}`, `don't use` | procedure | `"Rule: {extracted rule}"` |
-| Tool result turn | entity | `"Tool result: {tool_name}"` |
-| `{person} mentioned`, `{org} announced`, `{tool} is` | entity | `"Entity: {name}"` |
-
-Extraction is greedy: each matching cue phrase generates a `WriteInput`.
-The `body` field contains the original turn text plus any context from adjacent turns.
-
-**Scope:** Designed for simple preference/fact extraction. Complex extraction
-delegates to the LLM via `WikiConsolidator`.
-
----
+Rule-based, cue-phrase extraction from conversation turns. Specified, built,
+and never wired into a shipped path: nothing but its own test ever called it.
+Extraction is done by `WikiConsolidator` (Utility 5) on explicit consolidation,
+which is where the specification always sent anything beyond simple cues.
+Removed rather than left as a second, silent extraction path — see
+[implementation notes](implementation-notes.md).
 
 ### Utility 7: TranscriptHook
 
@@ -1244,7 +1221,7 @@ contains `manifest.json`, and that all expected directories are present.
 | `hashlib` | ✅ | SHA-256 content hashing | `WikiStore`, `IndexManager` |
 | `tomllib` | ✅ | TOML config parsing (Python 3.11+) | `ConfigLoader` |
 | `tarfile` / `gzip` | ✅ | Backup/restore archives | `BackupRestore` |
-| `re` | ✅ | [[wiki-link]] regex parsing | `LinkManager`, `NodeExtractor` |
+| `re` | ✅ | [[wiki-link]] regex parsing | `LinkManager` |
 | `threading` | ✅ | IndexWatcher background polling | `IndexWatcher` |
 | `argparse` | ✅ | CLI argument parsing | `CLI` |
 | `xml.etree.ElementTree` | ✅ | Mermaid diagram XML (lint) | Ward lint |
@@ -1439,8 +1416,7 @@ def ingest_transcript(
 2. Writes `~/.memex/transcripts/{yyyy-mm-dd}/{session_id}.meta.json`.
 3. Creates `~/.memex/docs/global/episodes/{session_id}.md` (episode node) with `transcript_ref` in front matter.
 4. Updates `wiki_index` with the new episode record.
-5. Optionally runs `NodeExtractor.extract(turns)` to auto-extract facts/preferences (if configured).
-6. Appends to `logs/memex.log`.
+5. Appends to `logs/memex.log`.
 
 **Error behavior:**
 - `FileExistsError` if `{session_id}.jsonl` already exists (must use `overwrite=True` to replace).
@@ -1814,33 +1790,31 @@ The following 21 tests must all pass before claiming build completeness.
 
 10. **File: `memex/transcript_hook.py`** — `TranscriptHook`. JSONL + JSON metadata write. Episode node creation with `transcript_ref`. `get_provenance()` (backward trace). `list_sessions()`. `delete_transcript()`.
 
-11. **File: `memex/extractor.py`** — `NodeExtractor`. Cue-phrase pattern matching. `extract_from_turn()`. `extract()` over list of turns.
+11. **File: `memex/llm_clients.py`** — `LLMClient` protocol. `OllamaClient` (stdlib `http.client`), `LMStudioClient` (stdlib `http.client`). `OpenAIClient` (requires `openai` pip), `AnthropicClient` (requires `anthropic` pip).
 
-12. **File: `memex/llm_clients.py`** — `LLMClient` protocol. `OllamaClient` (stdlib `http.client`), `LMStudioClient` (stdlib `http.client`). `OpenAIClient` (requires `openai` pip), `AnthropicClient` (requires `anthropic` pip).
-
-13. **File: `memex/consolidator.py`** — `WikiConsolidator`. Prompt template from §11. LLM call. Output parsing. Node creation loop. Report generation.
+12. **File: `memex/consolidator.py`** — `WikiConsolidator`. Prompt template from §11. LLM call. Output parsing. Node creation loop. Report generation.
 
 ### Phase 4 — Operations and CLI (File 14–17)
 
 **Milestone:** All CLI commands work; MCP server runs.
 
-14. **File: `memex/backup.py`** — `BackupRestore`. `tarfile` + `gzip` backup. `verify()`. `restore()` with temp dir + rollback.
+13. **File: `memex/backup.py`** — `BackupRestore`. `tarfile` + `gzip` backup. `verify()`. `restore()` with temp dir + rollback.
 
-15. **File: `memex/import_export.py`** — `ImportExport`. Export all nodes to JSON. Import JSON nodes to wiki files. `ExportReport`, `ImportReport`.
+14. **File: `memex/import_export.py`** — `ImportExport`. Export all nodes to JSON. Import JSON nodes to wiki files. `ExportReport`, `ImportReport`.
 
-16. **File: `memex/cli.py`** — `CLI`. `argparse` for all commands from §7 Utility 10. Subcommands: `write`, `recall`, `consolidate`, `forget`, `ingest-transcript`, `rebuild-index`, `backup`, `restore`, `export`, `import`, `info`, `watch`, `serve-mcp`.
+15. **File: `memex/cli.py`** — `CLI`. `argparse` for all commands from §7 Utility 10. Subcommands: `write`, `recall`, `consolidate`, `forget`, `ingest-transcript`, `rebuild-index`, `backup`, `restore`, `export`, `import`, `info`, `watch`, `serve-mcp`.
 
-17. **File: `memex/mcp_server.py`** — SDK-backed server factory. All 8 tools from §7 Utility 11. The official MCP Python SDK owns stdio and protocol behavior.
+16. **File: `memex/mcp_server.py`** — SDK-backed server factory. All 8 tools from §7 Utility 11. The official MCP Python SDK owns stdio and protocol behavior.
 
 ### Phase 5 — Polish (File 18–20)
 
 **Milestone:** All acceptance tests pass; spec matches implementation.
 
-18. **File: `memex/watcher.py`** — `IndexWatcher`. `os.stat().st_mtime` polling. Background `threading.Thread`. `check()` and `reindex_changed()`.
+17. **File: `memex/watcher.py`** — `IndexWatcher`. `os.stat().st_mtime` polling. Background `threading.Thread`. `check()` and `reindex_changed()`.
 
-19. **File: `memex/logging.py`** — Logging setup. Rotating log file. Structured log format (JSON or text). Operation audit trail.
+18. **File: `memex/logging.py`** — Logging setup. Rotating log file. Structured log format (JSON or text). Operation audit trail.
 
-20. **File: `pyproject.toml`** — Project metadata. Entry points: `memex = memex.cli:main`. Python ≥ 3.11. No required dependencies.
+19. **File: `pyproject.toml`** — Project metadata. Entry points: `memex = memex.cli:main`. Python ≥ 3.11. No required dependencies.
 
 ---
 

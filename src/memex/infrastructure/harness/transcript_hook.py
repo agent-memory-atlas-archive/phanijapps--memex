@@ -18,9 +18,9 @@ from memex.domain.models import (
     WikiNode,
 )
 from memex.domain.slugs import slugify
-from memex.infrastructure.index_manager import IndexManager
-from memex.infrastructure.link_manager import LinkManager
-from memex.infrastructure.wiki_store import WikiStore
+from memex.infrastructure.search.index_manager import IndexManager
+from memex.infrastructure.search.link_manager import LinkManager
+from memex.infrastructure.store.wiki_store import WikiStore
 
 _SUMMARY_EXCERPT_CHARS = 200
 _SESSION_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*$")

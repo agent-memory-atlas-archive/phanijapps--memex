@@ -307,7 +307,7 @@ class CorpusGenerator:
         """Direct file write — bypasses WikiStore to avoid O(n²) slug scanning."""
         from memex.domain.frontmatter import serialize_front_matter
         from memex.domain.models import utc_now_iso
-        from memex.infrastructure.wiki_store import TYPE_DIRS, hash_body, node_front_matter
+        from memex.infrastructure.store.wiki_store import TYPE_DIRS, hash_body, node_front_matter
 
         slug = _slugify(title)
         base = slug

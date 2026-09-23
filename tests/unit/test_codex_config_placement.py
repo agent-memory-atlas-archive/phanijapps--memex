@@ -2,9 +2,9 @@
 
 from pathlib import Path
 
-from memex.infrastructure.harness_installer import install_harness
+from memex.infrastructure.harness.installer import install_harness
 
-MARKETPLACE = Path(__file__).parent.parent.parent / "marketplace"
+MARKETPLACE = Path(__file__).parent.parent.parent / "src/memex/marketplace"
 
 
 def _install(home: Path, project: Path, config_text: str) -> str:

@@ -7,7 +7,7 @@ import pytest
 
 from memex import mcp_server
 from memex.domain.operations import RecallResultDict, TaskRecallResultDict
-from memex.infrastructure.bm25_retriever import MAX_QUERY_BYTES, MAX_QUERY_TOKENS
+from memex.infrastructure.search.bm25_retriever import MAX_QUERY_BYTES, MAX_QUERY_TOKENS
 from memex.infrastructure.workspace_context import ProjectContext
 from memex.mcp_server import (
     memex_forget,

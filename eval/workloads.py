@@ -17,7 +17,7 @@ from typing import Literal, cast
 
 from eval.corpus import CorpusResult, QuerySpec
 from memex.domain.errors import IndexManagerError
-from memex.infrastructure.index_manager import check_slug
+from memex.infrastructure.search.index_manager import check_slug
 
 GUTENBERG_SOURCE_URL = "https://www.gutenberg.org/cache/epub/feeds/pg_catalog.csv.gz"
 GUTENBERG_MAX_COMPRESSED_BYTES = 16 * 1024 * 1024

@@ -107,4 +107,4 @@ document.addEventListener('htmx:afterSwap',e=>{
 </script></body></html>"""
 
 
-DASHBOARD_CSS = (Path(__file__).parent / "dashboard.css").read_text(encoding="utf-8")
+DASHBOARD_CSS = (Path(__file__).parent / "assets" / "dashboard.css").read_text(encoding="utf-8")

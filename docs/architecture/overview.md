@@ -24,12 +24,20 @@ and rendered dashboard responses are derived or supporting state.
 | Area | Responsibility | Start here |
 | --- | --- | --- |
 | `src/memex/domain/` | Validated models, front matter, slugs, links, scrubbing, and adapter-neutral operation datatypes. No filesystem, database, network, or SDK calls. | `models.py`, `operations.py` |
-| `src/memex/application/` | The public `Memex` facade, orchestration, context packing, verification, decay, and the LLM port. | `memory.py`, `ports.py` |
-| `src/memex/infrastructure/` | Markdown persistence, SQLite/FTS5, transcript parsing, archive safety, LLM clients, configuration, installers, and visualization. | `wiki_store.py`, `index_manager.py`, `config.py` |
+| `src/memex/application/` | The public `Memex` facade, orchestration, consolidation, context packing, verification, decay, and the LLM port. | `memory.py`, `ports.py` |
+| `src/memex/infrastructure/` | Cross-cutting runtime adapters no package claims: configuration, logging, the run log, workspace identity, and LLM clients. | `config.py`, `llm_clients.py` |
+| `src/memex/infrastructure/store/` | The Markdown tree that is the source of truth: page CRUD, generated navigation, watching, archive, and transfer. | `wiki_store.py`, `navigation.py` |
+| `src/memex/infrastructure/search/` | The disposable SQLite index: FTS5 retrieval, index upkeep, and the link graph. | `bm25_retriever.py`, `index_manager.py` |
+| `src/memex/infrastructure/harness/` | Coding-agent integration: installers, harness-native transcript parsing, capture, and harness-assisted episode summaries. | `installer.py`, `transcript_hook.py` |
+| `src/memex/infrastructure/web/` | The read-only localhost dashboard: HTTP server, HTML components, and its assets. | `server.py`, `components.py` |
 | `src/memex/cli.py` | Argument parsing and JSON/text presentation for the shared services. | `_build_parser()`, `_run()` |
 | `src/memex/mcp_server.py` | Typed stdio MCP tools over the same facade and domain datatypes. | `build_server()` |
-| `marketplace/` | Thin harness-specific installation assets over the stable `memex hook` contract. | Per-harness `README.md` |
+| `src/memex/marketplace/` | Thin harness-specific installation assets over the stable `memex hook` contract. Package data: `memex install` reads it at runtime. | Per-harness `README.md` |
 | `eval/` | Offline corpus generation, retrieval metrics, and scale experiments. It is development tooling, not package runtime. | `run.py`, `runner.py` |
+
+The `store/` and `search/` packages are the two halves of ADR-0001 made
+visible: `store/` owns the authoritative Markdown, `search/` owns the
+disposable index rebuilt from it.
 
 `Memex` is both the public Python API and the composition root: it constructs
 the filesystem store, index, retriever, link manager, transcript hook, archive
@@ -41,10 +49,11 @@ The CLI has two deliberate infrastructure-facing seams: harness installation
 and harness-native transcript parsing. They adapt external files and processes
 before handing normalized data to the shared application contract.
 
-The dashboard keeps `viz.py` as the public local-server seam and route adapter.
-`viz_components.py` owns the shell and scope controls; `dashboard.css` owns the
-local visual system; `viz_explorer.py` owns selection and pagination; and
-`viz_sessions.py` owns grouped session and replay rendering. Routes compose
+The dashboard keeps `web/server.py` as the public local-server seam and route
+adapter. `web/components.py` owns the shell and scope controls;
+`web/assets/dashboard.css` owns the local visual system; `web/explorer.py` owns
+selection and pagination; and `web/sessions.py` owns grouped session and replay
+rendering. Routes compose
 server-rendered fragments from those parts. Dashboard search uses the
 retriever's non-mutating read path, so GET requests do not update index access
 counters. The dashboard is a read-only localhost projection. Its durable

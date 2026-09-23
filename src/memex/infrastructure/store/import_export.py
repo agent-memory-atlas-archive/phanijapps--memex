@@ -11,9 +11,9 @@ from memex.domain.errors import IndexManagerError, WikiStoreError
 from memex.domain.models import NODE_TYPES, SemanticLink, WikiNode, utc_now_iso
 from memex.domain.reserved import RESERVED_SLUGS
 from memex.domain.scrub import scrub
-from memex.infrastructure.index_manager import IndexManager
-from memex.infrastructure.link_manager import LinkManager
-from memex.infrastructure.wiki_store import WikiStore
+from memex.infrastructure.search.index_manager import IndexManager
+from memex.infrastructure.search.link_manager import LinkManager
+from memex.infrastructure.store.wiki_store import WikiStore
 
 logger = logging.getLogger("memex")
 

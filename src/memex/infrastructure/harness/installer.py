@@ -102,36 +102,23 @@ TOML_TEMPLATE = """# memex configuration — see the user guide (docs/guide.md)
 
 
 def default_marketplace(explicit: Path | None = None) -> Path:
-    """Resolve the marketplace directory: --from flag, the current checkout,
-    the copy bundled inside the installed package (wheel installs), or the
-    repository root relative to the package (editable installs)."""
+    """Resolve the harness asset directory.
+
+    ``explicit`` is the ``--from`` flag; otherwise the assets are the copy
+    that ships inside the installed package, which is the same directory for
+    a wheel and for an editable install. The package root is found by name,
+    never by counting parents, so moving this module cannot break installs.
+    """
     if explicit is not None:
         return explicit
-    cwd_candidate = Path.cwd() / "marketplace"
-    if cwd_candidate.is_dir():
-        return cwd_candidate
-    packaged = packaged_marketplace()
-    if packaged is not None:
-        return packaged
-    raise FileNotFoundError(
-        "marketplace directory not found (not in ./marketplace, the package, "
-        "or the repository). Reinstall from source: uv tool install . --force"
-    )
-
-
-def packaged_marketplace() -> Path | None:
-    """Find assets shipped with a wheel or beside an editable install."""
-    # __file__ is .../memex/infrastructure/: the wheel bundles marketplace
-    # at .../memex/marketplace, and editable installs reach the repo root
-    # three parents up from infrastructure/.
-    package_dir = Path(__file__).parent
-    bundled = package_dir.parent / "marketplace"
+    package_root = next(parent for parent in Path(__file__).parents if parent.name == "memex")
+    bundled = package_root / "marketplace"
     if bundled.is_dir():
         return bundled
-    editable_repo = package_dir.parent.parent.parent / "marketplace"
-    if editable_repo.is_dir():
-        return editable_repo
-    return None
+    raise FileNotFoundError(
+        "marketplace assets are missing from the memex package. "
+        "Reinstall from source: uv tool install . --force"
+    )
 
 
 def init_memex(data_dir: Path, *, consolidation_provider: str | None = None) -> InstallReport:

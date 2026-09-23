@@ -10,7 +10,7 @@ from memex.domain.models import (
     WikiNode,
     WriteInput,
 )
-from memex.infrastructure.backup import BackupRestore
+from memex.infrastructure.store.backup import BackupRestore
 
 
 def test_turn_entry_rejects_bad_role() -> None:

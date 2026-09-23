@@ -4,8 +4,8 @@ import pytest
 
 from eval.weighted_retriever import WeightedLexicalRetriever
 from memex.domain.models import WikiNode
-from memex.infrastructure.index_manager import IndexManager
-from memex.infrastructure.wiki_store import WikiStore
+from memex.infrastructure.search.index_manager import IndexManager
+from memex.infrastructure.store.wiki_store import WikiStore
 
 
 def _build_index(data_dir: Path, pages: list[tuple[str, str]]) -> IndexManager:

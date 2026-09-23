@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from eval.run import main as eval_main
-from memex.infrastructure.bm25_retriever import production_ranker_metadata
+from memex.infrastructure.search.bm25_retriever import production_ranker_metadata
 
 
 def test_eval_corpus_basic(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

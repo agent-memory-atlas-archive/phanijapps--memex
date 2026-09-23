@@ -59,9 +59,7 @@ def _event_name(payload: dict[str, object]) -> str:
     # Codex lifecycle hooks send `hook_event_name` ("SessionEnd",
     # "PostCompact", ...); the notify channel sends `type`
     # ("agent-turn-complete").
-    raw = str(
-        payload.get("hook_event_name") or payload.get("type") or payload.get("event") or ""
-    )
+    raw = str(payload.get("hook_event_name") or payload.get("type") or payload.get("event") or "")
     return raw.strip().lower().replace("_", "-")
 
 
@@ -103,7 +101,7 @@ def _rollout_for_session(session_id: str) -> str | None:
         except sqlite3.Error:
             continue
         if row and row[0] and Path(row[0]).exists():
-            return row[0]
+            return str(row[0])
     return None
 
 
@@ -171,9 +169,7 @@ def main() -> int:
     event = _event_name(payload)
     session_id = _field(payload, "session_id", "session-id", "thread_id", "thread-id") or ""
 
-    if "turn-complete" in event:
-        kind = "sync"
-    elif "compact" in event:
+    if "turn-complete" in event or "compact" in event:
         kind = "sync"
     elif "session-end" in event or "sessionend" in event:
         kind = "detached"

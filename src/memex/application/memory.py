@@ -7,6 +7,7 @@ from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from memex.application.consolidator import WikiConsolidator
 from memex.application.decay import RecencyDecay
 from memex.application.ports import LLMClient
 from memex.domain.errors import LLMError
@@ -33,19 +34,18 @@ from memex.domain.models import (
     utc_now_iso,
 )
 from memex.domain.scrub import scrub
-from memex.infrastructure.backup import BackupRestore
-from memex.infrastructure.bm25_retriever import BM25Retriever, _query_tokens
 from memex.infrastructure.config import ConfigLoader, MemexConfig
-from memex.infrastructure.consolidator import WikiConsolidator
-from memex.infrastructure.import_export import ImportExport
-from memex.infrastructure.index_manager import IndexManager
-from memex.infrastructure.link_manager import LinkManager
+from memex.infrastructure.harness.transcript_hook import TranscriptHook
 from memex.infrastructure.llm_clients import client_from_config
 from memex.infrastructure.logging import setup_logging
-from memex.infrastructure.navigation import NavigationGenerator
 from memex.infrastructure.run_log import append_run
-from memex.infrastructure.transcript_hook import TranscriptHook
-from memex.infrastructure.wiki_store import WikiStore, hash_body
+from memex.infrastructure.search.bm25_retriever import BM25Retriever, _query_tokens
+from memex.infrastructure.search.index_manager import IndexManager
+from memex.infrastructure.search.link_manager import LinkManager
+from memex.infrastructure.store.backup import BackupRestore
+from memex.infrastructure.store.import_export import ImportExport
+from memex.infrastructure.store.navigation import NavigationGenerator
+from memex.infrastructure.store.wiki_store import WikiStore, hash_body
 
 
 class Memex:
@@ -659,7 +659,7 @@ class Memex:
         from memex.infrastructure.run_log import read_runs, zero_yield_streak
 
         stale = 0
-        from memex.infrastructure.wiki_store import hash_body
+        from memex.infrastructure.store.wiki_store import hash_body
 
         for node in self.wiki_store.scan_all():
             row = self.index_manager.get(

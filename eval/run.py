@@ -21,8 +21,8 @@ from eval.corpus import CorpusResult
 from eval.runner import format_report, run_retrieval_eval
 from eval.selection import CANDIDATE_NAMES, WORKLOAD_NAMES, EvaluationConfig, run_selection
 from memex import Memex
-from memex.infrastructure.bm25_retriever import production_ranker_metadata
 from memex.infrastructure.config import MemexConfig
+from memex.infrastructure.search.bm25_retriever import production_ranker_metadata
 
 
 def _build_parser() -> argparse.ArgumentParser:

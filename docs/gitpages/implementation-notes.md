@@ -106,7 +106,7 @@ rule, and the OpenAI SDK is the single LLM client.
   stdout (empty output when nothing is stored), `transcript` ingests
   harness-native session files (pi sessions, Claude transcripts, Codex
   rollouts) with idempotent, filename-derived session ids. The
-  marketplace/ directory ships per-harness adapters over this contract;
+  src/memex/marketplace/ directory ships per-harness adapters over this contract;
   pi is the reference implementation.
 
 - `memex verify` (L3) always checks health (parseable wiki, index
@@ -224,3 +224,38 @@ rule, and the OpenAI SDK is the single LLM client.
   checks, and a generated store passes the OKF reference linter with zero
   errors and zero warnings. There is no migration: a pre-OKF store must be
   deleted.
+
+- **Infrastructure packages and the retired extractor.** `infrastructure/` is
+  grouped by concern: `store/` (the authoritative Markdown tree — `wiki_store`,
+  `navigation`, `watcher`, `backup`, `import_export`), `search/` (the
+  disposable index — `index_manager`, `bm25_retriever`, `link_manager`),
+  `harness/` (`installer`, `transcripts`, `transcript_hook`,
+  `episode_enrichment`), and `web/` (the dashboard and its assets). Only
+  cross-cutting runtime adapters stay at the root: `config`, `logging`,
+  `run_log`, `workspace_context`, and `llm_clients`. `WikiConsolidator` moved
+  to `application/consolidator.py`, where the layer rule puts it: it
+  orchestrates over the `LLMClient` port and holds no SDK. `NodeExtractor`
+  (spec §7 Utility 6) is removed — it was built, never wired into any shipped
+  path, and its own docstring sent anything beyond simple cues to the
+  consolidator. Two path couplings caught by tests during the move, recorded
+  here because they will catch the next one: `packaged_marketplace()` resolved
+  the marketplace directory by counting parents of `__file__` (it now anchors
+  on the package root by name), and `pyproject.toml` pins both packaged assets
+  and per-file lint ignores by full path.
+
+- **Harness assets are package data.** `marketplace/` lives at
+  `src/memex/marketplace/`, inside the package that reads it, because
+  `memex install <harness>` needs it at runtime. That collapses what used to
+  be three mechanisms into one path: the `force-include` build bridge, the
+  wheel-versus-editable fork in `packaged_marketplace()`, and the
+  current-directory fallback in `default_marketplace()` are all gone.
+  `packaged_marketplace()` is removed; `default_marketplace(explicit)` is the
+  only resolver, honouring `--from` and otherwise reading the copy inside the
+  installed package. A checkout's `./marketplace` no longer shadows the
+  installed assets, which is the correct behavior: installer files must match
+  the installed version, and `--from` remains the explicit override.
+  `pyproject.toml` now carries no `force-include` section at all — a wheel
+  built without one was confirmed to contain every asset, so the two entries
+  for `dashboard.css` and `htmx.min.js` were redundant too. Moving the
+  assets under `src/` also brought the shipped harness scripts into `ruff`
+  and `mypy`, which found and fixed two defects in the Codex wrapper.

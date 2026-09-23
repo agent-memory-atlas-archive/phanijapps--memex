@@ -9,10 +9,10 @@ from pathlib import Path
 import pytest
 
 from memex import cli
-from memex.infrastructure import harness_installer
-from memex.infrastructure.harness_installer import install_harness, uninstall_harness
+from memex.infrastructure.harness import installer as harness_installer
+from memex.infrastructure.harness.installer import install_harness, uninstall_harness
 
-MARKETPLACE = Path(__file__).parent.parent.parent / "marketplace"
+MARKETPLACE = Path(__file__).parent.parent.parent / "src/memex/marketplace"
 
 
 @pytest.fixture
@@ -231,7 +231,7 @@ def test_claude_mcp_removal_checks_user_entry_before_deleting(
 ) -> None:
     commands: list[list[str]] = []
     monkeypatch.setattr(
-        "memex.infrastructure.harness_installer.shutil.which", lambda name: "/test/claude"
+        "memex.infrastructure.harness.installer.shutil.which", lambda name: "/test/claude"
     )
 
     def run(args: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
@@ -243,7 +243,7 @@ def test_claude_mcp_removal_checks_user_entry_before_deleting(
         )
         return subprocess.CompletedProcess(args, 0, stdout=output, stderr="")
 
-    monkeypatch.setattr("memex.infrastructure.harness_installer.subprocess.run", run)
+    monkeypatch.setattr("memex.infrastructure.harness.installer.subprocess.run", run)
     report = harness_installer.UninstallReport(harness="claude")
 
     harness_installer._unregister_claude_mcp(Path.home(), report)
@@ -269,13 +269,13 @@ def test_claude_uninstall_leaves_invalid_settings_untouched(homes: tuple[Path, P
 
 def test_claude_mcp_lookup_timeout_is_reported(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "memex.infrastructure.harness_installer.shutil.which", lambda name: "/test/claude"
+        "memex.infrastructure.harness.installer.shutil.which", lambda name: "/test/claude"
     )
 
     def timeout(args: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
         raise subprocess.TimeoutExpired(args, 30)
 
-    monkeypatch.setattr("memex.infrastructure.harness_installer.subprocess.run", timeout)
+    monkeypatch.setattr("memex.infrastructure.harness.installer.subprocess.run", timeout)
     report = harness_installer.UninstallReport(harness="claude")
 
     harness_installer._unregister_claude_mcp(Path.home(), report)
@@ -285,7 +285,7 @@ def test_claude_mcp_lookup_timeout_is_reported(monkeypatch: pytest.MonkeyPatch) 
 
 def test_claude_mcp_remove_failure_is_reported(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "memex.infrastructure.harness_installer.shutil.which", lambda name: "/test/claude"
+        "memex.infrastructure.harness.installer.shutil.which", lambda name: "/test/claude"
     )
 
     def run(args: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
@@ -301,7 +301,7 @@ def test_claude_mcp_remove_failure_is_reported(monkeypatch: pytest.MonkeyPatch) 
             stderr="",
         )
 
-    monkeypatch.setattr("memex.infrastructure.harness_installer.subprocess.run", run)
+    monkeypatch.setattr("memex.infrastructure.harness.installer.subprocess.run", run)
     report = harness_installer.UninstallReport(harness="claude")
 
     harness_installer._unregister_claude_mcp(Path.home(), report)

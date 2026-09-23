@@ -11,8 +11,8 @@ from dataclasses import dataclass, field
 
 from memex.application.memory import Memex
 from memex.domain.models import WikiNode
-from memex.infrastructure.navigation import NavigationChange
-from memex.infrastructure.wiki_store import hash_body
+from memex.infrastructure.store.navigation import NavigationChange
+from memex.infrastructure.store.wiki_store import hash_body
 
 
 @dataclass(slots=True)

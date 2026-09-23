@@ -4,7 +4,7 @@ import pytest
 
 from memex.domain.errors import IndexManagerError
 from memex.domain.models import WikiNode
-from memex.infrastructure.index_manager import SCHEMA_VERSION, IndexManager, check_slug
+from memex.infrastructure.search.index_manager import SCHEMA_VERSION, IndexManager, check_slug
 
 
 def _node(**overrides: object) -> WikiNode:

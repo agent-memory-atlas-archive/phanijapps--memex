@@ -18,7 +18,7 @@ from memex.application.memory import Memex
 from memex.application.verify import verify
 from memex.domain.models import WriteInput
 from memex.infrastructure.config import ConfigLoader
-from memex.infrastructure.navigation import (
+from memex.infrastructure.store.navigation import (
     NavigationError,
     NavigationGenerator,
     NavigationReport,
@@ -520,7 +520,7 @@ def test_navigation_refresh_failure_never_fails_the_mutation(data_dir: Path) -> 
     entities_index = memex.wiki_store.wiki_dir / "global" / "entities" / "index.md"
     entities_index.unlink()
 
-    from memex.infrastructure import navigation as nav_module
+    from memex.infrastructure.store import navigation as nav_module
 
     original = nav_module.NavigationGenerator.refresh
 
@@ -622,7 +622,7 @@ def test_navigation_diagnostics_never_carry_memory_content_or_secrets(
 
 
 def test_generator_writes_do_not_feed_back_into_memory_reindex(data_dir: Path) -> None:
-    from memex.infrastructure.watcher import IndexWatcher
+    from memex.infrastructure.store.watcher import IndexWatcher
 
     memex = _memex(data_dir)
     _write(memex, "Watched page")
@@ -640,7 +640,7 @@ def test_generator_writes_do_not_feed_back_into_memory_reindex(data_dir: Path) -
 
 
 def test_external_edit_refreshes_navigation(data_dir: Path) -> None:
-    from memex.infrastructure.watcher import IndexWatcher
+    from memex.infrastructure.store.watcher import IndexWatcher
 
     memex = _memex(data_dir)
     slug = _write(memex, "Edited page", description="old text")

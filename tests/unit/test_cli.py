@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from memex import cli
-from memex.infrastructure.bm25_retriever import MAX_QUERY_BYTES
+from memex.infrastructure.search.bm25_retriever import MAX_QUERY_BYTES
 from memex.infrastructure.workspace_context import ProjectContext
 
 
@@ -47,7 +47,7 @@ def test_watch_command_wires_navigation_and_refreshes(
     from memex.application.memory import Memex
     from memex.domain.models import WriteInput
     from memex.infrastructure.config import MemexConfig
-    from memex.infrastructure.watcher import IndexWatcher
+    from memex.infrastructure.store.watcher import IndexWatcher
 
     memex = Memex(MemexConfig(data_dir=data_dir))
     memex.write(WriteInput(type="entity", title="Watched", body="b", description="old text"))

@@ -8,58 +8,64 @@ import pytest
 
 from memex import cli
 from memex.infrastructure.config import ConfigLoader, LLMConfig
-from memex.infrastructure.harness_installer import default_marketplace, init_memex
+from memex.infrastructure.harness.installer import default_marketplace, init_memex
 from memex.infrastructure.llm_clients import HarnessLLMClient, client_from_config
 
-MARKETPLACE = Path(__file__).parent.parent.parent / "marketplace"
+MARKETPLACE = Path(__file__).parent.parent.parent / "src/memex/marketplace"
 
 
 class TestMarketplaceResolution:
+    """Assets ship inside the package, so one layout serves every install."""
+
     def test_explicit_wins(self, tmp_path: Path) -> None:
         explicit = tmp_path / "my-market"
         explicit.mkdir()
         assert default_marketplace(explicit) == explicit
 
-    def test_cwd_fallback(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        repo = tmp_path / "repo"
-        (repo / "marketplace").mkdir(parents=True)
-        monkeypatch.chdir(repo)
-        assert default_marketplace(None) == repo / "marketplace"
+    def test_resolves_inside_the_package(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import memex.infrastructure.harness.installer as installer
 
-    def test_missing_everywhere(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        import memex.infrastructure.harness_installer as installer
-
+        package = tmp_path / "site-packages/memex"
+        (package / "infrastructure/harness").mkdir(parents=True)
+        (package / "marketplace").mkdir()
         monkeypatch.chdir(tmp_path)
-        # Simulate an installed package with no bundled or nearby marketplace.
-        fake_infra = tmp_path / "site-packages/memex/infrastructure"
-        fake_infra.mkdir(parents=True)
-        monkeypatch.setattr(installer, "__file__", str(fake_infra / "installer.py"))
+        monkeypatch.setattr(
+            installer, "__file__", str(package / "infrastructure/harness/installer.py")
+        )
+        assert default_marketplace(None) == package / "marketplace"
+
+    def test_missing_assets_name_the_recovery(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import memex.infrastructure.harness.installer as installer
+
+        package = tmp_path / "site-packages/memex"
+        (package / "infrastructure/harness").mkdir(parents=True)
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(
+            installer, "__file__", str(package / "infrastructure/harness/installer.py")
+        )
         with pytest.raises(FileNotFoundError, match="Reinstall from source"):
             default_marketplace(None)
 
-    def test_editable_repo_layout_fallback(
+    def test_a_checkout_cwd_does_not_shadow_the_installed_copy(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        import memex.infrastructure.harness_installer as installer
+        """Installer assets must match the installed version, not the cwd."""
+        import memex.infrastructure.harness.installer as installer
 
-        repo = tmp_path / "repo"
-        infra = repo / "src/memex/infrastructure"
-        infra.mkdir(parents=True)
-        (repo / "marketplace").mkdir()
-        monkeypatch.chdir(tmp_path)  # no cwd candidate
-        monkeypatch.setattr(installer, "__file__", str(infra / "installer.py"))
-        assert default_marketplace(None) == repo / "marketplace"
-
-    def test_bundled_wheel_layout(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        import memex.infrastructure.harness_installer as installer
-
-        site = tmp_path / "site-packages"
-        infra = site / "memex/infrastructure"
-        infra.mkdir(parents=True)
-        (site / "memex/marketplace").mkdir()
-        monkeypatch.chdir(tmp_path)
-        monkeypatch.setattr(installer, "__file__", str(infra / "installer.py"))
-        assert default_marketplace(None) == site / "memex/marketplace"
+        package = tmp_path / "site-packages/memex"
+        (package / "infrastructure/harness").mkdir(parents=True)
+        (package / "marketplace").mkdir()
+        checkout = tmp_path / "checkout"
+        (checkout / "marketplace").mkdir(parents=True)
+        monkeypatch.chdir(checkout)
+        monkeypatch.setattr(
+            installer, "__file__", str(package / "infrastructure/harness/installer.py")
+        )
+        assert default_marketplace(None) == package / "marketplace"
 
 
 class TestInitMemex:

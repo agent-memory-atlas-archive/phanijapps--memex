@@ -8,9 +8,9 @@ from pathlib import Path
 
 import pytest
 
-from memex.infrastructure.harness_installer import install_harness
+from memex.infrastructure.harness.installer import install_harness
 
-MARKETPLACE = Path(__file__).parent.parent.parent / "marketplace"
+MARKETPLACE = Path(__file__).parent.parent.parent / "src/memex/marketplace"
 
 
 @pytest.fixture
@@ -140,7 +140,7 @@ def test_claude_install_preserves_custom_memex_guidance(homes: tuple[Path, Path]
 def test_claude_install_upgrades_pre_description_guidance(
     homes: tuple[Path, Path],
 ) -> None:
-    from memex.infrastructure.harness_installer import _PRE_DESCRIPTION_CLAUDE_SNIPPET
+    from memex.infrastructure.harness.installer import _PRE_DESCRIPTION_CLAUDE_SNIPPET
 
     home, project = homes
     project.mkdir(parents=True)

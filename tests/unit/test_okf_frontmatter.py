@@ -20,8 +20,8 @@ from memex.application.verify import verify
 from memex.domain.errors import WikiStoreError
 from memex.domain.models import SemanticLink, WriteInput
 from memex.domain.reserved import OKF_VERSION
-from memex.infrastructure.import_export import ImportExport
-from memex.infrastructure.wiki_store import _OKF_KEYS, WikiStore
+from memex.infrastructure.store.import_export import ImportExport
+from memex.infrastructure.store.wiki_store import _OKF_KEYS, WikiStore
 
 
 @pytest.fixture
@@ -417,7 +417,7 @@ class TestReviewedCriteria:
 
     def test_schema_version_is_six(self) -> None:
         """AC-0029."""
-        from memex.infrastructure.index_manager import SCHEMA_VERSION
+        from memex.infrastructure.search.index_manager import SCHEMA_VERSION
 
         assert SCHEMA_VERSION == "6"
 

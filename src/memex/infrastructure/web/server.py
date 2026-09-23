@@ -19,9 +19,8 @@ from urllib.parse import parse_qs, quote, urlencode, urlparse
 
 from memex.application.memory import Memex
 from memex.domain.models import SessionSummary, WikiNode
-from memex.infrastructure.markdown import render_markdown
-from memex.infrastructure.viz_components import DASHBOARD_CSS, PAGE_SHELL, escape, scope_controls
-from memex.infrastructure.viz_explorer import (
+from memex.infrastructure.web.components import DASHBOARD_CSS, PAGE_SHELL, escape, scope_controls
+from memex.infrastructure.web.explorer import (
     MemorySelection,
     direct_url,
     fragment_url,
@@ -29,13 +28,14 @@ from memex.infrastructure.viz_explorer import (
     parse_page,
     render_pager,
 )
-from memex.infrastructure.viz_sessions import SessionView, render_replay, render_session_groups
+from memex.infrastructure.web.markdown import render_markdown
+from memex.infrastructure.web.sessions import SessionView, render_replay, render_session_groups
 
 DEFAULT_PORT = 7171
 SEARCH_SCOPES = {"best", "project", "global"}
 MAX_CHART_TOKENS = 1_000_000_000_000
 
-_HTMX_PATH = Path(__file__).parent / "htmx.min.js"
+_HTMX_PATH = Path(__file__).parent / "assets" / "htmx.min.js"
 _HTMX_BYTES: bytes = (
     _HTMX_PATH.read_bytes() if _HTMX_PATH.exists() else b"console.error('htmx not found');"
 )

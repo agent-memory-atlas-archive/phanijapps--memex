@@ -125,7 +125,7 @@ class TestDispatchSmoke:
 
         called = []
         monkeypatch.setattr(
-            "memex.infrastructure.viz.serve",
+            "memex.infrastructure.web.server.serve",
             lambda **kw: called.append(kw),
         )
         monkeypatch.setenv("MEMEX_DATA_DIR", str(tmp_path))
@@ -172,12 +172,12 @@ class TestWatchCommand:
         import time as time_mod
 
         from memex import cli
-        from memex.infrastructure import watcher as watcher_mod
-        from memex.infrastructure.index_manager import IndexManager
-        from memex.infrastructure.link_manager import LinkManager
-        from memex.infrastructure.navigation import NavigationGenerator
-        from memex.infrastructure.watcher import IndexWatcher
-        from memex.infrastructure.wiki_store import WikiStore
+        from memex.infrastructure.search.index_manager import IndexManager
+        from memex.infrastructure.search.link_manager import LinkManager
+        from memex.infrastructure.store import watcher as watcher_mod
+        from memex.infrastructure.store.navigation import NavigationGenerator
+        from memex.infrastructure.store.watcher import IndexWatcher
+        from memex.infrastructure.store.wiki_store import WikiStore
 
         seen_link_managers: list[LinkManager | None] = []
         seen_navigation: list[NavigationGenerator | None] = []

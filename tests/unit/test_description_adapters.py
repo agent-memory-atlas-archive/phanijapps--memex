@@ -14,15 +14,15 @@ from typing import cast
 import pytest
 
 from memex import cli
+from memex.application.consolidator import WikiConsolidator
 from memex.application.memory import Memex as MemexFacade
 from memex.application.ports import LLMResponse
 from memex.domain.models import ConsolidateInput, WikiNode, WriteInput
 from memex.domain.operations import RecallResultDict
 from memex.infrastructure.config import ConfigLoader, MemexConfig
-from memex.infrastructure.consolidator import WikiConsolidator
-from memex.infrastructure.index_manager import IndexManager
-from memex.infrastructure.link_manager import LinkManager
-from memex.infrastructure.wiki_store import WikiStore
+from memex.infrastructure.search.index_manager import IndexManager
+from memex.infrastructure.search.link_manager import LinkManager
+from memex.infrastructure.store.wiki_store import WikiStore
 from memex.mcp_server import memex_recall, memex_write
 
 VALID_DESCRIPTION = "signpost sentence for the adapter matrix"

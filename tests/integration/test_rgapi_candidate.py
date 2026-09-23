@@ -20,8 +20,8 @@ from eval.rgapi_candidate import (
 )
 from eval.selection import _hydrate_rgapi_hits
 from memex.domain.models import WikiNode
-from memex.infrastructure.index_manager import IndexManager
-from memex.infrastructure.wiki_store import WikiStore
+from memex.infrastructure.search.index_manager import IndexManager
+from memex.infrastructure.store.wiki_store import WikiStore
 
 
 def test_base_install_recalls_without_rgapi_or_rg_executable(tmp_path: Path) -> None:

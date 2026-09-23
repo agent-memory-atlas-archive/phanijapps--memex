@@ -25,14 +25,13 @@ from memex.domain.models import (
 )
 from memex.domain.operations import summary
 from memex.infrastructure.config import ConfigLoader
-from memex.infrastructure.harness_installer import (
+from memex.infrastructure.harness.installer import (
     SUPPORTED,
     default_marketplace,
     install_harness,
-    packaged_marketplace,
     uninstall_harness,
 )
-from memex.infrastructure.harness_transcripts import (
+from memex.infrastructure.harness.transcripts import (
     HARNESSES,
     parse_transcript,
     read_transcript_turns,
@@ -338,11 +337,7 @@ def _run_install(args: argparse.Namespace) -> int:
 
 def _run_uninstall(args: argparse.Namespace) -> int:
     name = args.harness if args.command == "uninstall" else args.name
-    marketplace = (
-        None
-        if name == "custom"
-        else args.marketplace or packaged_marketplace() or default_marketplace()
-    )
+    marketplace = None if name == "custom" else default_marketplace(args.marketplace)
     home = args.home if args.home is not None else Path.home()
     try:
         report = uninstall_harness(name, marketplace or Path("."), home=home, project=Path.cwd())
@@ -546,7 +541,7 @@ def _hook_transcript(args: argparse.Namespace) -> int:
     # to summarize the session. Idempotent — already-enriched episodes skip.
     enrich = args.enrich or not args.no_enrich
     if enrich and parsed.header and parsed.header.harness:
-        from memex.infrastructure.episode_enrichment import (
+        from memex.infrastructure.harness.episode_enrichment import (
             enrich_episode,
             enriched_body,
             is_enriched,
@@ -598,7 +593,7 @@ def _run(args: argparse.Namespace) -> int:
         return 0
 
     if args.command == "viz":
-        from memex.infrastructure.viz import serve
+        from memex.infrastructure.web.server import serve
 
         data_dir = args.data_dir.expanduser() if args.data_dir else None
         serve(data_dir=data_dir, port=args.port)
@@ -727,7 +722,7 @@ def _run(args: argparse.Namespace) -> int:
         elif args.command == "info":
             _emit(_info(memex))
         elif args.command == "watch":
-            from memex.infrastructure.watcher import IndexWatcher
+            from memex.infrastructure.store.watcher import IndexWatcher
 
             watcher = IndexWatcher(
                 memex.wiki_store.wiki_dir,

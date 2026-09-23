@@ -6,8 +6,8 @@ import math
 from datetime import UTC, datetime
 
 from memex.domain.models import WikiNode, utc_now_iso
-from memex.infrastructure.index_manager import IndexManager
-from memex.infrastructure.wiki_store import WikiStore
+from memex.infrastructure.search.index_manager import IndexManager
+from memex.infrastructure.store.wiki_store import WikiStore
 
 _CHANGE_EPSILON = 1e-6
 

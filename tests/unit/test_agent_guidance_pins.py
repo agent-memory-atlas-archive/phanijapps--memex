@@ -14,9 +14,9 @@ _QUESTION_RULE = ("three", "recall")
 _CONFINE_RULE = ("rg", "within the returned Memex paths")
 
 _SNIPPETS: tuple[tuple[str, Path], ...] = (
-    ("codex", Path("marketplace/codex/AGENTS-snippet.md")),
-    ("claude", Path("marketplace/claude/CLAUDE-snippet.md")),
-    ("copilot", Path("marketplace/copilot/copilot-instructions-snippet.md")),
+    ("codex", Path("src/memex/marketplace/codex/AGENTS-snippet.md")),
+    ("claude", Path("src/memex/marketplace/claude/CLAUDE-snippet.md")),
+    ("copilot", Path("src/memex/marketplace/copilot/copilot-instructions-snippet.md")),
 )
 
 _RULES: tuple[tuple[str, tuple[str, ...]], ...] = (

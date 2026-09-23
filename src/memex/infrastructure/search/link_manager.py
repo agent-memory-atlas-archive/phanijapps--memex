@@ -9,7 +9,7 @@ from memex.domain.errors import IndexManagerError
 from memex.domain.links import parse_links
 from memex.domain.models import BODY_REL, WikiNode
 from memex.domain.reserved import is_structural
-from memex.infrastructure.index_manager import check_slug
+from memex.infrastructure.search.index_manager import check_slug
 
 
 class LinkManager:

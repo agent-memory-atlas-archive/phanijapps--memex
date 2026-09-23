@@ -11,7 +11,7 @@ def make_memex(data_dir: Path) -> Memex:
 
 
 def test_detects_external_edit(data_dir: Path) -> None:
-    from memex.infrastructure.watcher import IndexWatcher
+    from memex.infrastructure.store.watcher import IndexWatcher
 
     memex = make_memex(data_dir)
     from memex.domain.models import WriteInput
@@ -26,7 +26,7 @@ def test_detects_external_edit(data_dir: Path) -> None:
 
 
 def test_reindexes_real_content_changes(data_dir: Path) -> None:
-    from memex.infrastructure.watcher import IndexWatcher
+    from memex.infrastructure.store.watcher import IndexWatcher
 
     memex = make_memex(data_dir)
     memex.write(WriteInput(type="entity", title="Watched", body="original"))
@@ -48,7 +48,7 @@ def test_reindexes_real_content_changes(data_dir: Path) -> None:
 
 
 def test_reindexes_external_link_changes(data_dir: Path) -> None:
-    from memex.infrastructure.watcher import IndexWatcher
+    from memex.infrastructure.store.watcher import IndexWatcher
 
     memex = make_memex(data_dir)
     memex.write(WriteInput(type="entity", title="Target", body="target body"))
@@ -69,7 +69,7 @@ def test_reindexes_external_link_changes(data_dir: Path) -> None:
 
 
 def test_reindexes_description_only_edit(data_dir: Path) -> None:
-    from memex.infrastructure.watcher import IndexWatcher
+    from memex.infrastructure.store.watcher import IndexWatcher
 
     memex = make_memex(data_dir)
     memex.write(
@@ -102,7 +102,7 @@ def test_reindexes_description_only_edit(data_dir: Path) -> None:
 
 
 def test_touched_but_unchanged_skipped(data_dir: Path) -> None:
-    from memex.infrastructure.watcher import IndexWatcher
+    from memex.infrastructure.store.watcher import IndexWatcher
 
     memex = make_memex(data_dir)
     memex.write(WriteInput(type="entity", title="Stable", body="same"))
@@ -116,7 +116,7 @@ def test_touched_but_unchanged_skipped(data_dir: Path) -> None:
 
 
 def test_deleted_page_removed_from_index(data_dir: Path) -> None:
-    from memex.infrastructure.watcher import IndexWatcher
+    from memex.infrastructure.store.watcher import IndexWatcher
 
     memex = make_memex(data_dir)
     memex.write(WriteInput(type="entity", title="Doomed", body="bye"))
@@ -129,7 +129,7 @@ def test_deleted_page_removed_from_index(data_dir: Path) -> None:
 
 
 def test_reindexes_duplicate_project_slug_by_namespace(data_dir: Path) -> None:
-    from memex.infrastructure.watcher import IndexWatcher
+    from memex.infrastructure.store.watcher import IndexWatcher
 
     memex = make_memex(data_dir)
     first = memex.write(
@@ -178,7 +178,7 @@ def test_reindexes_duplicate_project_slug_by_namespace(data_dir: Path) -> None:
 
 
 def test_start_stop_polling(data_dir: Path) -> None:
-    from memex.infrastructure.watcher import IndexWatcher
+    from memex.infrastructure.store.watcher import IndexWatcher
 
     memex = make_memex(data_dir)
     watcher = IndexWatcher(
@@ -191,7 +191,7 @@ def test_start_stop_polling(data_dir: Path) -> None:
 
 
 def test_zero_interval_disables_polling(data_dir: Path) -> None:
-    from memex.infrastructure.watcher import IndexWatcher
+    from memex.infrastructure.store.watcher import IndexWatcher
 
     memex = make_memex(data_dir)
     disabled = IndexWatcher(

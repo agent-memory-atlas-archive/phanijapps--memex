@@ -24,8 +24,8 @@ from eval.selection import (
 )
 from memex.application.memory import Memex
 from memex.domain.models import RecallHit, RecallResult, WriteInput
-from memex.infrastructure.bm25_retriever import BM25Retriever
 from memex.infrastructure.config import MemexConfig
+from memex.infrastructure.search.bm25_retriever import BM25Retriever
 
 
 def test_selection_refuses_nonempty_output_directory(tmp_path: Path) -> None:

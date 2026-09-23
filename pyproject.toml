@@ -54,26 +54,21 @@ docs = [
   "mkdocs-material>=9.5",
 ]
 
-[tool.hatch.build.targets.wheel.force-include]
-"marketplace" = "memex/marketplace"
-"src/memex/infrastructure/htmx.min.js" = "memex/infrastructure/htmx.min.js"
-"src/memex/infrastructure/dashboard.css" = "memex/infrastructure/dashboard.css"
-
 [tool.ruff]
 target-version = "py312"
 line-length = 100
-exclude = [".agents", "docs", "marketplace", "tools", ".codex"]
+exclude = [".agents", "docs", "tools", ".codex"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "S", "SIM", "RUF"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["S101"]
-"src/memex/infrastructure/index_manager.py" = ["E501"]
-"src/memex/infrastructure/harness_installer.py" = ["E501"]
-"src/memex/infrastructure/transcript_hook.py" = ["E501"]
+"src/memex/infrastructure/search/index_manager.py" = ["E501"]
+"src/memex/infrastructure/harness/installer.py" = ["E501"]
+"src/memex/infrastructure/harness/transcript_hook.py" = ["E501"]
 "src/memex/infrastructure/workspace_context.py" = ["S603"]
-"src/memex/infrastructure/viz.py" = ["E501"]
+"src/memex/infrastructure/web/server.py" = ["E501"]
 "src/memex/infrastructure/llm_clients.py" = ["S603"]
 
 [tool.mypy]

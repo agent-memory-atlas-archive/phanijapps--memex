@@ -10,9 +10,9 @@ from memex import Memex
 from memex.domain.models import ConsolidateInput, WikiNode, WriteInput
 from memex.domain.scrub import scrub
 from memex.infrastructure.config import ConfigLoader, MemexConfig
-from memex.infrastructure.index_manager import IndexManager
-from memex.infrastructure.link_manager import LinkManager
-from memex.infrastructure.wiki_store import WikiStore
+from memex.infrastructure.search.index_manager import IndexManager
+from memex.infrastructure.search.link_manager import LinkManager
+from memex.infrastructure.store.wiki_store import WikiStore
 
 SECRETS = [
     "sk-proj-abcdefghijklmnopqrstuv0123456789abcdefghijklmnopqrstuv",  # OpenAI
@@ -167,8 +167,8 @@ class TestDescriptionScrub:
     def test_consolidation_scrubs_description(self, data_dir: Path) -> None:
         import json
 
+        from memex.application.consolidator import WikiConsolidator
         from memex.application.ports import LLMResponse
-        from memex.infrastructure.consolidator import WikiConsolidator
 
         store = WikiStore(data_dir)
         index = IndexManager(data_dir / "mem.db")

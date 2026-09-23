@@ -4,14 +4,14 @@ from pathlib import Path
 import pytest
 
 from memex.domain.models import WikiNode
-from memex.infrastructure.bm25_retriever import (
+from memex.infrastructure.search.bm25_retriever import (
     MAX_QUERY_BYTES,
     MAX_QUERY_TOKENS,
     BM25Retriever,
     production_ranker_metadata,
 )
-from memex.infrastructure.index_manager import IndexManager
-from memex.infrastructure.wiki_store import WikiStore
+from memex.infrastructure.search.index_manager import IndexManager
+from memex.infrastructure.store.wiki_store import WikiStore
 
 
 def _node(

@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from memex.infrastructure.harness_installer import install_harness
+from memex.infrastructure.harness.installer import install_harness
 
-MARKETPLACE = Path(__file__).parent.parent.parent / "marketplace"
+MARKETPLACE = Path(__file__).parent.parent.parent / "src/memex/marketplace"
 
 
 def fake_claude(bin_dir: Path, behavior: str) -> None:

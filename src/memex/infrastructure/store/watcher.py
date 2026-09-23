@@ -7,10 +7,10 @@ import threading
 from pathlib import Path
 
 from memex.domain.models import WikiNode
-from memex.infrastructure.index_manager import IndexManager
-from memex.infrastructure.link_manager import LinkManager
-from memex.infrastructure.navigation import NavigationGenerator
-from memex.infrastructure.wiki_store import WikiStore, hash_body
+from memex.infrastructure.search.index_manager import IndexManager
+from memex.infrastructure.search.link_manager import LinkManager
+from memex.infrastructure.store.navigation import NavigationGenerator
+from memex.infrastructure.store.wiki_store import WikiStore, hash_body
 
 logger = logging.getLogger("memex")
 

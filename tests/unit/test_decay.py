@@ -5,8 +5,8 @@ import pytest
 
 from memex.application.decay import RecencyDecay
 from memex.domain.models import WikiNode, utc_now_iso
-from memex.infrastructure.index_manager import IndexManager
-from memex.infrastructure.wiki_store import WikiStore
+from memex.infrastructure.search.index_manager import IndexManager
+from memex.infrastructure.store.wiki_store import WikiStore
 
 
 def _node(**overrides: object) -> WikiNode:

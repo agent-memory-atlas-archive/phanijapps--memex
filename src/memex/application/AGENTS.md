@@ -3,7 +3,9 @@
 Applies to `src/memex/application/`. Inherits the root `AGENTS.md`. Scope-specific deltas only.
 
 - `memory.py` owns the `Memex` facade every adapter calls. Orchestration lives
-  here; storage and I/O stay in `infrastructure/`.
+  here; storage and I/O stay in `infrastructure/`. `consolidator.py` is the
+  second orchestrator: it selects episodes, calls the LLM through the port, and
+  writes results through the store, holding no SDK of its own.
 - Swappable collaborators (anything LLM- or backend-shaped) go through a
   `Protocol` in `ports.py`. The fixed filesystem and index machinery is imported
   directly — follow that split rather than converting either side.
