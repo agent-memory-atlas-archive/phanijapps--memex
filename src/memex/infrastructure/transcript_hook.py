@@ -281,7 +281,10 @@ class TranscriptHook:
 
     def _episode_backlinks(self, slug: str) -> list[str]:
         rows = self._index.connection.execute(
-            "SELECT w.slug FROM wiki_links l JOIN wiki_index w ON w.slug = l.source_slug"
+            # DISTINCT: any relation from an episode counts once as evidence,
+            # whichever rel carries it.
+            "SELECT DISTINCT w.slug FROM wiki_links l JOIN wiki_index w"
+            " ON w.slug = l.source_slug"
             " WHERE l.target_slug = ? AND w.node_type = 'episode' ORDER BY w.slug",
             (slug,),
         ).fetchall()
@@ -328,6 +331,12 @@ class TranscriptHook:
         turn_count = int(meta.get("turn_count", 0))
         if turn_count < 0:
             raise ValueError("invalid session turn count")
+        raw_usage = meta.get("token_usage")
+        token_usage = (
+            {str(k): v for k, v in raw_usage.items() if isinstance(v, int)}
+            if isinstance(raw_usage, dict)
+            else None
+        )
         slug = episode_slug(session_id)
         return SessionSummary(
             session_id=session_id,
@@ -336,6 +345,7 @@ class TranscriptHook:
             turn_count=turn_count,
             episode_slug=slug if self._store.exists(slug) else None,
             file_path=str(meta_path.with_name(f"{session_id}.jsonl")),
+            token_usage=token_usage or None,
         )
 
     def _meta_path(self, session_id: str, captured_at: str | None = None) -> Path:

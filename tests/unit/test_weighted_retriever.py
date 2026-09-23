@@ -220,7 +220,7 @@ def test_eligibility_filters_apply_before_source_limit(data_dir: Path) -> None:
         ).fetchone()["slug"]
     )
     index.connection.execute(
-        "UPDATE wiki_index SET expires_at = ? WHERE slug = ?",
+        "UPDATE wiki_index SET valid_until = ? WHERE slug = ?",
         ("2000-01-01T00:00:00Z", expired_slug),
     )
     index.connection.commit()

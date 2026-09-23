@@ -51,7 +51,7 @@ def paginate(nodes: list[WikiNode], selection: MemorySelection) -> MemoryPage:
         nodes = [node for node in nodes if node.project_id == selection.project_id]
     ordered = sorted(
         nodes,
-        key=lambda node: (str(node.updated or ""), node.slug, node.project_id or ""),
+        key=lambda node: (str(node.timestamp or ""), node.slug, node.project_id or ""),
         reverse=True,
     )
     total = len(ordered)

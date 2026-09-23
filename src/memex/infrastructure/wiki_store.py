@@ -13,8 +13,15 @@ from pathlib import Path
 
 from memex.domain.errors import WikiStoreError
 from memex.domain.frontmatter import parse_front_matter, serialize_front_matter
-from memex.domain.models import NODE_TYPES, PAGE_STATUSES, WikiNode, new_id, utc_now_iso
-from memex.domain.reserved import RESERVED_SLUGS, is_structural
+from memex.domain.models import (
+    NODE_TYPES,
+    PAGE_STATUSES,
+    SemanticLink,
+    WikiNode,
+    new_id,
+    utc_now_iso,
+)
+from memex.domain.reserved import OKF_VERSION, RESERVED_SLUGS, is_structural
 from memex.domain.slugs import derive_slug, unique_slug
 
 TYPE_DIRS: dict[str, str] = {
@@ -27,23 +34,35 @@ TYPE_DIRS: dict[str, str] = {
 
 _SAFE_COMPONENT = re.compile(r"[a-z0-9][a-z0-9-]{0,127}")
 
-_FRONT_MATTER_KEYS: tuple[str, ...] = (
-    "id",
+# OKF v0.2 fields first, in the order the OKF reference implementation writes
+# them, then the Memex extension fields. The reader accepts exactly this set:
+# an unknown key is a malformed page, and the retired names `created`,
+# `updated`, `valid_to`, and `expires_at` are unknown.
+_OKF_KEYS: tuple[str, ...] = (
+    "okf_version",
     "type",
     "title",
     "description",
+    "resource",
     "tags",
+    "timestamp",
+    "valid_from",
+    "valid_until",
+    "stale_after",
+    "updated_at",
+    "parent",
+    "supersedes",
+    "implements",
+    "depends_on",
+    "links",
+)
+
+_MEMEX_KEYS: tuple[str, ...] = (
+    "id",
     "importance",
-    "created",
-    "updated",
     "access_count",
     "last_access",
-    "expires_at",
-    "valid_from",
-    "valid_to",
-    "transcript_ref",
-    "session_id",
-    "links",
+    "created",
     "content_hash",
     "status",
     "occurred_at",
@@ -53,17 +72,22 @@ _FRONT_MATTER_KEYS: tuple[str, ...] = (
     "scope",
     "project_id",
     "project_label",
+    "session_id",
+    "transcript_ref",
 )
+
+_FRONT_MATTER_KEYS: tuple[str, ...] = _OKF_KEYS + _MEMEX_KEYS
 
 _STR_FIELDS: tuple[str, ...] = (
     "title",
     "description",
-    "created",
-    "updated",
+    "resource",
+    "timestamp",
+    "updated_at",
     "last_access",
-    "expires_at",
+    "stale_after",
     "valid_from",
-    "valid_to",
+    "valid_until",
     "transcript_ref",
     "session_id",
     "content_hash",
@@ -166,6 +190,10 @@ class WikiStore:
         Writing to an existing slug updates it: ``id``, ``created``,
         ``access_count``, and ``last_access`` are preserved from the stored
         page; every other field comes from the input node (spec §7 Utility 1).
+
+        The two OKF timestamps carry different promises, as the format
+        intends: ``timestamp`` is refreshed on every write, while
+        ``updated_at`` moves only when the body actually changes.
         """
         if node.type not in TYPE_DIRS:
             raise WikiStoreError(f"unknown node type: {node.type!r}")
@@ -183,18 +211,23 @@ class WikiStore:
 
         stored = node
         stored.slug = slug
+        now = utc_now_iso()
+        content_hash = hash_body(stored.body)
         if existing is not None:
             stored.id = existing.id
             stored.created = existing.created
             stored.access_count = existing.access_count
             stored.last_access = existing.last_access
+            stored.updated_at = (
+                existing.updated_at if content_hash == existing.content_hash else now
+            )
         else:
             stored.id = node.id or new_id()
             if not stored.created:
-                stored.created = utc_now_iso()
-        stored.updated = utc_now_iso()
-        stored.content_hash = hash_body(stored.body)
-        stored.links = _merge_links(stored.links, stored.body)
+                stored.created = now
+            stored.updated_at = now
+        stored.timestamp = now
+        stored.content_hash = content_hash
 
         path = self.get_path(
             stored.slug,
@@ -203,7 +236,7 @@ class WikiStore:
             project_id=stored.project_id,
             project_locator=stored.project_locator,
         )
-        self._atomic_write(path, serialize_front_matter(_node_to_dict(stored), stored.body))
+        self._atomic_write(path, serialize_front_matter(node_front_matter(stored), stored.body))
         stored.file_path = str(path)
         return stored
 
@@ -295,9 +328,9 @@ class WikiStore:
             raise WikiStoreError(f"cannot move, no wiki page for slug: {slug!r}")
         old_path = self.get_path(slug)
         node.type = new_type
-        node.updated = utc_now_iso()
+        node.updated_at = utc_now_iso()
         destination = self.get_path(slug, new_type, scope=node.scope, project_id=node.project_id)
-        self._atomic_write(destination, serialize_front_matter(_node_to_dict(node), node.body))
+        self._atomic_write(destination, serialize_front_matter(node_front_matter(node), node.body))
         old_path.unlink()
         node.file_path = str(destination)
         return node
@@ -517,17 +550,6 @@ class WikiStore:
             raise WikiStoreError(f"cannot write wiki page: {exc.strerror}") from exc
 
 
-def _merge_links(explicit: list[str], body: str) -> list[str]:
-    """Canonical outgoing links: explicit list plus everything parsed from body."""
-    from memex.domain.links import parse_links
-
-    merged = list(explicit)
-    for parsed in parse_links(body):
-        if parsed not in merged:
-            merged.append(parsed)
-    return merged
-
-
 def _namespace_key(node: WikiNode) -> NamespaceKey:
     return (node.scope, node.project_id or "", node.type, node.slug)
 
@@ -537,24 +559,30 @@ def _format_namespace_key(key: NamespaceKey) -> str:
     return f"scope={scope!r}, project_id={project_id!r}, type={node_type!r}, slug={slug!r}"
 
 
-def _node_to_dict(node: WikiNode) -> dict[str, object]:
+def node_front_matter(node: WikiNode) -> dict[str, object]:
+    """Front matter in emission order: OKF v0.2 fields, then Memex fields."""
     return {
-        "id": node.id,
+        "okf_version": OKF_VERSION,
         "type": node.type,
         "title": node.title,
         "description": node.description,
+        "resource": node.resource,
         "tags": node.tags,
-        "importance": node.importance,
+        "timestamp": node.timestamp,
+        "valid_from": node.valid_from,
+        "valid_until": node.valid_until,
+        "stale_after": node.stale_after,
+        "updated_at": node.updated_at,
+        "parent": node.parent,
+        "supersedes": node.supersedes,
+        "implements": node.implements,
+        "depends_on": node.depends_on,
+        "links": [link.to_mapping() for link in node.links],
+        "id": node.id,
         "created": node.created,
-        "updated": node.updated,
+        "importance": node.importance,
         "access_count": node.access_count,
         "last_access": node.last_access,
-        "expires_at": node.expires_at,
-        "valid_from": node.valid_from,
-        "valid_to": node.valid_to,
-        "transcript_ref": node.transcript_ref,
-        "session_id": node.session_id,
-        "links": node.links,
         "content_hash": node.content_hash,
         "status": node.status,
         "occurred_at": node.occurred_at,
@@ -564,6 +592,8 @@ def _node_to_dict(node: WikiNode) -> dict[str, object]:
         "scope": node.scope,
         "project_id": node.project_id,
         "project_label": node.project_label,
+        "session_id": node.session_id,
+        "transcript_ref": node.transcript_ref,
     }
 
 
@@ -597,10 +627,31 @@ def _status_value(data: dict[str, object]) -> str:
     raise WikiStoreError(f"invalid page status: {value!r} (expected one of {PAGE_STATUSES})")
 
 
+def _link_list(data: dict[str, object]) -> list[SemanticLink]:
+    """Typed links from front matter, validated one entry at a time."""
+    value = data.get("links", [])
+    if not isinstance(value, list):
+        raise WikiStoreError("front matter field 'links' must be a list")
+    links: list[SemanticLink] = []
+    for entry in value:
+        try:
+            links.append(SemanticLink.parse(entry))
+        except ValueError as exc:
+            raise WikiStoreError(f"front matter field 'links': {exc}") from exc
+    return links
+
+
+def _okf_version(data: dict[str, object]) -> None:
+    value = data.get("okf_version")
+    if value != OKF_VERSION:
+        raise WikiStoreError(f"unsupported okf_version: {value!r} (expected {OKF_VERSION!r})")
+
+
 def _node_from_dict(data: dict[str, object], body: str) -> WikiNode:
     unknown = set(data) - set(_FRONT_MATTER_KEYS)
     if unknown:
         raise WikiStoreError(f"unknown front matter keys: {sorted(unknown)}")
+    _okf_version(data)
     node_type = data.get("type")
     if not isinstance(node_type, str) or node_type not in NODE_TYPES:
         raise WikiStoreError(f"invalid node type: {node_type!r}")
@@ -616,18 +667,22 @@ def _node_from_dict(data: dict[str, object], body: str) -> WikiNode:
         body=body,
         id=_require_str(data, "id"),
         description=_str_value(data, "description") or "",
+        resource=_str_value(data, "resource"),
         tags=_list_value(data, "tags"),
-        importance=float(importance),
+        timestamp=_require_str(data, "timestamp"),
+        valid_from=_str_value(data, "valid_from"),
+        valid_until=_str_value(data, "valid_until"),
+        stale_after=_str_value(data, "stale_after"),
+        updated_at=_require_str(data, "updated_at"),
+        parent=_str_value(data, "parent"),
+        supersedes=_list_value(data, "supersedes"),
+        implements=_list_value(data, "implements"),
+        depends_on=_list_value(data, "depends_on"),
+        links=_link_list(data),
         created=_require_str(data, "created"),
-        updated=_require_str(data, "updated"),
+        importance=float(importance),
         access_count=access_count,
         last_access=_str_value(data, "last_access"),
-        expires_at=_str_value(data, "expires_at"),
-        valid_from=_str_value(data, "valid_from"),
-        valid_to=_str_value(data, "valid_to"),
-        transcript_ref=_str_value(data, "transcript_ref"),
-        session_id=_str_value(data, "session_id"),
-        links=_list_value(data, "links"),
         content_hash=_str_value(data, "content_hash") or "",
         status=_status_value(data),
         occurred_at=_str_value(data, "occurred_at"),
@@ -637,4 +692,6 @@ def _node_from_dict(data: dict[str, object], body: str) -> WikiNode:
         scope=_str_value(data, "scope") or "global",
         project_id=_str_value(data, "project_id"),
         project_label=_str_value(data, "project_label"),
+        session_id=_str_value(data, "session_id"),
+        transcript_ref=_str_value(data, "transcript_ref"),
     )

@@ -129,7 +129,8 @@ class TestArchiveAndMerge:  # AC-0005, AC-0006
         source = m.wiki_store.read("merge-source")
         assert source is not None
         assert source.status == "superseded"
-        assert "merge-target" in source.links
+        # OKF records the replacement on the surviving page, not the retired one.
+        assert "merge-source" in target.supersedes
         # source invisible to recall; target finds merged content
         assert m.recall("source body", include_inactive=True).hits
         assert any(h.slug == "merge-target" for h in m.recall("source body").hits)

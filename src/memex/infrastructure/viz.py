@@ -73,7 +73,7 @@ def _meta_line(node: WikiNode) -> str:
     parts = [_esc(getattr(node, "type", ""))]
     if getattr(node, "tags", None):
         parts.append(" ".join(f"#{_esc(t)}" for t in node.tags[:4]))
-    updated = str(getattr(node, "updated", "") or "")[:10]
+    updated = str(getattr(node, "timestamp", "") or "")[:10]
     if updated:
         parts.append(updated)
     importance = getattr(node, "importance", None)
@@ -243,7 +243,7 @@ class VizHandler(BaseHTTPRequestHandler):
         all_nodes = self._m().wiki_store.list()
         nodes = sorted(
             (node for node in all_nodes if node.type != "episode"),
-            key=lambda node: (str(node.updated or ""), node.slug),
+            key=lambda node: (str(node.timestamp or ""), node.slug),
             reverse=True,
         )[:8]
         projects = self._projects()
@@ -597,8 +597,8 @@ class VizHandler(BaseHTTPRequestHandler):
         meta_parts = [_esc(node.type), f"importance {_esc(node.importance)}"]
         if node.tags:
             meta_parts.append(" ".join(f"#{_esc(t)}" for t in node.tags))
-        if node.updated:
-            meta_parts.append(f"updated {_esc(str(node.updated)[:10])}")
+        if node.timestamp:
+            meta_parts.append(f"updated {_esc(str(node.timestamp)[:10])}")
         if node.source:
             meta_parts.append(f"source {_esc(node.source)}")
         if node.harness:

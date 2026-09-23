@@ -20,7 +20,7 @@ from typing import cast
 from memex.domain.errors import IndexManagerError
 from memex.domain.models import WikiNode, utc_now_iso
 
-SCHEMA_VERSION = "5"
+SCHEMA_VERSION = "6"
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS index_meta (
@@ -46,12 +46,13 @@ CREATE TABLE IF NOT EXISTS wiki_index (
     confidence    TEXT,
     tags          TEXT NOT NULL DEFAULT '[]',
     created       TEXT NOT NULL,
-    updated       TEXT NOT NULL,
+    timestamp     TEXT NOT NULL,
+    updated_at    TEXT NOT NULL,
     access_count  INTEGER NOT NULL DEFAULT 0,
     last_access   TEXT,
-    expires_at    TEXT,
+    stale_after   TEXT,
     valid_from    TEXT,
-    valid_to      TEXT,
+    valid_until   TEXT,
     content_hash  TEXT NOT NULL,
     transcript_ref TEXT,
     body          TEXT NOT NULL DEFAULT ''
@@ -91,12 +92,13 @@ CREATE TABLE IF NOT EXISTS wiki_links (
     source_project_id TEXT NOT NULL DEFAULT '',
     source_slug TEXT NOT NULL,
     target_slug TEXT NOT NULL,
-    PRIMARY KEY (source_scope, source_project_id, source_slug, target_slug)
+    rel TEXT NOT NULL DEFAULT 'relates-to',
+    PRIMARY KEY (source_scope, source_project_id, source_slug, target_slug, rel)
 );
 
 CREATE INDEX IF NOT EXISTS idx_wiki_index_type ON wiki_index(node_type);
 CREATE INDEX IF NOT EXISTS idx_wiki_index_scope ON wiki_index(scope, project_id);
-CREATE INDEX IF NOT EXISTS idx_wiki_index_updated ON wiki_index(updated);
+CREATE INDEX IF NOT EXISTS idx_wiki_index_updated ON wiki_index(updated_at);
 CREATE INDEX IF NOT EXISTS idx_wiki_index_importance ON wiki_index(importance);
 CREATE INDEX IF NOT EXISTS idx_wiki_index_access ON wiki_index(last_access);
 CREATE INDEX IF NOT EXISTS idx_wiki_links_source
@@ -108,12 +110,12 @@ _SAFE_SLUG = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 
 _UPSERT = """
 INSERT INTO wiki_index (
-    id, slug, scope, project_id, project_label, file_path, title, description, node_type, importance, tags, created, updated,
-    access_count, last_access, expires_at, valid_from, valid_to,
+    id, slug, scope, project_id, project_label, file_path, title, description, node_type, importance, tags, created, timestamp, updated_at,
+    access_count, last_access, stale_after, valid_from, valid_until,
     content_hash, transcript_ref, body, status, occurred_at, source, harness, confidence
 ) VALUES (
-    :id, :slug, :scope, :project_id, :project_label, :file_path, :title, :description, :node_type, :importance, :tags, :created, :updated,
-    :access_count, :last_access, :expires_at, :valid_from, :valid_to,
+    :id, :slug, :scope, :project_id, :project_label, :file_path, :title, :description, :node_type, :importance, :tags, :created, :timestamp, :updated_at,
+    :access_count, :last_access, :stale_after, :valid_from, :valid_until,
     :content_hash, :transcript_ref, :body, :status, :occurred_at, :source, :harness, :confidence
 )
 ON CONFLICT(scope, project_id, node_type, slug) DO UPDATE SET
@@ -124,10 +126,11 @@ ON CONFLICT(scope, project_id, node_type, slug) DO UPDATE SET
     node_type = excluded.node_type,
     importance = excluded.importance,
     tags = excluded.tags,
-    updated = excluded.updated,
-    expires_at = excluded.expires_at,
+    timestamp = excluded.timestamp,
+    updated_at = excluded.updated_at,
+    stale_after = excluded.stale_after,
     valid_from = excluded.valid_from,
-    valid_to = excluded.valid_to,
+    valid_until = excluded.valid_until,
     content_hash = excluded.content_hash,
     transcript_ref = excluded.transcript_ref,
     body = excluded.body,
@@ -154,12 +157,13 @@ def node_record(node: WikiNode) -> dict[str, object]:
         "importance": node.importance,
         "tags": json.dumps(node.tags),
         "created": node.created,
-        "updated": node.updated,
+        "timestamp": node.timestamp,
+        "updated_at": node.updated_at,
         "access_count": node.access_count,
         "last_access": node.last_access,
-        "expires_at": node.expires_at,
+        "stale_after": node.stale_after,
         "valid_from": node.valid_from,
-        "valid_to": node.valid_to,
+        "valid_until": node.valid_until,
         "content_hash": node.content_hash,
         "transcript_ref": node.transcript_ref,
         "body": node.body,
@@ -226,6 +230,12 @@ class IndexManager:
             "project_id",
             "project_label",
             "description",
+            # OKF v0.2 column names: a pre-OKF store carries created/updated/
+            # valid_to/expires_at instead and rebuilds from Markdown.
+            "timestamp",
+            "updated_at",
+            "valid_until",
+            "stale_after",
         }
         return self._needs_rebuild or not expected <= columns
 
@@ -275,7 +285,7 @@ class IndexManager:
         if row is None:
             return False
         columns = {row["name"] for row in self._conn.execute("PRAGMA table_info(wiki_links)")}
-        return not {"source_scope", "source_project_id"} <= columns
+        return not {"source_scope", "source_project_id", "rel"} <= columns
 
     def build(self, nodes: list[WikiNode]) -> int:
         """Bulk upsert. Returns the number of records written."""

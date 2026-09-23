@@ -50,7 +50,7 @@ def format_context_block(result: RecallResult) -> str:
         lines.append("---")
         lines.append(
             f"{hit.rank}. {hit.title} ({hit.node_type}) | "
-            f"importance: {hit.importance} | updated: {hit.updated}"
+            f"importance: {hit.importance} | updated: {hit.updated_at}"
         )
         lines.append(f"   File: {hit.file_path}")
         lines.append(f"   {hit.snippet}")

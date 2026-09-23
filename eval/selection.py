@@ -55,11 +55,11 @@ from memex import __version__ as MEMEX_VERSION
 from memex.application import context_injection
 from memex.application.memory import Memex
 from memex.domain.frontmatter import serialize_front_matter
-from memex.domain.models import RecallHit, utc_now_iso
+from memex.domain.models import RecallHit, WikiNode, utc_now_iso
 from memex.domain.slugs import unique_slug
 from memex.infrastructure.bm25_retriever import BM25Retriever, production_ranker_metadata
 from memex.infrastructure.config import MemexConfig
-from memex.infrastructure.wiki_store import TYPE_DIRS, hash_body
+from memex.infrastructure.wiki_store import TYPE_DIRS, hash_body, node_front_matter
 
 type CandidateName = Literal["field-channel-rrf-k60", "semantic-and-fallback-fts5", "rgapi-0.1.22"]
 type WorkloadName = Literal["realistic", "gutenberg", "salesforce"]
@@ -485,26 +485,20 @@ def _append_fixture_workload(snapshot_dir: Path, fixture: Path, *, corpus: str) 
         used_slugs.add(slug)
         body = _fixture_body(row, corpus=corpus)
         now = utc_now_iso()
-        front_matter = {
-            "id": str(uuid.uuid4()),
-            "type": "entity",
-            "title": str(row["title"] if corpus == "gutenberg" else row["slug"]),
-            "tags": [corpus, "evaluation"],
-            "importance": 0.5,
-            "created": now,
-            "updated": now,
-            "access_count": 0,
-            "last_access": None,
-            "expires_at": None,
-            "valid_from": None,
-            "valid_to": None,
-            "transcript_ref": None,
-            "session_id": None,
-            "links": [],
-            "content_hash": hash_body(body),
-        }
+        node = WikiNode(
+            type="entity",
+            title=str(row["title"] if corpus == "gutenberg" else row["slug"]),
+            body=body,
+            id=str(uuid.uuid4()),
+            slug=slug,
+            tags=[corpus, "evaluation"],
+            created=now,
+            timestamp=now,
+            updated_at=now,
+            content_hash=hash_body(body),
+        )
         path = _fixture_page_path(snapshot_dir, slug)
-        path.write_text(serialize_front_matter(front_matter, body), encoding="utf-8")
+        path.write_text(serialize_front_matter(node_front_matter(node), body), encoding="utf-8")
 
 
 def _fixture_rows(fixture: Path) -> list[dict[str, object]]:
@@ -804,8 +798,8 @@ def _hydrate_rgapi_hits(
         placeholders = ",".join("?" for _ in batch)
         rows = conn.execute(
             "SELECT * FROM wiki_index WHERE slug IN (" + placeholders + ") "  # noqa: S608
-            "AND (expires_at IS NULL OR expires_at >= ?) "
-            "AND (valid_to IS NULL OR valid_to >= ?) "
+            "AND (valid_from IS NULL OR valid_from <= ?) "
+            "AND (valid_until IS NULL OR valid_until >= ?) "
             "AND (status IS NULL OR status = 'active')",
             (*batch, now, now),
         ).fetchall()
@@ -860,7 +854,8 @@ def _rgapi_hit(row: sqlite3.Row, rank: int, query: str, links: list[str]) -> Rec
         snippet_source="body",
         tags=json.loads(str(row["tags"])),
         created=str(row["created"]),
-        updated=str(row["updated"]),
+        timestamp=str(row["timestamp"]),
+        updated_at=str(row["updated_at"]),
         last_access=row["last_access"],
         transcript_ref=row["transcript_ref"],
         links=links,

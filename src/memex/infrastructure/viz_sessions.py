@@ -121,7 +121,8 @@ def render_replay(turns: list[dict[str, object]], meta: dict[str, object]) -> st
     summary = (
         f'<p class="subtle">{escape(meta.get("turn_count", len(cards)))} turns · '
         f"started {escape(str(meta.get('started_at') or 'Unknown')[:16])} · "
-        f"harness {escape(meta.get('harness') or 'Unknown')}</p>"
+        f"harness {escape(meta.get('harness') or 'Unknown')}"
+        f"{_usage_line(meta.get('token_usage'))}</p>"
     )
     return (
         '<h1 class="page-heading">Session replay</h1>'
@@ -130,3 +131,21 @@ def render_replay(turns: list[dict[str, object]], meta: dict[str, object]) -> st
         + "".join(cards)
         + "</div>"
     )
+
+
+_USAGE_LABELS = (
+    ("input_tokens", "in"),
+    ("output_tokens", "out"),
+    ("cache_read_input_tokens", "cache read"),
+    ("cache_creation_input_tokens", "cache write"),
+)
+
+
+def _usage_line(usage: object) -> str:
+    """Render harness-reported session totals; empty when the capture has none."""
+    if not isinstance(usage, dict):
+        return ""
+    parts = [
+        f"{label} {usage[key]:,}" for key, label in _USAGE_LABELS if isinstance(usage.get(key), int)
+    ]
+    return " · " + escape(" / ".join(parts)) if parts else ""

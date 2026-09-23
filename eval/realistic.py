@@ -15,7 +15,7 @@ from eval.corpus import CorpusResult, QuerySpec
 from memex.domain.frontmatter import serialize_front_matter
 from memex.domain.models import WikiNode, utc_now_iso
 from memex.domain.slugs import slugify, unique_slug
-from memex.infrastructure.wiki_store import TYPE_DIRS, hash_body
+from memex.infrastructure.wiki_store import TYPE_DIRS, hash_body, node_front_matter
 
 # ---------------------------------------------------------------------------
 # Domain vocabularies
@@ -632,42 +632,26 @@ class RealisticCorpusGenerator:
                 self._topic_slugs.setdefault(item, []).append(slug)
 
         now = utc_now_iso()
-        node_id = str(uuid.uuid4())
-        fm = {
-            "id": node_id,
-            "type": node_type,
-            "title": title,
-            "tags": tags,
-            "importance": 0.5,
-            "created": now,
-            "updated": now,
-            "access_count": 0,
-            "last_access": None,
-            "expires_at": None,
-            "valid_from": None,
-            "valid_to": None,
-            "transcript_ref": None,
-            "session_id": session_id,
-            "links": [],
-            "content_hash": hash_body(body),
-        }
-        path = self._data_dir / "docs" / TYPE_DIRS[node_type] / f"{slug}.md"
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(serialize_front_matter(fm, body), encoding="utf-8")
-
-        self._slugs.append(slug)
-        self._domain_counts[node_type] = self._domain_counts.get(node_type, 0) + 1
-        return WikiNode(
+        node = WikiNode(
             type=node_type,
             title=title,
             body=body,
-            id=node_id,
+            id=str(uuid.uuid4()),
             slug=slug,
             tags=tags,
             created=now,
-            updated=now,
+            timestamp=now,
+            updated_at=now,
             session_id=session_id,
+            content_hash=hash_body(body),
         )
+        path = self._data_dir / "docs" / TYPE_DIRS[node_type] / f"{slug}.md"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(serialize_front_matter(node_front_matter(node), body), encoding="utf-8")
+
+        self._slugs.append(slug)
+        self._domain_counts[node_type] = self._domain_counts.get(node_type, 0) + 1
+        return node
 
     def _add_query(self, query: str, topic: str, difficulty: str) -> None:
         """Defer resolution: expected slugs = every page of that topic."""

@@ -83,3 +83,58 @@ class TestSerialize:
     def test_escapes_in_list_items(self) -> None:
         text = serialize_front_matter({"links": ['say "hi"']}, "b")
         assert 'say \\"hi\\"' in text
+
+
+class TestTypedLinks:
+    """OKF v0.2 typed links live in inline flow mappings (spec AC-0003)."""
+
+    def test_typed_link_round_trip(self) -> None:
+        data: dict[str, object] = {
+            "links": [
+                {"target": "estate-runtime-edge", "rel": "relates-to"},
+                {"target": "pcl-ent-workspace", "rel": "depends-on", "label": 'the "estate"'},
+            ]
+        }
+        text = serialize_front_matter(data, "body")
+        assert "links: [{target:" in text
+        # One key per line: two typed links still occupy a single front-matter line.
+        block = text.split("---\n")[1]
+        assert block.strip().count("\n") == 0
+        parsed, body = parse_front_matter(text)
+        assert parsed == data
+        assert body == "body"
+
+    def test_mixed_list_items_are_independent(self) -> None:
+        data, _ = parse_front_matter(
+            '---\ntags: ["a", "b"]\nlinks: [{target: "x", rel: "y"}]\n---\nbody'
+        )
+        assert data["tags"] == ["a", "b"]
+        assert data["links"] == [{"target": "x", "rel": "y"}]
+
+    def test_comma_inside_quoted_mapping_value(self) -> None:
+        data, _ = parse_front_matter('---\nlinks: [{target: "a,b", rel: "c"}]\n---\nbody')
+        assert data["links"] == [{"target": "a,b", "rel": "c"}]
+
+    def test_link_entry_rejects_unquoted_value(self) -> None:
+        with pytest.raises(FrontMatterError, match="must be quoted"):
+            parse_front_matter('---\nlinks: [{target: x, rel: "y"}]\n---\nbody')
+
+    def test_link_entry_rejects_duplicate_key(self) -> None:
+        with pytest.raises(FrontMatterError, match="duplicate mapping key"):
+            parse_front_matter('---\nlinks: [{target: "a", target: "b"}]\n---\nbody')
+
+    def test_link_entry_rejects_empty_mapping(self) -> None:
+        with pytest.raises(FrontMatterError, match="mapping item is empty"):
+            parse_front_matter("---\nlinks: [{}]\n---\nbody")
+
+    def test_unbalanced_brace_rejected(self) -> None:
+        with pytest.raises(FrontMatterError, match="unbalanced"):
+            parse_front_matter('---\nlinks: [{target: "a"]\n---\nbody')
+
+    def test_trailing_comma_rejected(self) -> None:
+        with pytest.raises(FrontMatterError, match="empty collection item"):
+            parse_front_matter('---\ntags: ["a",]\n---\nbody')
+
+    def test_serializing_non_string_mapping_value_rejected(self) -> None:
+        with pytest.raises(FrontMatterError, match="mapping values must be strings"):
+            serialize_front_matter({"links": [{"target": "a", "rel": 2}]}, "b")

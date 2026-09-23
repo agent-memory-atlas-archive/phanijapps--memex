@@ -93,6 +93,9 @@ def memex_write(
     tags: list[str] | None = None,
     importance: Annotated[float, Field(ge=0, le=1)] = 0.5,
     links: list[str] | None = None,
+    parent: str | None = None,
+    supersedes: list[str] | None = None,
+    depends_on: list[str] | None = None,
     project_id: str | None = None,
     project_label: str | None = None,
 ) -> WriteResultDict:
@@ -109,12 +112,16 @@ def memex_write(
             512 UTF-8 bytes) stating WHEN the page is useful — the situation
             or question it answers, in a searcher's words, not copied from
             the body; searchable and returned with recall hits.
-        body: Markdown; ``[[slug]]`` references become wiki links, merged
-            with ``links``.
+        body: Markdown; ``[[slug]]`` references become ``mentions`` edges
+            in the link graph.
         scope: Required namespace choice: global or project.
         tags: Lowercased and deduplicated on write.
         importance: Schema-enforced bounds [0, 1].
-        links: Explicit outgoing slugs in addition to body links.
+        links: Typed OKF links, each ``"target"`` or ``"target:rel"``;
+            a bare target means the relation ``relates-to``.
+        parent: Slug of the hierarchical parent page, if any.
+        supersedes: Slugs this page replaces.
+        depends_on: Slugs this page depends on.
 
     Returns:
         ``{"slug", "file_path"}`` on success; ``{"error": str}`` on
@@ -135,7 +142,10 @@ def memex_write(
                 description=description or "",
                 tags=tags or [],
                 importance=importance,
-                links=links or [],
+                links=list(links or []),
+                parent=parent,
+                supersedes=supersedes or [],
+                depends_on=depends_on or [],
                 scope=scope,
                 project_id=project_id,
                 project_label=project_label,
@@ -236,7 +246,7 @@ def memex_forget(slug: str, mode: ForgetMode | None = None) -> ForgetResultDict:
 
     "hard" deletes the file and purges its index row and wiki_links in
     both directions (irreversible). "soft" and "decay" keep the file,
-    set valid_to / expires_at respectively (default now), and hide the
+    both set valid_until (default now), and hide the
     node from recall unless include_expired is passed.
 
     Args:
@@ -264,7 +274,8 @@ def memex_provenance(slug: str) -> ProvenanceDict:
 
     Returns:
         ProvenanceReport as JSON — confidence "direct" (node carries a
-        transcript_ref), "inferred" (an episode links to the node), or
+        transcript_ref), "inferred" (an episode reaches the node through
+        any relation), or
         "none"; transcript and metadata file paths.
     """
     try:

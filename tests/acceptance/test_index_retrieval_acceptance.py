@@ -59,7 +59,8 @@ def test_wiki_link_parsing(components: dict[str, object]) -> None:
 
     stored = store.read(source.slug)
     assert stored is not None
-    assert "python-3-12" in stored.links
+    # Body references are graph edges, not declared front-matter relations.
+    assert stored.links == []
 
     links.sync_node(stored)
     assert links.get_outgoing(source.slug) == ["missing-page", "python-3-12"]

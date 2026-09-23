@@ -201,3 +201,26 @@ rule, and the OpenAI SDK is the single LLM client.
   for base installs, and is not a user-facing recall selector. No embeddings,
   cross-encoder, hosted search service, graph database, network call, or `rg`
   executable was added to the production recall path.
+
+- **OKF v0.2 page front matter (ADR-0005).** Pages are Open Knowledge Format
+  v0.2 concepts. Front matter declares `okf_version: "0.2"` and emits the OKF
+  fields first in the reference implementation's order — `type`, `title`,
+  `description`, `resource`, `tags`, `timestamp`, `valid_from`, `valid_until`,
+  `stale_after`, `updated_at`, `parent`, `supersedes`, `implements`,
+  `depends_on`, `links` — followed by the Memex fields OKF has no equivalent
+  for. Four spec field names are retired with no alias: `created` keeps its
+  name but becomes a Memex extension, `updated` becomes OKF `timestamp`
+  (refreshed on every write) with `updated_at` moving only when the body
+  changes, `valid_to` becomes `valid_until`, and `expires_at` becomes
+  `stale_after` — advisory only, never a recall filter. Recall visibility is
+  the `valid_from`/`valid_until` window alone, so `forget --soft` and
+  `forget --decay` both end that window, the first at once and the second one
+  configured half-life out. Front-matter `links` are OKF typed relations
+  (`[{target: "slug", rel: "relates-to"}]`, written inline so the codec stays
+  line-oriented); a body `[[slug]]` reference is a `mentions` edge in
+  `wiki_links` and is no longer copied into front matter. `wiki_links` gained
+  a `rel` column inside its primary key and the schema moved to version 6,
+  which rebuilds from Markdown. `memex verify` gained five OKF conformance
+  checks, and a generated store passes the OKF reference linter with zero
+  errors and zero warnings. There is no migration: a pre-OKF store must be
+  deleted.

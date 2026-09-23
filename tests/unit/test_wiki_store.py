@@ -453,23 +453,34 @@ class TestFrontMatterValidation:
     def test_unknown_key_rejected(self, data_dir: Path) -> None:
         self.write_raw(
             data_dir,
-            '---\nid: "a"\ntype: "entity"\ntitle: "t"\n'
-            'created: "2026-01-01T00:00:00Z"\nupdated: "2026-01-01T00:00:00Z"\n'
+            '---\nokf_version: "0.2"\nid: "a"\ntype: "entity"\ntitle: "t"\n'
+            'created: "2026-01-01T00:00:00Z"\ntimestamp: "2026-01-01T00:00:00Z"\n'
+            'updated_at: "2026-01-01T00:00:00Z"\n'
             'importance: 0.5\nmystery: "x"\n---\nbody',
         )
         with pytest.raises(WikiStoreError, match="unknown front matter"):
             WikiStore(data_dir).read("raw")
 
     def test_missing_required_rejected(self, data_dir: Path) -> None:
-        self.write_raw(data_dir, '---\nid: "a"\ntype: "entity"\ntitle: "t"\n---\nbody')
+        self.write_raw(
+            data_dir,
+            '---\nokf_version: "0.2"\nid: "a"\ntype: "entity"\ntitle: "t"\n---\nbody',
+        )
         with pytest.raises(WikiStoreError, match="required"):
+            WikiStore(data_dir).read("raw")
+
+    def test_missing_okf_version_rejected(self, data_dir: Path) -> None:
+        """A page without the format marker is not an OKF v0.2 concept."""
+        self.write_raw(data_dir, '---\nid: "a"\ntype: "entity"\ntitle: "t"\n---\nbody')
+        with pytest.raises(WikiStoreError, match="unsupported okf_version"):
             WikiStore(data_dir).read("raw")
 
     def test_non_numeric_importance_rejected(self, data_dir: Path) -> None:
         self.write_raw(
             data_dir,
-            '---\nid: "a"\ntype: "entity"\ntitle: "t"\n'
-            'created: "2026-01-01T00:00:00Z"\nupdated: "2026-01-01T00:00:00Z"\n'
+            '---\nokf_version: "0.2"\nid: "a"\ntype: "entity"\ntitle: "t"\n'
+            'created: "2026-01-01T00:00:00Z"\ntimestamp: "2026-01-01T00:00:00Z"\n'
+            'updated_at: "2026-01-01T00:00:00Z"\n'
             'importance: "high"\n---\nbody',
         )
         with pytest.raises(WikiStoreError, match="importance"):
@@ -478,8 +489,9 @@ class TestFrontMatterValidation:
     def test_non_int_access_count_rejected(self, data_dir: Path) -> None:
         self.write_raw(
             data_dir,
-            '---\nid: "a"\ntype: "entity"\ntitle: "t"\n'
-            'created: "2026-01-01T00:00:00Z"\nupdated: "2026-01-01T00:00:00Z"\n'
+            '---\nokf_version: "0.2"\nid: "a"\ntype: "entity"\ntitle: "t"\n'
+            'created: "2026-01-01T00:00:00Z"\ntimestamp: "2026-01-01T00:00:00Z"\n'
+            'updated_at: "2026-01-01T00:00:00Z"\n'
             'importance: 0.5\naccess_count: "many"\n---\nbody',
         )
         with pytest.raises(WikiStoreError, match="access_count"):
@@ -488,8 +500,9 @@ class TestFrontMatterValidation:
     def test_non_list_tags_rejected(self, data_dir: Path) -> None:
         self.write_raw(
             data_dir,
-            '---\nid: "a"\ntype: "entity"\ntitle: "t"\n'
-            'created: "2026-01-01T00:00:00Z"\nupdated: "2026-01-01T00:00:00Z"\n'
+            '---\nokf_version: "0.2"\nid: "a"\ntype: "entity"\ntitle: "t"\n'
+            'created: "2026-01-01T00:00:00Z"\ntimestamp: "2026-01-01T00:00:00Z"\n'
+            'updated_at: "2026-01-01T00:00:00Z"\n'
             'importance: 0.5\ntags: "tool"\n---\nbody',
         )
         with pytest.raises(WikiStoreError, match="tags"):
@@ -498,8 +511,9 @@ class TestFrontMatterValidation:
     def test_non_string_list_items_rejected(self, data_dir: Path) -> None:
         self.write_raw(
             data_dir,
-            '---\nid: "a"\ntype: "entity"\ntitle: "t"\n'
-            'created: "2026-01-01T00:00:00Z"\nupdated: "2026-01-01T00:00:00Z"\n'
+            '---\nokf_version: "0.2"\nid: "a"\ntype: "entity"\ntitle: "t"\n'
+            'created: "2026-01-01T00:00:00Z"\ntimestamp: "2026-01-01T00:00:00Z"\n'
+            'updated_at: "2026-01-01T00:00:00Z"\n'
             "importance: 0.5\nlinks: [1, 2]\n---\nbody",
         )
         with pytest.raises(WikiStoreError, match="links"):
@@ -508,8 +522,9 @@ class TestFrontMatterValidation:
     def test_invalid_type_rejected(self, data_dir: Path) -> None:
         self.write_raw(
             data_dir,
-            '---\nid: "a"\ntype: "folder"\ntitle: "t"\n'
-            'created: "2026-01-01T00:00:00Z"\nupdated: "2026-01-01T00:00:00Z"\n'
+            '---\nokf_version: "0.2"\nid: "a"\ntype: "folder"\ntitle: "t"\n'
+            'created: "2026-01-01T00:00:00Z"\ntimestamp: "2026-01-01T00:00:00Z"\n'
+            'updated_at: "2026-01-01T00:00:00Z"\n'
             "importance: 0.5\n---\nbody",
         )
         with pytest.raises(WikiStoreError, match="node type"):
@@ -518,8 +533,9 @@ class TestFrontMatterValidation:
     def test_string_field_must_be_string(self, data_dir: Path) -> None:
         self.write_raw(
             data_dir,
-            '---\nid: "a"\ntype: "entity"\ntitle: "t"\n'
-            'created: "2026-01-01T00:00:00Z"\nupdated: "2026-01-01T00:00:00Z"\n'
+            '---\nokf_version: "0.2"\nid: "a"\ntype: "entity"\ntitle: "t"\n'
+            'created: "2026-01-01T00:00:00Z"\ntimestamp: "2026-01-01T00:00:00Z"\n'
+            'updated_at: "2026-01-01T00:00:00Z"\n'
             "importance: 0.5\nlast_access: 5\n---\nbody",
         )
         with pytest.raises(WikiStoreError, match="last_access"):

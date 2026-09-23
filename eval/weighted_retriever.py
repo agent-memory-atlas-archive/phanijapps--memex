@@ -53,8 +53,8 @@ SELECT w.slug, bm25(wiki_fts) AS score
 FROM wiki_fts
 JOIN wiki_index w ON w.rowid = wiki_fts.rowid
 WHERE wiki_fts MATCH :match
-  AND (w.expires_at IS NULL OR w.expires_at >= :now)
-  AND (w.valid_to IS NULL OR w.valid_to >= :now)
+  AND (w.valid_from IS NULL OR w.valid_from <= :now)
+  AND (w.valid_until IS NULL OR w.valid_until >= :now)
   AND (w.status IS NULL OR w.status = 'active')
 ORDER BY score, w.slug
 LIMIT :limit
@@ -63,7 +63,7 @@ LIMIT :limit
 _HIT_SQL = """
 SELECT
     w.slug, w.file_path, w.title, w.node_type, w.importance,
-    w.tags, w.created, w.updated, w.last_access, w.transcript_ref, w.status,
+    w.tags, w.created, w.timestamp, w.updated_at, w.last_access, w.transcript_ref, w.status,
     snippet(wiki_fts, 2, '<mark>', '</mark>', '...', 12)
         AS body_snippet,
     snippet(wiki_fts, 1, '<mark>', '</mark>', '...', 12)
@@ -224,7 +224,8 @@ class WeightedLexicalRetriever:
             snippet_source=source,
             tags=json.loads(str(row["tags"])),
             created=str(row["created"]),
-            updated=str(row["updated"]),
+            timestamp=str(row["timestamp"]),
+            updated_at=str(row["updated_at"]),
             last_access=row["last_access"],
             transcript_ref=row["transcript_ref"],
             links=links,

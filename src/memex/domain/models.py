@@ -17,6 +17,13 @@ from typing import Literal
 
 NODE_TYPES: tuple[str, ...] = ("entity", "preference", "procedure", "summary", "episode")
 PAGE_STATUSES: tuple[str, ...] = ("active", "pending", "superseded", "archived")
+
+# OKF v0.2 relation vocabulary. ``DEFAULT_REL`` is what an untyped link means,
+# ``BODY_REL`` is what a ``[[slug]]`` body reference means, and the four
+# relation fields project into the graph under their own field name.
+DEFAULT_REL = "relates-to"
+BODY_REL = "mentions"
+RELATION_FIELDS: tuple[str, ...] = ("parent", "supersedes", "implements", "depends_on")
 NON_EPISODE_TYPES: tuple[str, ...] = tuple(t for t in NODE_TYPES if t != "episode")
 TURN_ROLES: tuple[str, ...] = ("user", "agent", "tool")
 FORGET_MODES: tuple[str, ...] = ("hard", "soft", "decay")
@@ -92,6 +99,84 @@ def _norm_slugs(slugs: list[str], field_name: str) -> list[str]:
         raise ValueError(f"{field_name} must contain non-empty slugs")
     if len(set(normalized)) != len(normalized):
         raise ValueError(f"{field_name} must be unique")
+    return normalized
+
+
+@dataclass(slots=True)
+class SemanticLink:
+    """One OKF v0.2 typed link: a target concept and the relation to it.
+
+    Stored front matter carries these as inline mappings
+    (``{target: "slug", rel: "relates-to"}``). ``label`` is optional display
+    text and is never used for routing or lookup.
+    """
+
+    target: str
+    rel: str = DEFAULT_REL
+    label: str | None = None
+
+    def __post_init__(self) -> None:
+        self.target = self.target.strip().lower()
+        if not self.target:
+            raise ValueError("link target must be non-empty")
+        self.rel = self.rel.strip().lower().replace(" ", "-")
+        if not self.rel:
+            raise ValueError("link rel must be non-empty")
+        if self.label is not None:
+            if not self.label.strip():
+                raise ValueError("link label must be non-empty when provided")
+            if any(unicodedata.category(character) == "Cc" for character in self.label):
+                raise ValueError("link label must be a single line")
+
+    @classmethod
+    def parse(cls, value: object) -> SemanticLink:
+        """Build a link from a mapping, a ``target:rel`` string, or a bare slug."""
+        if isinstance(value, SemanticLink):
+            return cls(target=value.target, rel=value.rel, label=value.label)
+        if isinstance(value, str):
+            target, separator, rel = value.partition(":")
+            return cls(target=target, rel=rel if separator else DEFAULT_REL)
+        if isinstance(value, Mapping):
+            unknown = set(value) - {"target", "rel", "label"}
+            if unknown:
+                raise ValueError(f"link has unsupported fields: {sorted(unknown)}")
+            if "target" not in value:
+                raise ValueError("link is missing required field 'target'")
+            members = {key: value.get(key) for key in ("target", "rel", "label")}
+            for name, member in members.items():
+                if member is not None and not isinstance(member, str):
+                    raise ValueError(f"link field {name!r} must be a string")
+            target_value = members["target"]
+            rel_value = members["rel"]
+            label_value = members["label"]
+            if not isinstance(target_value, str):
+                raise ValueError("link field 'target' must be a string")
+            return cls(
+                target=target_value,
+                rel=rel_value if isinstance(rel_value, str) else DEFAULT_REL,
+                label=label_value if isinstance(label_value, str) else None,
+            )
+        raise ValueError("link must be a string or a mapping with 'target' and 'rel'")
+
+    def to_mapping(self) -> dict[str, str]:
+        """Front-matter form: ``target`` and ``rel``, plus ``label`` when set."""
+        mapping = {"target": self.target, "rel": self.rel}
+        if self.label is not None:
+            mapping["label"] = self.label
+        return mapping
+
+
+def _norm_links(links: list[object]) -> list[SemanticLink]:
+    """Normalize every accepted link form, deduplicating on (target, rel)."""
+    normalized: list[SemanticLink] = []
+    seen: set[tuple[str, str]] = set()
+    for link in links:
+        parsed = SemanticLink.parse(link)
+        identity = (parsed.target, parsed.rel)
+        if identity in seen:
+            raise ValueError("links must be unique on (target, rel)")
+        seen.add(identity)
+        normalized.append(parsed)
     return normalized
 
 
@@ -179,14 +264,19 @@ class WriteInput:
     title: str
     body: str
     description: str = ""
+    resource: str | None = None
     tags: list[str] = field(default_factory=list)
     importance: float = 0.5
-    links: list[str] = field(default_factory=list)
+    links: list[object] = field(default_factory=list)
+    parent: str | None = None
+    supersedes: list[str] = field(default_factory=list)
+    implements: list[str] = field(default_factory=list)
+    depends_on: list[str] = field(default_factory=list)
     session_id: str | None = None
     transcript_ref: str | None = None
-    expires_at: str | None = None
+    stale_after: str | None = None
     valid_from: str | None = None
-    valid_to: str | None = None
+    valid_until: str | None = None
     # v1-guardrails fields: lifecycle + provenance (all optional, default active)
     status: str = "active"
     occurred_at: str | None = None
@@ -207,7 +297,11 @@ class WriteInput:
         if not 0.0 <= self.importance <= 1.0:
             raise ValueError("importance must be within [0.0, 1.0]")
         self.tags = _norm_tags(self.tags)
-        self.links = _norm_slugs(self.links, "links")
+        self.links = list(_norm_links(self.links))
+        self.parent = self.parent.strip().lower() if self.parent else None
+        self.supersedes = _norm_slugs(self.supersedes, "supersedes")
+        self.implements = _norm_slugs(self.implements, "implements")
+        self.depends_on = _norm_slugs(self.depends_on, "depends_on")
         if self.status not in PAGE_STATUSES:
             raise ValueError(f"status must be one of {PAGE_STATUSES}, got {self.status!r}")
         if self.occurred_at is not None:
@@ -216,7 +310,7 @@ class WriteInput:
             raise ValueError("session_id is required for episode nodes")
         if self.session_id is not None and not self.session_id.strip():
             raise ValueError("session_id must be non-empty when provided")
-        for name in ("expires_at", "valid_from", "valid_to"):
+        for name in ("stale_after", "valid_from", "valid_until"):
             value = getattr(self, name)
             if value is not None:
                 _check_iso(value, name)
@@ -233,7 +327,12 @@ class WriteInput:
 
 @dataclass(slots=True)
 class WikiNode:
-    """Full representation of a wiki page, front matter plus body."""
+    """Full representation of a wiki page, front matter plus body.
+
+    The field set is OKF v0.2 first — ``type`` through ``links`` carry the
+    names and meanings of the Open Knowledge Format — followed by the Memex
+    extension fields, which OKF preserves verbatim as unknown keys.
+    """
 
     type: str
     title: str
@@ -242,18 +341,27 @@ class WikiNode:
     slug: str = ""
     file_path: str | None = None
     description: str = ""
+    resource: str | None = None
     tags: list[str] = field(default_factory=list)
-    importance: float = 0.5
+    #: OKF ``timestamp``: refreshed on every write, like the OKF reference
+    #: writer. Creation time lives in the Memex ``created`` field, which OKF
+    #: has no equivalent for.
+    timestamp: str = field(default_factory=utc_now_iso)
+    valid_from: str | None = None
+    valid_until: str | None = None
+    stale_after: str | None = None
+    updated_at: str = field(default_factory=utc_now_iso)
+    parent: str | None = None
+    supersedes: list[str] = field(default_factory=list)
+    implements: list[str] = field(default_factory=list)
+    depends_on: list[str] = field(default_factory=list)
+    links: list[SemanticLink] = field(default_factory=list)
     created: str = field(default_factory=utc_now_iso)
-    updated: str = field(default_factory=utc_now_iso)
+    importance: float = 0.5
     access_count: int = 0
     last_access: str | None = None
-    expires_at: str | None = None
-    valid_from: str | None = None
-    valid_to: str | None = None
     transcript_ref: str | None = None
     session_id: str | None = None
-    links: list[str] = field(default_factory=list)
     content_hash: str = ""
     status: str = "active"
     occurred_at: str | None = None
@@ -273,6 +381,11 @@ class WikiNode:
         _check_description(self.description)
         if not 0.0 <= self.importance <= 1.0:
             raise ValueError("importance must be within [0.0, 1.0]")
+        self.links = _norm_links(list(self.links))
+        self.parent = self.parent.strip().lower() if self.parent else None
+        self.supersedes = _norm_slugs(self.supersedes, "supersedes")
+        self.implements = _norm_slugs(self.implements, "implements")
+        self.depends_on = _norm_slugs(self.depends_on, "depends_on")
         if self.status not in PAGE_STATUSES:
             raise ValueError(f"status must be one of {PAGE_STATUSES}, got {self.status!r}")
         if self.occurred_at is not None:
@@ -284,6 +397,23 @@ class WikiNode:
         if self.scope == "global" and self.project_id is not None:
             raise ValueError("project_id is only allowed for project scope")
         _check_project_metadata(self.scope, self.project_id, self.project_label)
+
+    def link_targets(self) -> list[str]:
+        """Front-matter link targets, in declaration order."""
+        return [link.target for link in self.links]
+
+    def relations(self) -> list[tuple[str, str]]:
+        """Every front-matter relation as ``(target, rel)``, links first.
+
+        Covers typed links plus the four OKF relation fields; body ``[[slug]]``
+        references are added by the link manager, which owns the body.
+        """
+        pairs = [(link.target, link.rel) for link in self.links]
+        if self.parent:
+            pairs.append((self.parent, "parent"))
+        for name in ("supersedes", "implements", "depends_on"):
+            pairs.extend((target, name) for target in getattr(self, name))
+        return pairs
 
 
 @dataclass(slots=True)
@@ -301,7 +431,8 @@ class RecallHit:
     snippet_source: str
     tags: list[str]
     created: str
-    updated: str
+    timestamp: str
+    updated_at: str
     last_access: str | None
     transcript_ref: str | None
     links: list[str]
@@ -454,7 +585,11 @@ class ProvenanceReport:
 
 @dataclass(slots=True)
 class SessionSummary:
-    """One stored session as listed by ``list_sessions`` (spec §12.5)."""
+    """One stored session as listed by ``list_sessions`` (spec §12.5).
+
+    ``token_usage`` carries the harness-reported session totals when the
+    capture recorded them (never summed or estimated here).
+    """
 
     session_id: str
     started_at: str | None
@@ -462,6 +597,7 @@ class SessionSummary:
     turn_count: int
     episode_slug: str | None
     file_path: str
+    token_usage: dict[str, int] | None = None
 
 
 @dataclass(slots=True)

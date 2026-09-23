@@ -55,7 +55,7 @@ def test_turn_entry_from_dict_requires_fields() -> None:
         {"links": [" "]},
         {"type": "episode"},  # episode requires session_id
         {"type": "entity", "session_id": " "},
-        {"expires_at": "tomorrow"},
+        {"stale_after": "tomorrow"},
         {"valid_from": "2026-13-99T00:00:00Z"},
         {"description": "line\nbreak"},
         {"description": "line\rbreak"},

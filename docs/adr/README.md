@@ -10,6 +10,7 @@ when a later ADR supersedes or deprecates them.
 | [0002](0002-use-layered-package-and-shared-adapter-contracts.md) | Accepted | 2026-09-15 | The package uses domain, application, and infrastructure ownership with shared adapter contracts. |
 | [0003](0003-use-one-llm-port-with-api-and-harness-providers.md) | Accepted | 2026-09-15 | Consolidation uses one LLM port implemented by compatible APIs or installed harnesses. |
 | [0004](0004-require-user-scope-enablement.md) | Accepted | 2026-09-16 | Capture, injection, and consolidation require explicit user-scope enablement. |
+| [0005](0005-adopt-okf-v02-page-front-matter.md) | Accepted | 2026-09-23 | Page front matter is OKF v0.2 first, with Memex fields as conformant extensions. |
 
 ## Adding a decision
 

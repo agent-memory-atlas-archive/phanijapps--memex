@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import replace
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from memex.application.decay import RecencyDecay
@@ -22,6 +23,7 @@ from memex.domain.models import (
     RecallHit,
     RecallResult,
     RestoreReport,
+    SemanticLink,
     SessionSummary,
     TaskRecallInput,
     TaskRecallResult,
@@ -150,12 +152,17 @@ class Memex:
             id="",
             tags=input.tags,
             importance=input.importance,
-            links=input.links,
+            resource=input.resource,
+            links=[SemanticLink.parse(link) for link in input.links],
+            parent=input.parent,
+            supersedes=input.supersedes,
+            implements=input.implements,
+            depends_on=input.depends_on,
             session_id=input.session_id,
             transcript_ref=input.transcript_ref,
-            expires_at=input.expires_at,
+            stale_after=input.stale_after,
             valid_from=input.valid_from,
-            valid_to=input.valid_to,
+            valid_until=input.valid_until,
             scope=input.scope,
             project_id=input.project_id,
             project_label=input.project_label,
@@ -188,7 +195,7 @@ class Memex:
         with strict AND matching, and retried with OR only when strict matching
         returns no rows. Untrusted input never reaches the FTS5 MATCH parser.
         Hits are ordered by ascending BM25 score (lower is better, per SQLite
-        FTS5). Nodes past ``expires_at`` or ``valid_to`` are invisible unless
+        FTS5). Nodes outside their ``valid_from``/``valid_until`` window are invisible unless
         the caller opts in; this is how soft-forgetting and decay hide memories.
 
         Side effects: every returned hit gets ``access_count += 1`` and a
@@ -332,20 +339,21 @@ class Memex:
         slug: str,
         *,
         mode: str = "hard",
-        valid_to: str | None = None,
+        valid_until: str | None = None,
     ) -> ForgetResult:
         """Remove a memory: delete the page, or retire it temporally.
 
         ``hard`` deletes the file and purges its index row and wiki_links
-        entries in both directions — irreversible. ``soft`` sets ``valid_to``
-        and ``decay`` sets ``expires_at``; both keep the file and default the
+        entries in both directions — irreversible. ``soft`` and ``decay`` both
+        set ``valid_until`` — ``soft`` to now, ``decay`` to one configured
+        half-life from now; both keep the file and default the
         timestamp to now, and both hide the node from recall unless the
         caller passes ``include_expired=True``.
 
         Args:
             slug: Wiki page slug.
             mode: One of ``hard``, ``soft``, ``decay``.
-            valid_to: ISO8601 UTC timestamp for soft/decay; defaults to now.
+            valid_until: ISO8601 UTC timestamp for soft/decay; defaults to now.
 
         Raises:
             FileNotFoundError: No page exists for ``slug``.
@@ -373,14 +381,26 @@ class Memex:
             self.logger.info("operation=forget mode=hard slug=%s", slug)
             return ForgetResult(slug=slug, forgotten=True, mode=mode, file_path=None)
 
-        timestamp = valid_to or utc_now_iso()
-        field = "valid_to" if mode == "soft" else "expires_at"
-        setattr(node, field, timestamp)
+        # Both modes end the validity window; only the instant differs.
+        # "soft" ends it now, "decay" ends it one half-life from now.
+        node.valid_until = valid_until or self._validity_end(mode)
         stored = self.wiki_store.write(node)
         self.index_manager.update_record(stored)
         self._refresh_navigation(stored.file_path)
         self.logger.info("operation=forget mode=%s slug=%s", mode, slug)
         return ForgetResult(slug=slug, forgotten=True, mode=mode, file_path=stored.file_path)
+
+    def _validity_end(self, mode: str) -> str:
+        """When a forget mode ends the validity window.
+
+        ``soft`` retires the page now. ``decay`` gives it one configured
+        half-life first, so the two modes are distinguishable operations
+        rather than two names for the same write.
+        """
+        if mode != "decay":
+            return utc_now_iso()
+        end = datetime.now(UTC) + timedelta(days=self.config.recency_decay.half_life_days)
+        return end.strftime("%Y-%m-%dT%H:%M:%SZ")
 
     def ingest_transcript(
         self, input: IngestTranscriptInput, *, overwrite: bool = False
@@ -580,12 +600,12 @@ class Memex:
         target_node.body = (
             target_node.body.rstrip() + f"\n\n## Merged from [[{source}]]\n\n{source_node.body}"
         )
+        target_node.supersedes = sorted({*target_node.supersedes, source})
         target_node = self.wiki_store.write(target_node)
         self.index_manager.update_record(target_node)
         self.link_manager.sync_node(target_node)
 
         source_node.status = "superseded"
-        source_node.links = sorted({*source_node.links, target})
         source_node = self.wiki_store.write(source_node)
         self.index_manager.update_record(source_node)
         self._refresh_navigation(target_node.file_path)

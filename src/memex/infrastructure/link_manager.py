@@ -7,7 +7,7 @@ from pathlib import Path
 
 from memex.domain.errors import IndexManagerError
 from memex.domain.links import parse_links
-from memex.domain.models import WikiNode
+from memex.domain.models import BODY_REL, WikiNode
 from memex.domain.reserved import is_structural
 from memex.infrastructure.index_manager import check_slug
 
@@ -17,6 +17,10 @@ class LinkManager:
 
     Sync model: replace-all-outgoing — syncing a source deletes its existing
     ``(source, *)`` pairs and inserts the freshly parsed set atomically.
+
+    Every edge carries an OKF relation: front-matter typed links keep their
+    declared ``rel``, the four OKF relation fields use their own field name,
+    and a ``[[slug]]`` body reference is a ``mentions`` edge.
     """
 
     def __init__(self, db: sqlite3.Connection, wiki_dir: Path) -> None:
@@ -36,6 +40,32 @@ class LinkManager:
     ) -> list[str]:
         """Replace the outgoing link set of ``source_slug`` from body text."""
         targets = parse_links(body)
+        self._replace(
+            source_scope,
+            source_project_id,
+            source_slug,
+            [(target, BODY_REL) for target in targets],
+        )
+        return targets
+
+    def sync_node(self, node: WikiNode) -> list[str]:
+        """Sync every relation a stored node declares, plus its body mentions."""
+        relations = list(node.relations())
+        declared = {target for target, _rel in relations}
+        relations.extend(
+            (target, BODY_REL) for target in parse_links(node.body) if target not in declared
+        )
+        self._replace(node.scope, node.project_id, node.slug, relations)
+        return [target for target, _rel in relations]
+
+    def _replace(
+        self,
+        source_scope: str,
+        source_project_id: str | None,
+        source_slug: str,
+        relations: list[tuple[str, str]],
+    ) -> None:
+        """Atomically swap one source's outgoing edges for ``relations``."""
         with self._db:
             self._db.execute(
                 "DELETE FROM wiki_links WHERE source_scope = ?"
@@ -44,34 +74,13 @@ class LinkManager:
             )
             self._db.executemany(
                 "INSERT OR IGNORE INTO wiki_links"
-                " (source_scope, source_project_id, source_slug, target_slug)"
-                " VALUES (?, ?, ?, ?)",
+                " (source_scope, source_project_id, source_slug, target_slug, rel)"
+                " VALUES (?, ?, ?, ?, ?)",
                 [
-                    (source_scope, source_project_id or "", source_slug, target)
-                    for target in targets
+                    (source_scope, source_project_id or "", source_slug, target, rel)
+                    for target, rel in relations
                 ],
             )
-        return targets
-
-    def sync_node(self, node: WikiNode) -> list[str]:
-        """Sync links for a stored node, merging its explicit front-matter links."""
-        targets = list(node.links)
-        for parsed in parse_links(node.body):
-            if parsed not in targets:
-                targets.append(parsed)
-        with self._db:
-            self._db.execute(
-                "DELETE FROM wiki_links WHERE source_scope = ?"
-                " AND source_project_id = ? AND source_slug = ?",
-                (node.scope, node.project_id or "", node.slug),
-            )
-            self._db.executemany(
-                "INSERT OR IGNORE INTO wiki_links"
-                " (source_scope, source_project_id, source_slug, target_slug)"
-                " VALUES (?, ?, ?, ?)",
-                [(node.scope, node.project_id or "", node.slug, target) for target in targets],
-            )
-        return targets
 
     def get_outgoing(
         self,
@@ -123,7 +132,7 @@ class LinkManager:
                 and (source_project_id is None or row["source_project_id"] == source_project_id)
             ]
             _refuse_ambiguous_source_slugs(rows + matching_sources)
-        return [str(row["target_slug"]) for row in rows]
+        return _unique([str(row["target_slug"]) for row in rows])
 
     def get_backlinks(self, slug: str) -> list[str]:
         rows = self._db.execute(
@@ -138,7 +147,7 @@ class LinkManager:
             (slug,),
         ).fetchall()
         _refuse_ambiguous_source_slugs(rows + indexed_sources)
-        return [str(row["source_slug"]) for row in rows]
+        return _unique([str(row["source_slug"]) for row in rows])
 
     def link_exists(
         self,
@@ -184,7 +193,7 @@ class LinkManager:
         graph: dict[str, list[str]] = {}
         for row in rows:
             graph.setdefault(str(row["source_slug"]), []).append(str(row["target_slug"]))
-        return graph
+        return {source: _unique(targets) for source, targets in graph.items()}
 
     def remove_slug(
         self,
@@ -218,6 +227,11 @@ class LinkManager:
         except IndexManagerError:
             return False
         return any(not is_structural(path) for path in self._wiki_dir.rglob(f"{slug}.md"))
+
+
+def _unique(values: list[str]) -> list[str]:
+    """Order-preserving de-duplication: one target may carry several rels."""
+    return list(dict.fromkeys(values))
 
 
 def _source_namespace_complete(source_scope: str | None, source_project_id: str | None) -> bool:

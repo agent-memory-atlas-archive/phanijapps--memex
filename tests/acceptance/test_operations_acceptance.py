@@ -47,13 +47,13 @@ def test_forget_hard(memex: Memex) -> None:
 
 def test_forget_soft(memex: Memex) -> None:
     slug = _write(memex, "Soft target", "retire me temporally")
-    result = memex.forget(slug, mode="soft", valid_to="2020-01-01T00:00:00Z")
+    result = memex.forget(slug, mode="soft", valid_until="2020-01-01T00:00:00Z")
 
     assert result.forgotten is True
     assert result.file_path is not None and Path(result.file_path).exists()
     node = memex.wiki_store.read(slug)
     assert node is not None
-    assert node.valid_to == "2020-01-01T00:00:00Z"
+    assert node.valid_until == "2020-01-01T00:00:00Z"
 
     # Excluded from recall once valid_to is in the past.
     hits = memex.recall("retire").hits
@@ -64,12 +64,12 @@ def test_forget_soft(memex: Memex) -> None:
 
 def test_forget_decay(memex: Memex) -> None:
     slug = _write(memex, "Decay target", "let me expire naturally")
-    result = memex.forget(slug, mode="decay", valid_to="2020-01-01T00:00:00Z")
+    result = memex.forget(slug, mode="decay", valid_until="2020-01-01T00:00:00Z")
 
     assert result.mode == "decay"
     node = memex.wiki_store.read(slug)
     assert node is not None
-    assert node.expires_at == "2020-01-01T00:00:00Z"
+    assert node.valid_until == "2020-01-01T00:00:00Z"
     assert slug not in [hit.slug for hit in memex.recall("expire").hits]
 
 

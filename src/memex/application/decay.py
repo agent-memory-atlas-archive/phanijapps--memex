@@ -57,7 +57,7 @@ class RecencyDecay:
             if dry_run:
                 continue
             node.importance = new_score
-            node.updated = utc_now_iso()
+            node.updated_at = utc_now_iso()
             wiki_store.write(node)
             if index_manager is not None:
                 index_manager.update_record(node)

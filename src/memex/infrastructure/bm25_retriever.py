@@ -52,7 +52,7 @@ _WINNER_SNIPPET_TOKENS = 12
 _LEGACY_BASE_SQL = """
 SELECT
     w.slug, w.file_path, w.title, w.description, w.node_type, w.importance,
-    w.tags, w.created, w.updated, w.last_access, w.transcript_ref, w.status,
+    w.tags, w.created, w.timestamp, w.updated_at, w.last_access, w.transcript_ref, w.status,
     w.scope, w.project_id, w.project_label,
     bm25(wiki_fts) AS score,
     snippet(wiki_fts, 3, '<mark>', '</mark>', '...', 32) AS body_snippet,
@@ -65,7 +65,7 @@ WHERE wiki_fts MATCH :match
 _WINNER_SELECT_SQL = """
 SELECT
     w.slug, w.file_path, w.title, w.description, w.node_type, w.importance,
-    w.tags, w.created, w.updated, w.last_access, w.transcript_ref, w.status,
+    w.tags, w.created, w.timestamp, w.updated_at, w.last_access, w.transcript_ref, w.status,
     w.scope, w.project_id, w.project_label,
     bm25(wiki_fts, 1.0, 1.0, :description_weight, :body_weight, 1.0) AS score,
     snippet(wiki_fts, 3, '<mark>', '</mark>', '...', :snippet_tokens)
@@ -272,7 +272,7 @@ class BM25Retriever:
         with strict AND matching, and retried with OR only when strict matching
         returns no rows. Untrusted input never reaches the FTS5 MATCH parser.
         Hits are ordered by ascending BM25 score — lower is better, per SQLite
-        FTS5. Nodes past ``expires_at`` or ``valid_to`` are invisible unless
+        FTS5. Nodes outside their ``valid_from``/``valid_until`` window are invisible unless
         the caller opts in; this is how soft-forgetting hides memories.
 
         Side effects: every returned hit gets ``access_count += 1`` and a
@@ -283,7 +283,7 @@ class BM25Retriever:
             top_k: Maximum hits, in [1, 100]; defaults to
                 ``default_top_k`` from construction.
             node_type: Restrict hits to one node type.
-            time_range: ``(from, to)`` ISO8601 bounds on ``updated``.
+            time_range: ``(from, to)`` ISO8601 bounds on ``updated_at``.
             tags: All listed tags must be present (AND semantics).
             include_expired: Also return soft-forgotten and decayed nodes.
 
@@ -445,7 +445,7 @@ class BM25Retriever:
         elif scope != "global":
             raise ValueError("scope must be 'global' or 'project'")
         if time_range is not None:
-            clauses.append("w.updated >= :time_from AND w.updated <= :time_to")
+            clauses.append("w.updated_at >= :time_from AND w.updated_at <= :time_to")
             params["time_from"], params["time_to"] = time_range
         for index, tag in enumerate(tags or []):
             key = f"tag_{index}"
@@ -453,8 +453,10 @@ class BM25Retriever:
             params[key] = f'%"{tag}"%'
         if not include_expired:
             now = utc_now_iso()
-            clauses.append("(w.expires_at IS NULL OR w.expires_at > :now)")
-            clauses.append("(w.valid_to IS NULL OR w.valid_to > :now)")
+            # One visibility rule: the OKF validity window. `stale_after` is
+            # advisory and never hides a page.
+            clauses.append("(w.valid_from IS NULL OR w.valid_from <= :now)")
+            clauses.append("(w.valid_until IS NULL OR w.valid_until > :now)")
             params["now"] = now
         if not include_inactive:
             clauses.append("(w.status IS NULL OR w.status = 'active')")
@@ -492,7 +494,9 @@ class BM25Retriever:
         placeholders = ",".join("(?, ?, ?)" for _ in keys)
         params = tuple(value for key in keys for value in key)
         sql = (
-            "SELECT source_scope, source_project_id, source_slug, target_slug FROM wiki_links "  # noqa: S608
+            # DISTINCT: one target may be reached by several relations.
+            "SELECT DISTINCT source_scope, source_project_id, source_slug, target_slug "  # noqa: S608
+            "FROM wiki_links "
             f"WHERE (source_scope, source_project_id, source_slug) IN ({placeholders}) "
             "ORDER BY source_scope, source_project_id, source_slug, target_slug"
         )
@@ -542,7 +546,8 @@ class BM25Retriever:
             snippet_source=source,
             tags=json.loads(str(row["tags"])),
             created=str(row["created"]),
-            updated=str(row["updated"]),
+            timestamp=str(row["timestamp"]),
+            updated_at=str(row["updated_at"]),
             last_access=row["last_access"],
             transcript_ref=row["transcript_ref"],
             links=links,

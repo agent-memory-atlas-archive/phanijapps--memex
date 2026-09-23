@@ -9,6 +9,28 @@ unreleased until a release tag is created.
 
 ### Changed
 
+- **Breaking — pages are OKF v0.2 concepts.** Front matter declares
+  `okf_version: "0.2"` and carries the Open Knowledge Format field set first,
+  in the order the OKF reference implementation writes it, followed by the
+  Memex fields OKF has no equivalent for. Four names are retired with no
+  alias: `updated` is now `timestamp` (refreshed on every write, with the new
+  `updated_at` moving only when the body changes), `valid_to` is now
+  `valid_until`, and `expires_at` is now `stale_after` — advisory only, never
+  hiding a page from recall. `created` survives as a Memex field and is still
+  written once. Recall visibility is the `valid_from`/`valid_until` window
+  alone, so `forget --soft` ends that window now and `forget --decay` ends it
+  one configured half-life out. Front-matter `links` are typed OKF relations
+  (`--link target[:rel]`, MCP `"target:rel"`), joined in one link graph by the
+  new `parent`, `supersedes`, `implements`, and `depends_on` fields; a body
+  `[[slug]]` reference is a `mentions` edge and is no longer copied into front
+  matter. CLI `--links` and `--expires-at` are gone, `--valid-to` is now
+  `--valid-until`, and recall hits carry `timestamp`/`updated_at` in place of
+  `updated`. Export JSON follows the page keys. `memex verify` gained five OKF
+  conformance checks, and a generated store passes the OKF reference linter
+  with zero errors and zero warnings. **There is no migration: delete an
+  existing `~/.memex/docs` and `mem.db` before upgrading.** The SQLite schema
+  is version 6 and rebuilds itself from Markdown.
+
 - Task recall evidence pack widened from 8 to 36 distinct pages (12 hits per
   question) with the 4,096-token context budget unchanged; multi-part coding
   tasks now surface far more of their required evidence (goal-shaped

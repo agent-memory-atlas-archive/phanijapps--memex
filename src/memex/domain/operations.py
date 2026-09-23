@@ -108,9 +108,9 @@ rows.""",
 When to use: the user asks to remove, retire, or expire a memory.
 
 Key constraints: mode "hard" permanently deletes the page and its
-index and link entries (irreversible); "soft" sets valid_to and
-"decay" sets expires_at — both keep the file and hide the node from
-recall by default.
+index and link entries (irreversible); "soft" and "decay" both set
+valid_until, differing only in the timestamp — both keep the file and
+hide the node from recall by default.
 
 Returns {"slug", "forgotten", "mode", "file_path"}; file_path is null
 after a hard delete.
@@ -222,7 +222,8 @@ class RecallHitDict(TypedDict, total=False):
     description: str
     tags: list[str]
     created: str
-    updated: str
+    timestamp: str
+    updated_at: str
     last_access: str | None
     transcript_ref: str | None
     links: list[str]

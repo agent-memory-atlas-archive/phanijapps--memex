@@ -20,6 +20,33 @@ Everything you need to run memex for yourself, your agent, or your team.
 human-readable, git-able, and editable by hand in any editor. If you edit a
 page externally, `memex rebuild-index` (or `memex watch`) picks it up.
 
+**Every page is an OKF v0.2 concept.** Front matter declares
+`okf_version: "0.2"` and carries the Open Knowledge Format fields first — in
+the order the OKF reference implementation writes them — followed by the
+Memex fields OKF has no equivalent for. An OKF tool reads the store as a
+valid bundle and preserves the Memex fields untouched.
+
+| OKF field | Meaning |
+|---|---|
+| `type` | One of entity, preference, procedure, summary, episode |
+| `title`, `description` | Name and one-line signpost |
+| `resource` | Canonical URI of the underlying asset, when there is one |
+| `tags` | Lowercased, deduplicated labels |
+| `timestamp` | Refreshed on every write |
+| `valid_from`, `valid_until` | The validity window recall honours |
+| `stale_after` | Advisory staleness; never hides a page |
+| `updated_at` | Moves only when the body actually changes |
+| `parent`, `supersedes`, `implements`, `depends_on` | Relations, as slugs |
+| `links` | Typed relations: `[{target: "slug", rel: "relates-to"}]` |
+
+The Memex block that follows carries `id`, `created`, `importance`,
+`access_count`, `last_access`, `content_hash`, `status`, `occurred_at`,
+`source`, `harness`, `confidence`, `scope`, `project_id`, `project_label`,
+`session_id`, and `transcript_ref`.
+
+A `[[slug]]` reference in the body is a graph edge with the relation
+`mentions`; it is not copied into front matter.
+
 ```
 ~/.memex/
 ├── docs/
@@ -62,9 +89,10 @@ rm ~/.memex/mem.db
 memex rebuild-index        # fully rebuilt from the memory files
 ```
 
-**Temporal validity.** Every node optionally carries `expires_at`,
-`valid_from`, and `valid_to`. Expired or retired nodes are hidden from
-recall by default (`--include-expired` / `include_expired=True` opts back in).
+**Temporal validity.** Recall honours one rule: the OKF validity window.
+A page is invisible before `valid_from` and from `valid_until` onward
+(`--include-expired` / `include_expired=True` opts back in). `stale_after`
+is advisory — `memex verify` reports it, recall never acts on it.
 
 ## Getting started
 
@@ -167,15 +195,15 @@ repository.
 
 ```bash
 memex forget deploy-on-fridays               # hard: file deleted, irreversible
-memex forget deploy-on-fridays --mode soft   # valid_to=now; hidden from recall
-memex forget deploy-on-fridays --mode decay --valid-to 2027-01-01T00:00:00Z
+memex forget deploy-on-fridays --mode soft   # valid_until=now; hidden from recall
+memex forget deploy-on-fridays --mode decay  # valid_until=now + one half-life
 ```
 
 | Mode | Effect |
 |---|---|
 | `hard` | Deletes the page, its index row, and its links — irreversible |
-| `soft` | Sets `valid_to`; page stays, hidden from recall by default |
-| `decay` | Sets `expires_at`; naturally excluded once past |
+| `soft` | Sets `valid_until` to now; page stays, hidden from recall by default |
+| `decay` | Sets `valid_until` one configured half-life out; excluded once past |
 
 ### consolidate
 

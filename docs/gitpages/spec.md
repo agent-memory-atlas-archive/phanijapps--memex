@@ -314,9 +314,9 @@ WriteInput = {
     "links"?:  list[str] = [],              # Explicit slug list (LinkManager infers the rest)
     "session_id"?: str,                      # Required for type="episode"
     "transcript_ref"?: str,                 # Path to transcript file (episode nodes only)
-    "expires_at"?: str | None = None,       # ISO8601 or null
+    "stale_after"?: str | None = None,      # ISO8601 or null (advisory)
     "valid_from"?: str | None = None,        # ISO8601 or null
-    "valid_to"?: str | None = None,          # ISO8601 or null
+    "valid_until"?: str | None = None,       # ISO8601 or null
 }
 ```
 
@@ -454,7 +454,7 @@ Ready for direct injection into an LLM prompt:
 === memex MEMORY ===
 [Search: "<query>"]
 ---
-1. <title> (<node_type>) | importance: <importance> | updated: <updated>
+1. <title> (<node_type>) | importance: <importance> | updated: <updated_at>
    File: <file_path>
    <snippet>
    Tags: <tags>
@@ -528,24 +528,33 @@ rebuild refuse the ambiguity.
 
 ```markdown
 ---
-id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
-type: "entity"          # entity | preference | procedure | summary | episode
+okf_version: "0.2"       # OKF v0.2 concept; the fields below follow its order
+type: "entity"           # entity | preference | procedure | summary | episode
 title: "Ruff linter"
+description: "When choosing or configuring the Python linter."
+resource: null           # Canonical URI of the underlying asset, or null
 tags: ["tool", "linter", "python"]
+timestamp: "2026-09-15T12:00:00Z"   # Refreshed on every write
+valid_from: "2026-09-15T10:00:00Z"  # ISO8601 or null
+valid_until: null        # ISO8601 or null; recall hides the page from here on
+stale_after: null        # Advisory only; never hides the page
+updated_at: "2026-09-15T12:00:00Z"  # Moves only when the body changes
+parent: null             # Slug of the hierarchical parent, or null
+supersedes: []           # Slugs this page replaces
+implements: []           # Slugs this page realizes
+depends_on: []           # Slugs this page depends on
+links: [{target: "python-3-11", rel: "relates-to"}]   # Typed OKF relations
+id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+created: "2026-09-15T10:00:00Z"   # Set once, never rewritten
 importance: 0.8
-created: "2026-09-15T10:00:00Z"
-updated: "2026-09-15T12:00:00Z"
 access_count: 7
 last_access: "2026-09-15T14:30:00Z"
-expires_at: null         # ISO8601 or null
-valid_from: "2026-09-15T10:00:00Z"
-valid_to: null           # ISO8601 or null
-transcript_ref: null     # Path relative to ~/.memex/ (only for episode nodes)
+content_hash: "sha256:abc123..."  # SHA-256 of body text (for change detection)
+status: "active"         # active | pending | superseded | archived
 scope: "global"          # global | project
 project_id: null          # opaque project identity for project pages
 project_label: null       # display-only project name for project pages
-links: ["python-3-11", "project-tooling"]   # Outgoing [[slug]] references
-content_hash: "sha256:abc123..."  # SHA-256 of body text (for change detection)
+transcript_ref: null     # Path relative to ~/.memex/ (only for episode nodes)
 ---
 # Ruff linter
 
@@ -603,13 +612,14 @@ CREATE TABLE IF NOT EXISTS wiki_index (
     node_type     TEXT NOT NULL,          -- entity | preference | procedure | summary | episode
     importance    REAL NOT NULL DEFAULT 0.5,
     tags          TEXT NOT NULL DEFAULT '[]',   -- JSON array
-    created       TEXT NOT NULL,          -- ISO8601
-    updated       TEXT NOT NULL,          -- ISO8601
+    created       TEXT NOT NULL,          -- ISO8601, set once
+    timestamp     TEXT NOT NULL,          -- ISO8601, every write
+    updated_at    TEXT NOT NULL,          -- ISO8601, body changes only
     access_count  INTEGER NOT NULL DEFAULT 0,
     last_access   TEXT,                    -- ISO8601 or null
-    expires_at     TEXT,                    -- ISO8601 or null
+    stale_after    TEXT,                    -- ISO8601 or null (advisory)
     valid_from     TEXT,                    -- ISO8601 or null
-    valid_to       TEXT,                    -- ISO8601 or null
+    valid_until    TEXT,                    -- ISO8601 or null
     content_hash   TEXT NOT NULL,          -- SHA-256 of body text
     transcript_ref TEXT                     -- Relative path to transcript (episode nodes only)
 );
@@ -821,7 +831,8 @@ class RecallHit:
     snippet_source: Literal["body", "title"]
     tags: list[str]
     created: str
-    updated: str
+    timestamp: str
+    updated_at: str
     last_access: str | None
     transcript_ref: str | None
     links: list[str]
@@ -1275,9 +1286,9 @@ def write(
 | `node.links` | `list[str]` | No | `[]` | Explicit outgoing link slugs |
 | `node.session_id` | `str` | For episode | — | Session ID for episode nodes |
 | `node.transcript_ref` | `str` | No | `None` | Path to transcript file |
-| `node.expires_at` | `str` | No | `None` | ISO8601 TTL |
+| `node.stale_after` | `str` | No | `None` | ISO8601 advisory staleness |
 | `node.valid_from` | `str` | No | `None` | ISO8601 temporal validity start |
-| `node.valid_to` | `str` | No | `None` | ISO8601 temporal validity end |
+| `node.valid_until` | `str` | No | `None` | ISO8601 temporal validity end |
 
 **Returns:** The full `WikiNode` including assigned `id`, `created`, `updated`,
 `slug`, `file_path`, and auto-computed fields (`content_hash`, parsed `links`).
@@ -1321,7 +1332,7 @@ def recall(
 | `node_type` | `str` | No | `None` | Filter by node type |
 | `time_range` | `tuple[str, str]` | No | `None` | ISO8601 range `(from, to)` |
 | `tags` | `list[str]` | No | `None` | Filter by tags (AND) |
-| `include_expired` | `bool` | No | `False` | Include nodes past `expires_at` |
+| `include_expired` | `bool` | No | `False` | Include nodes outside their validity window |
 
 **Returns:** `RecallResult` with hits, scores, snippets, file paths, and metadata.
 
@@ -1376,7 +1387,7 @@ def forget(
     slug: str,
     memex: memexFacade,
     mode: Literal["hard", "soft", "decay"] = "hard",
-    valid_to: str | None = None,
+    valid_until: str | None = None,
 ) -> ForgetResult:
 ```
 
@@ -1384,8 +1395,8 @@ def forget(
 | Name | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `slug` | `str` | Yes | — | Wiki page slug to forget |
-| `mode` | `str` | No | `"hard"` | `"hard"` (delete file), `"soft"` (set `valid_to`), `"decay"` (set `expires_at`) |
-| `valid_to` | `str` | No | `None` | ISO8601 timestamp for soft/decay modes |
+| `mode` | `str` | No | `"hard"` | `"hard"` (delete file), `"soft"` (end validity now), `"decay"` (end validity one half-life out) |
+| `valid_until` | `str` | No | `None` | ISO8601 timestamp for soft/decay modes |
 
 **Returns:**
 
@@ -1401,8 +1412,8 @@ ForgetResult = {
 **Side effects:**
 - `hard`: Deletes the selected scoped page under `~/.memex/docs/`; removes its
   index row and namespace-owned outgoing links.
-- `soft`: Sets `valid_to` in front matter; updates `updated` timestamp; upserts index.
-- `decay`: Sets `expires_at` in front matter; updates `updated` timestamp; upserts index.
+- `soft`: Sets `valid_until` to now in front matter; upserts index.
+- `decay`: Sets `valid_until` one configured half-life out; upserts index.
 
 **Error behavior:**
 - `FileNotFoundError` if slug does not exist.
@@ -1749,7 +1760,7 @@ The following 21 tests must all pass before claiming build completeness.
 | 2 | `test_wiki_slug_derivation` | Write nodes with titles that need slug normalization | Slugs are kebab-case, truncated at 64 chars, collision-resolved |
 | 3 | `test_wiki_list_filter_by_type` | List nodes filtered by type | Only nodes of requested type returned |
 | 4 | `test_wiki_delete` | Write then delete a node | File removed from filesystem; removed from index |
-| 5 | `test_wiki_front_matter_roundtrip` | Write node with all optional fields | All fields (importance, tags, expires_at, valid_from/to) roundtrip correctly |
+| 5 | `test_wiki_front_matter_roundtrip` | Write node with all optional fields | All fields (importance, tags, stale_after, valid_from/until, typed links) roundtrip correctly |
 | 6 | `test_wiki_link_parsing` | Write body with `[[wiki-link]]` links | LinkManager parses correct slugs; stored in `links` array |
 | 7 | `test_index_build_and_query` | Build index from list of nodes; query by term | BM25 returns results in relevance order; snippet non-empty |
 | 8 | `test_index_rebuild_from_wiki` | Write 5 nodes; delete index; call rebuild | All 5 nodes re-indexed; `last_index_rebuild` updated |
@@ -1758,8 +1769,8 @@ The following 21 tests must all pass before claiming build completeness.
 | 11 | `test_recall_filters` | Recall with `node_type`, `time_range`, `tags` filters | Only matching nodes returned |
 | 12 | `test_recall_snippet_source` | Recall where query matches title (not body) | `snippet_source = "title"` |
 | 13 | `test_forget_hard` | `forget(slug, mode="hard")` | File deleted; index row removed; wiki_links removed |
-| 14 | `test_forget_soft` | `forget(slug, mode="soft", valid_to="2026-09-20T00:00:00Z")` | `valid_to` set in front matter; file still present; node excluded from recall if `include_expired=False` |
-| 15 | `test_forget_decay` | `forget(slug, mode="decay")` | `expires_at` set in front matter; node naturally excluded after expiry |
+| 14 | `test_forget_soft` | `forget(slug, mode="soft", valid_until="2026-09-20T00:00:00Z")` | `valid_until` set in front matter; file still present; node excluded from recall if `include_expired=False` |
+| 15 | `test_forget_decay` | `forget(slug, mode="decay")` | `valid_until` set one half-life out; node naturally excluded after expiry |
 | 16 | **`test_transcript_ingest_and_link`** | Ingest a transcript; check episode node and transcript files | `.jsonl` + `.meta.json` written; episode node created with `transcript_ref`; `turn_count` correct |
 | 17 | **`test_transcript_provenance_trace`** | Write a fact node linked to an episode; call `get_provenance` | Returns the correct transcript file path; `confidence` = "inferred" |
 | 18 | **`test_transcript_list_sessions`** | Ingest 3 transcripts; call `list_sessions` | Returns all 3 sessions with correct metadata |

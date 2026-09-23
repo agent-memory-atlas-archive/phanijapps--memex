@@ -14,6 +14,7 @@ from memex.domain.models import (
     NON_EPISODE_TYPES,
     ConsolidateInput,
     ConsolidationReport,
+    SemanticLink,
     WikiNode,
     WriteInput,
 )
@@ -62,7 +63,7 @@ Return a JSON array of node objects. Each object:
   "body": "2-5 sentence description. May include [[wiki-link]] references.",
   "tags": ["tag1", "tag2"],
   "importance": 0.0-1.0,
-  "links": ["existing-node-slug"]
+  "links": ["existing-node-slug", "other-node-slug:depends-on"]
 }}
 
 ## EXISTING NODES IN THE KNOWLEDGE BASE
@@ -219,7 +220,7 @@ class WikiConsolidator:
             id="",
             tags=candidate.tags,
             importance=candidate.importance,
-            links=candidate.links,
+            links=[SemanticLink.parse(link) for link in candidate.links],
             status="pending" if self._approval == "manual" else "active",
             source="consolidation",
             harness=self._config.llm.provider,

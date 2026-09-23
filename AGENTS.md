@@ -18,6 +18,7 @@ Architecture and contracts: [`docs/gitpages/spec.md`](docs/gitpages/spec.md)
 deviations). Enhancement roadmap:
 [`docs/v1_enhance.md`](docs/v1_enhance.md).
 
+
 ## Rule lookups
 
 <!-- readability:exclude:start -->
@@ -88,7 +89,7 @@ real `~/.memex` (harness adapters capture live sessions into it).
 - Transcripts are captured automatically by the installed harness hooks;
   never ingest sessions manually unless recovering a missed capture.
 
-## Build and test commands
+## Setup & commands
 
 ```bash
 uv sync --all-groups            # install (add --locked in CI)

@@ -35,7 +35,7 @@ def test_wiki_write_and_read(data_dir: Path) -> None:
     assert read_back.tags == ["tool", "linter"]
     assert read_back.importance == 0.5
     assert read_back.created
-    assert read_back.updated
+    assert read_back.updated_at
     assert stored.file_path is not None
     assert Path(stored.file_path).exists()
 
@@ -79,9 +79,9 @@ def test_wiki_front_matter_roundtrip(data_dir: Path) -> None:
     store = WikiStore(data_dir)
     node = _node(
         importance=0.9,
-        expires_at="2027-01-01T00:00:00Z",
+        stale_after="2027-01-01T00:00:00Z",
         valid_from="2026-09-15T10:00:00Z",
-        valid_to="2026-12-31T23:59:59Z",
+        valid_until="2026-12-31T23:59:59Z",
         transcript_ref=None,
         links=["python-3-12"],
         access_count=3,
@@ -92,10 +92,12 @@ def test_wiki_front_matter_roundtrip(data_dir: Path) -> None:
 
     assert read_back is not None
     assert read_back.importance == 0.9
-    assert read_back.expires_at == "2027-01-01T00:00:00Z"
+    assert read_back.stale_after == "2027-01-01T00:00:00Z"
     assert read_back.valid_from == "2026-09-15T10:00:00Z"
-    assert read_back.valid_to == "2026-12-31T23:59:59Z"
-    assert read_back.links == ["python-3-12"]
+    assert read_back.valid_until == "2026-12-31T23:59:59Z"
+    assert [link.to_mapping() for link in read_back.links] == [
+        {"target": "python-3-12", "rel": "relates-to"}
+    ]
     assert read_back.access_count == 3
     assert read_back.last_access == "2026-09-15T12:00:00Z"
     assert read_back.content_hash.startswith("sha256:")

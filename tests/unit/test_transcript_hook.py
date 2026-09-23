@@ -97,3 +97,21 @@ def test_empty_turns_session(hook: TranscriptHook) -> None:
     summary = hook.list_sessions()[0]
     assert summary.started_at is None
     assert summary.ended_at is None
+
+
+def test_list_sessions_reports_token_usage(hook: TranscriptHook) -> None:
+    usage = {"input_tokens": 12, "output_tokens": 34, "cache_read_input_tokens": 56}
+    hook.ingest(
+        IngestTranscriptInput(
+            session_id="sess-tokens",
+            turns=[TurnStreamEntry(role="user", content="hi", turn=1)],
+            token_usage=usage,
+        )
+    )
+    summary = hook.list_sessions()[0]
+    assert summary.token_usage == usage
+
+
+def test_list_sessions_token_usage_absent_stays_none(hook: TranscriptHook) -> None:
+    hook.ingest(_input("sess-no-tokens"))
+    assert hook.list_sessions()[0].token_usage is None

@@ -25,8 +25,8 @@ def _write(
     body: str,
     node_type: str = "entity",
     tags: list[str] | None = None,
-    expires_at: str | None = None,
-    valid_to: str | None = None,
+    stale_after: str | None = None,
+    valid_until: str | None = None,
     status: str = "active",
 ) -> str:
     node = memex.write(
@@ -35,8 +35,8 @@ def _write(
             title=title,
             body=body,
             tags=tags or [],
-            expires_at=expires_at,
-            valid_to=valid_to,
+            stale_after=stale_after,
+            valid_until=valid_until,
         )
     )
     if status != "active":
@@ -137,7 +137,7 @@ def test_selected_ranker_filter_matrix_matches_eligibility(data_dir: Path) -> No
         memex,
         title="Atlas expired",
         body="atlas risk integration",
-        expires_at="2000-01-01T00:00:00Z",
+        valid_until="2000-01-01T00:00:00Z",
     )
     _write(
         memex,

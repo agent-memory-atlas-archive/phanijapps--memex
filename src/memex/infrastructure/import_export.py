@@ -8,7 +8,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from memex.domain.errors import IndexManagerError, WikiStoreError
-from memex.domain.models import NODE_TYPES, WikiNode, utc_now_iso
+from memex.domain.models import NODE_TYPES, SemanticLink, WikiNode, utc_now_iso
 from memex.domain.reserved import RESERVED_SLUGS
 from memex.domain.scrub import scrub
 from memex.infrastructure.index_manager import IndexManager
@@ -94,12 +94,22 @@ class ImportExport:
             "type": node.type,
             "title": node.title,
             "description": node.description,
+            "resource": node.resource,
             "tags": node.tags,
-            "importance": node.importance,
+            "timestamp": node.timestamp,
+            "valid_from": node.valid_from,
+            "valid_until": node.valid_until,
+            "stale_after": node.stale_after,
+            "updated_at": node.updated_at,
+            "parent": node.parent,
+            "supersedes": node.supersedes,
+            "implements": node.implements,
+            "depends_on": node.depends_on,
+            "links": [link.to_mapping() for link in node.links],
             "created": node.created,
-            "updated": node.updated,
+            "importance": node.importance,
+            "status": node.status,
             "body": node.body,
-            "links": node.links,
             "transcript_ref": node.transcript_ref,
             "scope": node.scope,
             "project_id": node.project_id,
@@ -145,10 +155,19 @@ class ImportExport:
             slug=str(slug) if isinstance(slug, str) and slug else "",
             tags=self._str_list(item, "tags"),
             importance=float(importance),
+            resource=self._str(item, "resource") or None,
             created=self._str(item, "created") or utc_now_iso(),
-            updated=self._str(item, "updated") or utc_now_iso(),
+            timestamp=self._str(item, "timestamp") or utc_now_iso(),
+            updated_at=self._str(item, "updated_at") or utc_now_iso(),
+            valid_from=self._str(item, "valid_from") or None,
+            valid_until=self._str(item, "valid_until") or None,
+            stale_after=self._str(item, "stale_after") or None,
+            parent=self._str(item, "parent") or None,
+            supersedes=self._str_list(item, "supersedes"),
+            implements=self._str_list(item, "implements"),
+            depends_on=self._str_list(item, "depends_on"),
             transcript_ref=transcript_ref if isinstance(transcript_ref, str) else None,
-            links=self._str_list(item, "links"),
+            links=self._link_list(item),
             scope=str(scope),
             project_id=project_id,
             project_label=project_label,
@@ -158,6 +177,14 @@ class ImportExport:
     def _str(item: dict[str, object], key: str) -> str:
         value = item.get(key)
         return value if isinstance(value, str) else ""
+
+    @staticmethod
+    def _link_list(item: dict[str, object]) -> list[SemanticLink]:
+        """Typed links from an export entry; each entry is validated."""
+        value = item.get("links", [])
+        if not isinstance(value, list):
+            raise ValueError("node field 'links' must be a list")
+        return [SemanticLink.parse(entry) for entry in value]
 
     @staticmethod
     def _str_list(item: dict[str, object], key: str) -> list[str]:

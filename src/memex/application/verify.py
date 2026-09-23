@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from memex.application.memory import Memex
+from memex.domain.models import WikiNode
 from memex.infrastructure.navigation import NavigationChange
 from memex.infrastructure.wiki_store import hash_body
 
@@ -70,6 +71,8 @@ def verify(
         )
     checks.append(_check("links-resolve", not broken, f"{len(broken)} broken links"))
 
+    checks.extend(okf_checks(nodes))
+
     navigation_changes = memex.navigation.diagnose(nodes)
     navigation_defects = [
         change for change in navigation_changes if change.category in {"missing", "stale", "orphan"}
@@ -90,7 +93,7 @@ def verify(
             if row["last_access"] and str(row["last_access"]) >= since:
                 recall_evidence = True
                 break
-        write_evidence = any(node.updated >= since for node in nodes)
+        write_evidence = any(node.updated_at >= since for node in nodes)
         if not recall_evidence:
             warnings.append(f"no recall activity recorded since {since}")
         if not write_evidence:
@@ -108,6 +111,78 @@ def verify(
         write_evidence=write_evidence,
         warnings=warnings,
     )
+
+
+def _slug_detail(label: str, slugs: list[str]) -> str:
+    """Bounded diagnostic: a count plus at most three page slugs, never content."""
+    if not slugs:
+        return f"0 {label}"
+    shown = ", ".join(sorted(slugs)[:3])
+    return f"{len(slugs)} {label}: {shown}"
+
+
+def okf_checks(nodes: list[WikiNode]) -> list[dict[str, object]]:
+    """OKF v0.2 graph and temporal conformance, as the OKF linter defines it.
+
+    Mirrors the reference linter's v0.2 rules: a ``parent`` must resolve and
+    must not cycle, relation targets should resolve, ``valid_from`` must not
+    follow ``valid_until``, and ``stale_after`` belongs inside a closed
+    validity window.
+    """
+    known = {node.slug for node in nodes}
+    by_slug = {node.slug: node for node in nodes}
+
+    unresolved_parents = [node.slug for node in nodes if node.parent and node.parent not in known]
+    cyclic: list[str] = []
+    for node in nodes:
+        seen = {node.slug}
+        current = by_slug.get(node.parent or "")
+        while current is not None:
+            if current.slug in seen:
+                cyclic.append(node.slug)
+                break
+            seen.add(current.slug)
+            current = by_slug.get(current.parent or "")
+
+    unresolved_relations = [
+        node.slug for node in nodes if any(target not in known for target, _rel in node.relations())
+    ]
+    inverted = [
+        node.slug
+        for node in nodes
+        if node.valid_from and node.valid_until and node.valid_from > node.valid_until
+    ]
+    out_of_window = [
+        node.slug
+        for node in nodes
+        if node.stale_after
+        and node.valid_from
+        and node.valid_until
+        and not (node.valid_from <= node.stale_after <= node.valid_until)
+    ]
+    return [
+        _check(
+            "okf-parent-resolves",
+            not unresolved_parents,
+            _slug_detail("unresolved parents", unresolved_parents),
+        ),
+        _check("okf-parent-acyclic", not cyclic, _slug_detail("parent cycles", cyclic)),
+        _check(
+            "okf-relations-resolve",
+            not unresolved_relations,
+            _slug_detail("unresolved relation targets", unresolved_relations),
+        ),
+        _check(
+            "okf-validity-ordered",
+            not inverted,
+            _slug_detail("pages with valid_from after valid_until", inverted),
+        ),
+        _check(
+            "okf-stale-in-window",
+            not out_of_window,
+            _slug_detail("pages with stale_after outside the validity window", out_of_window),
+        ),
+    ]
 
 
 def _navigation_detail(changes: list[NavigationChange]) -> str:

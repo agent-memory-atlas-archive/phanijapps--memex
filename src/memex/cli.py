@@ -62,11 +62,22 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     write.add_argument("--tags", default="", help="Comma-separated tags")
     write.add_argument("--importance", type=float, default=0.5)
-    write.add_argument("--links", default="", help="Comma-separated slugs")
+    write.add_argument(
+        "--link",
+        action="append",
+        default=[],
+        metavar="TARGET[:REL]",
+        help="Typed OKF link; repeatable. REL defaults to 'relates-to'",
+    )
+    write.add_argument("--resource", default=None, help="Canonical URI of the underlying asset")
+    write.add_argument("--parent", default=None, help="Slug of the hierarchical parent page")
+    write.add_argument("--supersedes", default="", help="Comma-separated slugs this page replaces")
+    write.add_argument("--implements", default="", help="Comma-separated slugs this page realizes")
+    write.add_argument("--depends-on", default="", help="Comma-separated slugs this page needs")
     write.add_argument("--session-id", default=None)
-    write.add_argument("--expires-at", default=None)
+    write.add_argument("--stale-after", default=None)
     write.add_argument("--valid-from", default=None)
-    write.add_argument("--valid-to", default=None)
+    write.add_argument("--valid-until", default=None)
     write.add_argument("--scope", choices=["global", "project"], default="global")
     write.add_argument("--project-id", default=None)
     write.add_argument("--project-label", default=None)
@@ -95,7 +106,7 @@ def _build_parser() -> argparse.ArgumentParser:
     forget = sub.add_parser("forget", help=summary("memex_forget"))
     forget.add_argument("slug")
     forget.add_argument("--mode", choices=["hard", "soft", "decay", "archive"], default="hard")
-    forget.add_argument("--valid-to", default=None)
+    forget.add_argument("--valid-until", default=None)
 
     ingest = sub.add_parser("ingest-transcript", help=summary("memex_ingest_transcript"))
     ingest.add_argument("--session-id", required=True)
@@ -129,6 +140,8 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     merge_cmd.add_argument("target")
     merge_cmd.add_argument("source")
+
+    sub.add_parser("sessions", help="List captured sessions with harness token usage")
 
     sub.add_parser("info", help="Show data directory and index statistics")
 
@@ -614,11 +627,16 @@ def _run(args: argparse.Namespace) -> int:
                     description=args.description or "",
                     tags=_csv(args.tags),
                     importance=args.importance,
-                    links=_csv(args.links),
+                    resource=args.resource,
+                    links=list(args.link),
+                    parent=args.parent,
+                    supersedes=_csv(args.supersedes),
+                    implements=_csv(args.implements),
+                    depends_on=_csv(args.depends_on),
                     session_id=args.session_id,
-                    expires_at=args.expires_at,
+                    stale_after=args.stale_after,
                     valid_from=args.valid_from,
-                    valid_to=args.valid_to,
+                    valid_until=args.valid_until,
                     scope=args.scope,
                     project_id=project_id,
                     project_label=project_label,
@@ -667,7 +685,7 @@ def _run(args: argparse.Namespace) -> int:
                 memex.consolidate(ConsolidateInput(mode=args.mode, max_episodes=args.max_episodes))
             )
         elif args.command == "forget":
-            _emit(memex.forget(args.slug, mode=args.mode, valid_to=args.valid_to))
+            _emit(memex.forget(args.slug, mode=args.mode, valid_until=args.valid_until))
         elif args.command == "ingest-transcript":
             _emit(
                 memex.ingest_transcript(
@@ -704,6 +722,8 @@ def _run(args: argparse.Namespace) -> int:
             return 0 if report.ok else 1
         elif args.command == "status":
             _emit(memex.status())
+        elif args.command == "sessions":
+            _emit(to_jsonable(memex.list_sessions()))
         elif args.command == "info":
             _emit(_info(memex))
         elif args.command == "watch":

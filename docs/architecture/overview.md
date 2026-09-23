@@ -145,6 +145,14 @@ hook.
 
 ### Generated directory navigation
 
+Pages themselves are OKF v0.2 concepts (ADR-0005): front matter declares
+`okf_version: "0.2"`, carries the OKF field set first in the reference
+implementation's order, and then the Memex fields OKF has no equivalent for,
+which an OKF reader preserves verbatim. Relations are one graph — typed
+front-matter `links`, the `parent`/`supersedes`/`implements`/`depends_on`
+fields, and body `[[slug]]` references all become `(source, target, rel)` rows
+in `wiki_links`.
+
 `NavigationGenerator` derives one deterministic `index.md` per directory that
 contains pages: the memory-root index declares `okf_version: "0.2"` and
 descendants are body-only listings of titles, descriptions, and child links.
@@ -160,7 +168,9 @@ path and verification reports it. Opening a store never writes navigation.
 ### Verification and maintenance
 
 `memex verify` checks page parsing, index freshness (including the mirrored
-description), links, optional recall/write activity evidence, and that
+description), links, OKF graph and temporal conformance (parent resolution and
+acyclicity, relation targets, validity ordering, advisory staleness inside the
+window), optional recall/write activity evidence, and that
 generated navigation matches the page tree. `rebuild-index` reconstructs
 derived SQLite state and regenerates directory indexes. Backup and restore
 validate archive paths and links; restore preserves the previous store in a
