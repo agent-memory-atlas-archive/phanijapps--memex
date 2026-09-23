@@ -181,7 +181,7 @@ class WikiStore:
         path = self._find_existing_path(slug, node_type, scope=scope, project_id=project_id)
         if path is None:
             return None
-        return self._read_path(path)
+        return self.read_path(path)
 
     def write(self, node: WikiNode) -> WikiNode:
         """Persist a node and return it as stored.
@@ -207,7 +207,7 @@ class WikiStore:
             project_id=node.project_id,
             project_locator=node.project_locator,
         )
-        existing = self._read_path(existing_path) if existing_path.exists() else None
+        existing = self.read_path(existing_path) if existing_path.exists() else None
 
         stored = node
         stored.slug = slug
@@ -259,7 +259,7 @@ class WikiStore:
                     continue  # generated index.md / optional OKF log.md
                 try:
                     self._reject_unsafe_page_path(path)
-                    nodes.append(self._read_path(path))
+                    nodes.append(self.read_path(path))
                 except WikiStoreError as exc:
                     if errors is None:
                         raise
@@ -284,7 +284,7 @@ class WikiStore:
                 continue  # generated index.md / optional OKF log.md
             try:
                 self._reject_unsafe_page_path(path)
-                nodes.append(self._read_path(path))
+                nodes.append(self.read_path(path))
             except WikiStoreError as exc:
                 if errors is None:
                     raise
@@ -423,7 +423,7 @@ class WikiStore:
                 continue
             if is_structural(path):
                 continue  # generated navigation is not a memory page
-            node = self._read_path(path)
+            node = self.read_path(path)
             if node_type is not None and node.type != node_type:
                 continue
             if scope is not None and node.scope != scope:
@@ -444,7 +444,7 @@ class WikiStore:
 
     def _reject_duplicate_project_keys(self, project_id: str, roots: PathList) -> None:
         nodes = [
-            self._read_path(path)
+            self.read_path(path)
             for root in roots
             for path in sorted(root.rglob("*.md"))
             if path.parent.name in TYPE_DIRS.values() and not is_structural(path)
@@ -473,7 +473,7 @@ class WikiStore:
         for path in sorted(project_dir.rglob("*.md")):
             if is_structural(path):
                 continue
-            node = self._read_path(path)
+            node = self.read_path(path)
             if node.scope == "project" and node.project_id:
                 project_ids.add(node.project_id)
         if len(project_ids) > 1:
@@ -510,7 +510,8 @@ class WikiStore:
             return locator
         raise WikiStoreError(f"invalid project locator: {locator!r}")
 
-    def _read_path(self, path: Path) -> WikiNode:
+    def read_path(self, path: Path) -> WikiNode:
+        """Parse the page at one exact path inside the docs tree."""
         self._reject_unsafe_page_path(path)
         try:
             text = path.read_text(encoding="utf-8")

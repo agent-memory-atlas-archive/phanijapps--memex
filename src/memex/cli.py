@@ -97,6 +97,12 @@ def _build_parser() -> argparse.ArgumentParser:
     recall.add_argument("--max-tokens", type=int, default=None)
     recall.add_argument("--scope", choices=["global", "project"], default=None)
     recall.add_argument("--project-id", default=None)
+    recall.add_argument(
+        "--engine",
+        choices=["fts5", "navigation"],
+        default="fts5",
+        help="fts5 searches the index; navigation ranks generated index.md rows",
+    )
 
     consolidate = sub.add_parser("consolidate", help=summary("memex_consolidate"))
     consolidate.add_argument("--mode", choices=["full", "dry-run"], default="full")
@@ -673,6 +679,7 @@ def _run(args: argparse.Namespace) -> int:
                         max_tokens=args.max_tokens,
                         scope=args.scope or "global",
                         project_id=project_id,
+                        engine=args.engine,
                     )
                 )
         elif args.command == "consolidate":

@@ -16,7 +16,7 @@ import pytest
 
 from memex.application.memory import Memex
 from memex.application.verify import verify
-from memex.domain.models import WriteInput
+from memex.domain.models import WikiNode, WriteInput
 from memex.infrastructure.config import ConfigLoader
 from memex.infrastructure.store.navigation import (
     NavigationError,
@@ -522,22 +522,23 @@ def test_navigation_refresh_failure_never_fails_the_mutation(data_dir: Path) -> 
 
     from memex.infrastructure.store import navigation as nav_module
 
-    original = nav_module.NavigationGenerator.refresh
+    original = nav_module.NavigationGenerator.refresh_page
 
     def exploding(
         self: NavigationGenerator,
-        changed_dir: Path,
+        page_path: Path,
+        node: object,
         scan_dir: object,
     ) -> NavigationReport:
         raise OSError("disk exploded /home/secret-user")
 
-    nav_module.NavigationGenerator.refresh = exploding  # type: ignore[method-assign]
+    nav_module.NavigationGenerator.refresh_page = exploding  # type: ignore[method-assign]
     try:
         node = memex.write(WriteInput(type="entity", title="Still works", body="b"))
         assert node.slug == "still-works"
         assert memex.wiki_store.read("still-works") is not None
     finally:
-        nav_module.NavigationGenerator.refresh = original  # type: ignore[method-assign]
+        nav_module.NavigationGenerator.refresh_page = original  # type: ignore[method-assign]
 
     verdict = verify(memex)
     nav = next(c for c in verdict.checks if c["check"] == "navigation-consistent")
@@ -775,7 +776,270 @@ def test_refresh_partial_log_is_bounded_and_excludes_routine_removals(
         encoding="utf-8",
     )
     with caplog.at_level(logging.WARNING, logger="memex"):
-        memex._refresh_navigation(str(entities / "index.md"))
+        memex._refresh_navigation(str(entities / "doomed-page.md"))
     partial = [r for r in caplog.records if "status=partial" in r.getMessage()]
     assert partial and "collision=1" in partial[0].getMessage()
     assert "Legacy" not in partial[0].getMessage()  # bounded: no memory content
+
+
+# --- Incremental single-page refresh (incremental-navigation spec) ---
+
+
+def _oracle_clean(memex: Memex) -> None:
+    """Every index.md on disk equals the full render; none is missing or orphaned."""
+    errors: list[str] = []
+    nodes = memex.wiki_store.scan_all(errors)
+    assert errors == []
+    assert memex.navigation.diagnose(nodes) == []
+
+
+def _update(
+    memex: Memex, slug: str, *, title: str | None = None, description: str | None = None
+) -> None:
+    node = memex.wiki_store.read(slug)
+    assert node is not None
+    if title is not None:
+        node.title = title
+    if description is not None:
+        node.description = description
+    stored = memex.wiki_store.write(node)
+    memex._refresh_navigation(stored.file_path)
+
+
+def _read_spy(monkeypatch: pytest.MonkeyPatch, docs: Path) -> list[Path]:
+    """Record every ``*.md`` under ``docs`` opened through ``Path.read_text``."""
+    opened: list[Path] = []
+    original = Path.read_text
+
+    def spy(self: Path, *args: object, **kwargs: object) -> str:
+        if self.suffix == ".md" and self.is_relative_to(docs):
+            opened.append(self)
+        return original(self, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(Path, "read_text", spy)
+    return opened
+
+
+def test_randomized_mutation_sequence_matches_full_render_after_every_step(
+    data_dir: Path,
+) -> None:
+    import random
+
+    memex = _memex(data_dir)
+    rng = random.Random(20260923)  # noqa: S311 - reproducible sequence, not security
+    live: dict[str, str] = {}  # slug -> type
+    words = ["alpha", "beta", "gamma", "delta", "kappa", "omega", "Evil [x](y)", "under_score"]
+    for step in range(120):
+        roll = rng.random()
+        if live and roll < 0.25:
+            slug = rng.choice(sorted(live))
+            memex.forget(slug, mode="hard")
+            del live[slug]
+        elif live and roll < 0.55:
+            slug = rng.choice(sorted(live))
+            _update(
+                memex,
+                slug,
+                title=f"{rng.choice(words)} {step}",
+                description=rng.choice(["", f"{rng.choice(words)} desc {step}"]),
+            )
+        else:
+            node_type = rng.choice(["entity", "preference"])
+            node = memex.write(
+                WriteInput(
+                    type=node_type,
+                    title=f"{rng.choice(words)} {rng.randint(0, 99)}",
+                    body="b",
+                    description=rng.choice(["", f"{rng.choice(words)} signpost"]),
+                )
+            )
+            live[node.slug] = node_type
+        _oracle_clean(memex)
+    assert live  # the sequence exercised both directories and left pages behind
+    assert {*live.values()} == {"entity", "preference"}
+
+
+def test_single_page_refresh_opens_a_constant_number_of_files(
+    data_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    memex = _memex(data_dir)
+    docs = memex.wiki_store.wiki_dir
+    entities = docs / "global" / "entities"
+
+    def opened_by_one_write(title: str) -> set[Path]:
+        opened = _read_spy(monkeypatch, docs)
+        node = memex.write(WriteInput(type="entity", title=title, body="b", description="d"))
+        monkeypatch.undo()
+        assert node.file_path
+        return {*opened}
+
+    for i in range(4):
+        _write(memex, f"seed {i}")
+    small = opened_by_one_write("probe small")
+    for i in range(4, 200):
+        _write(memex, f"seed {i}")
+    large = opened_by_one_write("probe large")
+
+    assert len(small) == len(large) == 2
+    assert large == {entities / "probe-large.md", entities / "index.md"}
+    # Ancestors list child directories only; a sibling write never opens them.
+    assert (docs / "global" / "index.md") not in large
+    assert (docs / "index.md") not in large
+    _oracle_clean(memex)
+
+
+def test_single_page_refresh_never_scans_the_directory(data_dir: Path) -> None:
+    memex = _memex(data_dir)
+    _write(memex, "seed one")
+    calls: list[Path] = []
+    original = memex.wiki_store.scan_dir
+
+    def counting_scan_dir(directory: Path, errors: list[str] | None = None) -> list[WikiNode]:
+        calls.append(directory)
+        return original(directory, errors)
+
+    memex.wiki_store.scan_dir = counting_scan_dir  # type: ignore[method-assign]
+    slug = _write(memex, "seed two", description="two")
+    _update(memex, slug, title="seed two renamed")
+    memex.forget(slug, mode="hard")
+    assert calls == []
+    _oracle_clean(memex)
+
+
+def test_missing_index_falls_back_to_full_render(data_dir: Path) -> None:
+    memex = _memex(data_dir)
+    _write(memex, "first")
+    entities_index = memex.wiki_store.wiki_dir / "global" / "entities" / "index.md"
+    entities_index.unlink()
+    _write(memex, "second", description="two")
+    assert "[first](first.md)" in entities_index.read_text(encoding="utf-8")
+    _oracle_clean(memex)
+
+
+def test_foreign_structural_index_falls_back_to_full_render(data_dir: Path) -> None:
+    memex = _memex(data_dir)
+    _write(memex, "first")
+    entities_index = memex.wiki_store.wiki_dir / "global" / "entities" / "index.md"
+    entities_index.write_text("# hand written\n\n- [x](first.md)\n", encoding="utf-8")
+    _write(memex, "second")
+    assert entities_index.read_text(encoding="utf-8").startswith("# global/entities\n")
+    _oracle_clean(memex)
+
+
+def test_ambiguous_row_falls_back_to_full_render(data_dir: Path) -> None:
+    memex = _memex(data_dir)
+    _write(memex, "first")
+    entities_index = memex.wiki_store.wiki_dir / "global" / "entities" / "index.md"
+    entities_index.write_text(
+        "# global/entities\n\n## Entities\n- [first](first.md)\n\n"
+        "## Preferences\n- [first](first.md)\n",
+        encoding="utf-8",
+    )
+    _update(memex, "first", description="renamed")
+    text = entities_index.read_text(encoding="utf-8")
+    assert text.count("(first.md)") == 1
+    assert "## Preferences" not in text
+    _oracle_clean(memex)
+
+
+def test_delete_of_unlisted_page_falls_back_to_full_render(data_dir: Path) -> None:
+    memex = _memex(data_dir)
+    _write(memex, "first")
+    slug = _write(memex, "second")
+    entities_index = memex.wiki_store.wiki_dir / "global" / "entities" / "index.md"
+    entities_index.write_text(
+        "# global/entities\n\n## Entities\n- [first](first.md)\n", encoding="utf-8"
+    )
+    memex.forget(slug, mode="hard")
+    _oracle_clean(memex)
+
+
+def test_legacy_page_at_index_path_is_untouched_by_single_page_refresh(data_dir: Path) -> None:
+    from memex.domain.models import WikiNode
+
+    memex = _memex(data_dir)
+    _write(memex, "first")
+    entities = memex.wiki_store.wiki_dir / "global" / "entities"
+    legacy = memex.wiki_store.write(
+        WikiNode(
+            type="entity", title="Legacy", body="legacy", id="22222222-2222-2222-2222-222222222222"
+        )
+    )
+    legacy_bytes = Path(legacy.file_path or "").read_bytes()
+    (entities / "index.md").write_bytes(legacy_bytes)
+    Path(legacy.file_path or "").unlink()
+
+    report = memex.navigation.refresh_page(
+        entities / "first.md", memex.wiki_store.read("first"), memex.wiki_store.scan_dir
+    )
+    assert (entities / "index.md").read_bytes() == legacy_bytes
+    assert [c.path for c in report.by_category("collision")] == ["global/entities/index.md"]
+
+
+def test_deleting_last_page_of_one_type_dir_rewrites_only_the_first_populated_ancestor(
+    data_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    memex = _memex(data_dir)
+    _write(memex, "entity page")
+    pref = memex.write(WriteInput(type="preference", title="pref page", body="b"))
+    docs = memex.wiki_store.wiki_dir
+    opened = _read_spy(monkeypatch, docs)
+    memex.forget(pref.slug, mode="hard")
+    monkeypatch.undo()
+    assert not (docs / "global" / "preferences" / "index.md").exists()
+    assert (docs / "index.md") not in {*opened}
+    assert "[preferences/]" not in (docs / "global" / "index.md").read_text(encoding="utf-8")
+    _oracle_clean(memex)
+
+
+def test_verify_navigation_stays_consistent_through_incremental_refreshes(
+    data_dir: Path,
+) -> None:
+    memex = _memex(data_dir)
+    first = _write(memex, "first", description="one")
+    second = _write(memex, "second")
+    _update(memex, first, title="first renamed", description="")
+    memex.forget(second, mode="hard")
+    memex.write(WriteInput(type="procedure", title="steps", body="b", description="how"))
+    verdict = verify(memex)
+    nav = next(c for c in verdict.checks if c["check"] == "navigation-consistent")
+    assert nav["ok"] is True, nav["detail"]
+
+
+def test_rebuild_index_still_regenerates_every_index(data_dir: Path) -> None:
+    memex = _memex(data_dir)
+    _write(memex, "first", description="one")
+    docs = memex.wiki_store.wiki_dir
+    for index in docs.rglob("index.md"):
+        index.write_text("# wrong\n", encoding="utf-8")
+    _regenerate(memex)
+    _oracle_clean(memex)
+
+
+def test_orphan_index_falls_back_to_full_render(data_dir: Path) -> None:
+    """A bare heading with no rows means the directory is only now gaining pages."""
+    memex = _memex(data_dir)
+    docs = memex.wiki_store.wiki_dir
+    (docs / "global" / "entities" / "index.md").write_text("# global/entities\n", encoding="utf-8")
+    _write(memex, "first")
+    assert "[entities/](entities/index.md)" in (docs / "global" / "index.md").read_text(
+        encoding="utf-8"
+    )
+    _oracle_clean(memex)
+
+
+def test_unparsable_mutated_page_falls_back_to_full_render(data_dir: Path) -> None:
+    """A page the store cannot parse leaves no stale row: the chain render drops it."""
+    memex = _memex(data_dir)
+    _write(memex, "first")
+    slug = _write(memex, "second", description="two")
+    page = memex.wiki_store.wiki_dir / "global" / "entities" / f"{slug}.md"
+    page.write_text('---\ntype: "entity"\nbogus: 1\n---\nbody\n', encoding="utf-8")
+    memex._refresh_navigation(str(page))
+    index_text = (page.parent / "index.md").read_text(encoding="utf-8")
+    assert "(first.md)" in index_text
+    assert "(second.md)" not in index_text
+    errors: list[str] = []
+    nodes = memex.wiki_store.scan_all(errors)
+    assert len(errors) == 1
+    assert memex.navigation.diagnose(nodes) == []

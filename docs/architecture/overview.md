@@ -24,9 +24,9 @@ and rendered dashboard responses are derived or supporting state.
 | Area | Responsibility | Start here |
 | --- | --- | --- |
 | `src/memex/domain/` | Validated models, front matter, slugs, links, scrubbing, and adapter-neutral operation datatypes. No filesystem, database, network, or SDK calls. | `models.py`, `operations.py` |
-| `src/memex/application/` | The public `Memex` facade, orchestration, consolidation, context packing, verification, decay, and the LLM port. | `memory.py`, `ports.py` |
+| `src/memex/application/` | The public `Memex` facade, orchestration, consolidation, context packing, link-graph expansion, verification, decay, and the LLM port. | `memory.py`, `ports.py`, `graph_expansion.py` |
 | `src/memex/infrastructure/` | Cross-cutting runtime adapters no package claims: configuration, logging, the run log, workspace identity, and LLM clients. | `config.py`, `llm_clients.py` |
-| `src/memex/infrastructure/store/` | The Markdown tree that is the source of truth: page CRUD, generated navigation, watching, archive, and transfer. | `wiki_store.py`, `navigation.py` |
+| `src/memex/infrastructure/store/` | The Markdown tree that is the source of truth: page CRUD, generated navigation, navigation search, watching, archive, and transfer. | `wiki_store.py`, `navigation.py`, `navigation_search.py` |
 | `src/memex/infrastructure/search/` | The disposable SQLite index: FTS5 retrieval, index upkeep, and the link graph. | `bm25_retriever.py`, `index_manager.py` |
 | `src/memex/infrastructure/harness/` | Coding-agent integration: installers, harness-native transcript parsing, capture, and harness-assisted episode summaries. | `installer.py`, `transcript_hook.py` |
 | `src/memex/infrastructure/web/` | The read-only localhost dashboard: HTTP server, HTML components, and its assets. | `server.py`, `components.py` |
@@ -82,6 +82,18 @@ indexes refresh as a best-effort follow-up that never fails the write.
    Markdown pages.
 3. Hook injection applies a relevance floor, packs hits to a token budget, and
    emits a bounded context block. Explicit recall can still return weak hits.
+4. Link-graph expansion (`application/graph_expansion.py`, OKF
+   `read_concept`) appends pages linked from the packed hits. Given seed
+   `RecallHit`s it walks `wiki_links` breadth-first (level by level,
+   alphabetical slug within a level, each page once, seeds excluded),
+   resolving each target inside its source page's scope and project and
+   through `BM25Retriever.neighbours`, which applies recall's own visibility
+   rule so only pages recall would return are reachable. It returns `Expansion(entries, omitted)`;
+   `render_expansion` yields the short blocks plus the omitted-count marker.
+   Consumers are `context_injection.build_injection` (session-start hook) and
+   `task_recall.with_linked_pages` (called by `Memex.recall_task`). Direct hits
+   are packed first and never displaced; expansion only spends the remaining
+   token budget.
 
 Production recall uses the `semantic-and-fallback-fts5` ranker. It caps the
 safe-token query at 64 tokens and 1,024 UTF-8 bytes, then first runs a strict
@@ -98,6 +110,19 @@ statistics are loaded once after ranking, and ascending slug is the final
 tie-break. The ranker is local SQLite FTS5 only: no embeddings, network service,
 runtime `rgapi`, subprocess search, or new required dependency is on the recall
 path.
+
+**Navigation search** (`infrastructure/store/navigation_search.py`) is a
+second recall engine that reads the Markdown tree's own navigation instead of
+`mem.db`: it parses the page rows of every structural `index.md` (legacy pages
+at that name are skipped through `classify_reserved`), ranks them by weighted
+title/description term overlap using the FTS5 retriever's query boundary, and
+opens only the front-matter block of the candidates it returns to apply the
+shared visibility rules. `Memex.recall` selects the engine
+(`engine="fts5" | "navigation"`) and falls back to it when the index reports
+zero rows while navigation lists pages, so a missing or emptied `mem.db`
+degrades recall rather than silencing it. Trust boundary: index rows and front
+matter are untrusted data; links are validated lexically to sibling `slug.md`
+pages and bodies are never read.
 
 The task-evidence candidate lives in `eval/task_evidence_model.py`, outside the
 production recall path. It compares goal-based questions from a coding harness
@@ -167,7 +192,14 @@ contains pages: the memory-root index declares `okf_version: "0.2"` and
 descendants are body-only listings of titles, descriptions, and child links.
 These files are disposable views of the pages, exactly like `mem.db`: the
 explicit `rebuild-index` path regenerates them, and a failed refresh never
-fails an authoritative page write. The filenames `index.md` and `log.md` are
+fails an authoritative page write. After a single page write, update, or
+delete, `NavigationGenerator.refresh_page` parses the directory's existing
+`index.md` back into the renderer's middle form, splices that page's row in
+sorted position, and re-serializes through the same composer, so the result
+is byte-identical to a full render at a fraction of the cost; a missing,
+hand-written, or ambiguous index falls back to the full directory-chain
+render, and ancestor indexes are rewritten only when a child directory gains
+or loses its last page. The filenames `index.md` and `log.md` are
 reserved at every level — structural files never enter the store scan, so
 they cannot become `WikiNode`s, FTS rows, links, export entries,
 consolidation input, or watcher lifecycle events. A valid legacy page at a

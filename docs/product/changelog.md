@@ -7,6 +7,28 @@ unreleased until a release tag is created.
 
 ## [Unreleased]
 
+### Added
+
+- Link-graph expansion (OKF `read_concept`) in recall packing: `memex hook
+  session-start` and task recall now append pages linked within one hop of
+  the direct hits, in deterministic breadth-first order (alphabetical within
+  a level), each as a short block naming the page, its depth, and the
+  relation route (`+ Title (type) | depth: 1 | via: seed -mentions-> slug`),
+  with title, file path, and description or short snippet only. Direct hits
+  pack first exactly as before; linked pages fill only the budget they leave
+  under the same 4,096-token bound, and the block ends with
+  `[memex] linked pages omitted (token budget): N` when anything was cut.
+  Depth is a keyword parameter (`build_injection(depth=...)`,
+  `with_linked_pages(depth=...)`, default 1); no configuration
+  key. Expansion reuses the retriever's visibility rule, so archived,
+  expired, pending, and other-project pages are never expanded.
+- `memex recall --engine {fts5,navigation}` and `Memex.recall(engine=...)`:
+  the `navigation` engine ranks the generated `index.md` rows (titles and
+  descriptions only, no body text, no SQLite) by weighted term overlap and
+  reads only the front matter of the pages it returns; `search_engine`
+  reports `navigation-index-md`. `time_range` is not supported by this
+  engine.
+
 ### Removed
 
 - `packaged_marketplace()` from the installer module. `default_marketplace()`
@@ -60,6 +82,25 @@ unreleased until a release tag is created.
   benchmark 12/24 → 22/24 tasks). Descriptions are weighted like body text in
   BM25, and every write surface teaches purpose-style ("when is this page
   useful") description authoring.
+- A single page write, update, or delete now splices that page's row into
+  its directory `index.md` in sorted position instead of re-rendering the
+  directory from a scan of every sibling page. Bytes stay identical to a full
+  render. Per-write cost at 600 pages in one directory fell from 354 ms to
+  14 ms (16 ms at 1000 pages) on the reference laptop. Ancestor indexes are
+  rewritten only when a child directory gains or loses its last page. A
+  missing, hand-written, or ambiguous index falls back to the full chain
+  render; a legacy page at `index.md` stays untouched and reports a
+  collision; `memex rebuild-index` still regenerates every index from a full
+  scan.
+- Recall with the default `fts5` engine now degrades instead of returning
+  nothing when the SQLite index holds zero rows but the generated navigation
+  lists pages: the answer comes from the navigation engine and
+  `search_engine` reports `navigation-index-md-fallback`; one bounded log
+  notice records the engine name and counts.
+- Task-evidence benchmark re-pinned to measured values (rendered tokens
+  16,240 / 81,005 / 61,386 / 4,749; completion and fact recall unchanged)
+  with a 2026-09-23 amendment table in
+  `docs/research/2026-09-20-task-evidence-baseline.md`.
 
 ## [memex][0.5.0] — 2026-09-21
 

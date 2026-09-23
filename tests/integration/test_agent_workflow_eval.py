@@ -237,10 +237,10 @@ def test_real_workflow_recall_keeps_scopes_and_recovers_task_evidence() -> None:
         "human_focused",
     }
     expected_metrics = {
-        "current_injection": (5, 0.515625, 24, 15002, 0, 0),
-        "broad_query": (17, 0.875, 24, 72180, 0, 0),
-        "human_focused": (22, 0.96875, 72, 52593, 0, 0),
-        "linked_summary": (11, 0.703125, 24, 4485, 0, 0),
+        "current_injection": (5, 0.515625, 24, 16322, 0, 0),
+        "broad_query": (17, 0.875, 24, 81684, 0, 0),
+        "human_focused": (22, 0.96875, 72, 59457, 0, 0),
+        "linked_summary": (11, 0.703125, 24, 4749, 0, 0),
     }
     for name, strategy in report.strategies.items():
         assert (

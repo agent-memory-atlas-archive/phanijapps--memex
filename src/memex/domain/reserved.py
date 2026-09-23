@@ -57,6 +57,17 @@ def classify_reserved(path: Path) -> str:
         # Undecodable reserved files stay "not_reserved" so every consumer
         # treats them as untouchable collisions, never generator-owned.
         return "not_reserved"
+    return classify_reserved_text(path.name, text)
+
+
+def classify_reserved_text(name: str, text: str) -> str:
+    """:func:`classify_reserved` for a reserved-named file already read.
+
+    Lets a caller that must parse the text anyway classify it without a
+    second read; ``name`` carries the reserved-filename check.
+    """
+    if name not in RESERVED_FILENAMES:
+        return "not_reserved"
     if not text.startswith("---\n"):
         return "structural"
     if _is_okf_root_shape(text):

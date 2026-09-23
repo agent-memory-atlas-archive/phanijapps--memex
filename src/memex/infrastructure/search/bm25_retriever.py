@@ -80,6 +80,17 @@ WHERE wiki_fts MATCH :match
 """
 
 
+_NEIGHBOUR_SQL = (
+    "SELECT l.rel, w.slug, w.scope, w.project_id, w.node_type, w.title, w.file_path,"
+    " w.description, SUBSTR(w.body, 1, :body_chars) AS body"
+    " FROM wiki_links AS l JOIN wiki_index AS w ON w.slug = l.target_slug"
+    " AND ((w.scope = l.source_scope AND w.project_id = l.source_project_id)"
+    " OR w.scope = 'global')"
+    " WHERE l.source_scope = :source_scope AND l.source_project_id = :source_project_id"
+    " AND l.source_slug = :source_slug"
+)
+
+
 def _stable_dedupe(tokens: list[str]) -> list[str]:
     deduped: list[str] = []
     seen: set[str] = set()
@@ -486,6 +497,47 @@ class BM25Retriever:
                 " WHERE slug = ? AND scope = ? AND project_id = ?",
                 [(now, hit.slug, hit.scope, hit.project_id or "") for hit in hits],
             )
+
+    def neighbours(
+        self,
+        source_scope: str,
+        source_project_id: str | None,
+        source_slug: str,
+        *,
+        scope: str = "global",
+        project_id: str | None = None,
+        body_chars: int,
+    ) -> list[sqlite3.Row]:
+        """Pages linked from one page that the caller's recall could return.
+
+        A ``[[slug]]`` names a page in the source's own namespace or a global
+        page, the two places ``memex verify`` accepts; which of those the
+        caller may see is the recall's own scope under the same visibility
+        clauses recall applies. The body is cut in SQL to ``body_chars``
+        because callers render a short snippet at most. Order is
+        deterministic.
+        """
+        clauses, params = self._eligibility_filters(
+            node_type=None,
+            time_range=None,
+            tags=None,
+            include_expired=False,
+            include_inactive=False,
+            scope=scope,
+            project_id=project_id,
+        )
+        sql = (
+            " AND ".join([_NEIGHBOUR_SQL, *clauses])
+            + " ORDER BY w.slug, w.scope, w.project_id, l.rel"
+        )
+        params.update(
+            source_scope=source_scope,
+            source_project_id=source_project_id or "",
+            source_slug=source_slug,
+            body_chars=body_chars,
+        )
+        with self._lock:
+            return self._conn.execute(sql, params).fetchall()
 
     def _links(self, rows: list[sqlite3.Row]) -> dict[tuple[str, str, str], list[str]]:
         if not rows:

@@ -6,11 +6,12 @@ import time
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Literal
 
 from memex.application.consolidator import WikiConsolidator
 from memex.application.decay import RecencyDecay
 from memex.application.ports import LLMClient
-from memex.domain.errors import LLMError
+from memex.domain.errors import LLMError, WikiStoreError
 from memex.domain.models import (
     DESCRIPTION_MAX_BYTES,
     FORGET_MODES,
@@ -45,7 +46,11 @@ from memex.infrastructure.search.link_manager import LinkManager
 from memex.infrastructure.store.backup import BackupRestore
 from memex.infrastructure.store.import_export import ImportExport
 from memex.infrastructure.store.navigation import NavigationGenerator
+from memex.infrastructure.store.navigation_search import FALLBACK_SEARCH_ENGINE, NavigationSearch
 from memex.infrastructure.store.wiki_store import WikiStore, hash_body
+
+RecallEngine = Literal["fts5", "navigation"]
+RECALL_ENGINES: tuple[RecallEngine, ...] = ("fts5", "navigation")
 
 
 class Memex:
@@ -188,10 +193,12 @@ class Memex:
         max_tokens: int | None = None,
         scope: str = "global",
         project_id: str | None = None,
+        engine: RecallEngine = "fts5",
     ) -> RecallResult:
-        """BM25 search over the index; each hit records access statistics.
+        """Ranked recall from the FTS5 index or the generated navigation.
 
-        The query is reduced to safe alphanumeric semantic tokens, searched
+        FTS5 hits record access statistics; navigation hits do not. The query
+        is reduced to safe alphanumeric semantic tokens, searched
         with strict AND matching, and retried with OR only when strict matching
         returns no rows. Untrusted input never reaches the FTS5 MATCH parser.
         Hits are ordered by ascending BM25 score (lower is better, per SQLite
@@ -209,6 +216,11 @@ class Memex:
             time_range: ``(from, to)`` ISO8601 bounds on ``updated``.
             tags: All listed tags must be present (AND semantics).
             include_expired: Also return soft-forgotten and decayed nodes.
+            engine: ``"fts5"`` (the index) or ``"navigation"`` (the generated
+                ``index.md`` rows: titles and descriptions only, no access
+                statistics, ``time_range`` rejected). With ``"fts5"`` and an
+                index holding zero rows while navigation lists pages, the
+                navigation engine answers and ``search_engine`` says so.
 
         Returns:
             RecallResult with 1-based ranks, best first. Empty ``hits`` is a
@@ -218,6 +230,59 @@ class Memex:
             ValueError: Query has no searchable terms, or ``top_k`` outside
                 [1, 100].
         """
+        if engine not in RECALL_ENGINES:
+            raise ValueError(f"engine must be one of {RECALL_ENGINES}, got {engine!r}")
+        if engine == "navigation":
+            result = self._navigation_recall(
+                query,
+                top_k=top_k,
+                node_type=node_type,
+                time_range=time_range,
+                tags=tags,
+                include_expired=include_expired,
+                include_inactive=include_inactive,
+                max_tokens=max_tokens,
+                scope=scope,
+                project_id=project_id,
+            )
+            self.logger.info(
+                "operation=recall engine=%s hits=%d navigation_rows=%d",
+                result.search_engine,
+                len(result.hits),
+                result.total_indexed,
+            )
+            return result
+        if self.index_manager.count() == 0:
+            # A missing or emptied mem.db degrades recall to the generated
+            # navigation instead of answering nothing. time_range needs the
+            # index, so that request answers nothing; the notice keeps the
+            # degraded state visible to operators.
+            if time_range is not None:
+                self.logger.warning(
+                    "operation=recall engine=fts5 indexed_rows=0 reason=time_range hits=0"
+                )
+            else:
+                fallback = self._navigation_recall(
+                    query,
+                    top_k=top_k,
+                    node_type=node_type,
+                    time_range=None,
+                    tags=tags,
+                    include_expired=include_expired,
+                    include_inactive=include_inactive,
+                    max_tokens=max_tokens,
+                    scope=scope,
+                    project_id=project_id,
+                )
+                if fallback.total_indexed:
+                    result = replace(fallback, search_engine=FALLBACK_SEARCH_ENGINE)
+                    self.logger.warning(
+                        "operation=recall engine=%s indexed_rows=0 navigation_rows=%d hits=%d",
+                        result.search_engine,
+                        result.total_indexed,
+                        len(result.hits),
+                    )
+                    return result
         if max_tokens is not None:
             from memex.application.context_injection import pack_to_budget
 
@@ -251,9 +316,47 @@ class Memex:
         )
         return result
 
+    def _navigation_recall(
+        self,
+        query: str,
+        *,
+        top_k: int | None,
+        node_type: str | None,
+        time_range: tuple[str, str] | None,
+        tags: list[str] | None,
+        include_expired: bool,
+        include_inactive: bool,
+        max_tokens: int | None,
+        scope: str,
+        project_id: str | None,
+    ) -> RecallResult:
+        """Recall from the generated navigation; no index row is touched."""
+        from memex.application.context_injection import pack_to_budget
+
+        result = NavigationSearch(
+            self.wiki_store.wiki_dir, default_top_k=self.config.bm25.default_top_k
+        ).search(
+            query,
+            top_k=top_k,
+            node_type=node_type,
+            time_range=time_range,
+            tags=tags,
+            include_expired=include_expired,
+            include_inactive=include_inactive,
+            scope=scope,
+            project_id=project_id,
+        )
+        if max_tokens is not None:
+            result.hits = _renumber_hits(pack_to_budget(result.hits, max_tokens))
+        return result
+
     def recall_task(self, input: TaskRecallInput) -> TaskRecallResult:
         """Gather project evidence for caller-written questions within one budget."""
-        from memex.application.task_recall import assemble_task_recall, validate_task_budget
+        from memex.application.task_recall import (
+            assemble_task_recall,
+            validate_task_budget,
+            with_linked_pages,
+        )
 
         input = TaskRecallInput(
             goal=input.goal,
@@ -282,6 +385,7 @@ class Memex:
             for question in input.questions
         ]
         result, selected = assemble_task_recall(input, ranked)
+        result = with_linked_pages(self, input, result, selected)
         self.retriever.record_access(selected)
         self.logger.info("operation=recall_task hits=%d", len(selected))
         return result
@@ -623,17 +727,26 @@ class Memex:
         self._refresh_navigation(str(path))
 
     def _refresh_navigation(self, file_path: str | None) -> None:
-        """Best-effort chain-scoped index refresh after a page mutation.
+        """Best-effort single-page index refresh after a page mutation.
 
-        Takes the mutated page's path and refreshes its directory chain,
-        parsing only that chain's own pages. Navigation is disposable: a
-        failure here never fails or rolls back the mutation. ``memex verify``
-        derives and reports the defect, and a full rebuild repairs it.
+        Re-reads only the mutated page (absent means deleted) and splices
+        its entry into the directory index, so the cost never grows with the
+        page's siblings. A page the store cannot parse is invisible to every
+        full render, so the chain refresh drops its row instead of leaving
+        it stale. Navigation is disposable: a failure here never fails or
+        rolls back the mutation. ``memex verify`` derives and reports the
+        defect, and a full rebuild repairs it.
         """
         if not file_path:
             return
+        page_path = Path(file_path)
         try:
-            report = self.navigation.refresh(Path(file_path).parent, self.wiki_store.scan_dir)
+            try:
+                node = self.wiki_store.read_path(page_path) if page_path.exists() else None
+            except WikiStoreError:
+                report = self.navigation.refresh(page_path.parent, self.wiki_store.scan_dir)
+            else:
+                report = self.navigation.refresh_page(page_path, node, self.wiki_store.scan_dir)
         except Exception:
             self.logger.warning("operation=navigation_refresh status=failed")
             return

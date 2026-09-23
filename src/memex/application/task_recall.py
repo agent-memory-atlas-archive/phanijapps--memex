@@ -3,8 +3,19 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
+from typing import TYPE_CHECKING
 
+from memex.application.context_injection import estimate_tokens
+from memex.application.graph_expansion import (
+    DEFAULT_EXPANSION_DEPTH,
+    expand_links,
+    render_expansion,
+)
 from memex.domain.models import RecallHit, TaskRecallInput, TaskRecallResult
+
+if TYPE_CHECKING:
+    from memex.application.memory import Memex
 
 
 def _identity(hit: RecallHit) -> tuple[str, str | None, str]:
@@ -52,10 +63,10 @@ def _gaps(
 
 
 def assemble_task_recall(
-    request: TaskRecallInput, ranked: list[list[RecallHit]]
+    request: TaskRecallInput,
+    ranked: list[list[RecallHit]],
 ) -> tuple[TaskRecallResult, list[RecallHit]]:
     """Interleave question rankings and charge all rendered text to the budget."""
-    from memex.application.context_injection import estimate_tokens
 
     selected: list[RecallHit] = []
     seen: set[tuple[str, str | None, str]] = set()
@@ -90,9 +101,40 @@ def assemble_task_recall(
     )
 
 
+def with_linked_pages(
+    memex: Memex,
+    request: TaskRecallInput,
+    result: TaskRecallResult,
+    selected: list[RecallHit],
+    *,
+    depth: int = DEFAULT_EXPANSION_DEPTH,
+) -> TaskRecallResult:
+    """``result`` with pages linked within ``depth`` hops of its sources appended.
+
+    OKF's ``read_concept(depth)`` over task recall: the sources never move,
+    linked pages fill only the budget they leave, and the result comes back
+    unchanged when nothing is linked or even the omitted marker would not fit.
+    """
+    expansion = expand_links(
+        memex,
+        selected,
+        depth=depth,
+        max_tokens=request.max_tokens - result.rendered_tokens,
+        scope="project",
+        project_id=request.project_id,
+    )
+    linked = render_expansion(expansion)
+    if not linked:
+        return result
+    context = "\n".join([result.context, *linked])
+    tokens = estimate_tokens(context)
+    if tokens > request.max_tokens:
+        return result
+    return replace(result, context=context, rendered_tokens=tokens)
+
+
 def validate_task_budget(request: TaskRecallInput) -> None:
     """Fail a too-small envelope before reading or recording any memory."""
-    from memex.application.context_injection import estimate_tokens
 
     envelope = _render(request, [], (request.questions, request.questions))
     if estimate_tokens(envelope) > request.max_tokens:

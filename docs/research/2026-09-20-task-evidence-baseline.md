@@ -59,6 +59,23 @@ baseline for comparison.
 | Human-written focused queries | 22/24 | 96.88% | 72 | 52,593 | 189.4 | 0 | 0 |
 | Linked task summary | 11/24 | 70.31% | 24 | 4,485 | 1,051.7 | 0 | 0 |
 
+**Amendment (2026-09-23).** Link-graph expansion (OKF ``read_concept``)
+now follows hook injection and task recall: direct hits pack first exactly as
+before, pages linked within one hop fill only the budget they leave, and a
+trailing marker counts anything cut. On this fixture the four ``[[...]]``
+references point at slugs no card carries, so expansion adds no rendered
+pages and no tokens; complete tasks and fact recall are unchanged. The
+rendered-token movement in the rows below comes from the retriever's
+snippet and query-term changes that landed on ``main`` between amendments.
+These rows are the values the committed benchmark now pins.
+
+| Strategy | Complete tasks | Fact recall | Calls | Rendered tokens | Latency ms | Inactive hits | Other-project hits |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Current hook injection | 5/24 | 51.56% | 24 | 16,322 | 44.3 | 0 | 0 |
+| One broad query | 17/24 | 87.50% | 24 | 81,684 | 99.2 | 0 | 0 |
+| Human-written focused queries | 22/24 | 96.88% | 72 | 59,457 | 126.9 | 0 | 0 |
+| Linked task summary | 11/24 | 70.31% | 24 | 4,749 | 262.5 | 0 | 0 |
+
 Each task strategy keeps at most eight distinct evidence hits and validates the
 per-task rendered context budget at 4,096 estimated tokens. The linked-summary
 baseline retrieves one summary page with one broad query, does not force the

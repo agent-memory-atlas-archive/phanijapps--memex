@@ -18,11 +18,18 @@ from typing import ClassVar
 
 from memex.domain.errors import MemexError
 from memex.domain.models import NODE_TYPES, WikiNode
-from memex.domain.reserved import OKF_VERSION, is_structural
+from memex.domain.reserved import OKF_VERSION, classify_reserved_text, is_structural
 from memex.infrastructure.store.wiki_store import TYPE_DIRS
 
 _INDEX_NAME = "index.md"
 _ESCAPE_CHARS = frozenset("\\`*_[]<>")
+_SUBDIR_HEADING = "Subdirectories"
+_SECTION_TYPES = {TYPE_DIRS[node_type].capitalize(): node_type for node_type in NODE_TYPES}
+
+# Entry lines of one index keyed by node type, then by slug: the parsed
+# form of an index that both the full render and the single-page splice
+# serialize through one composer, so their bytes cannot diverge.
+Entries = dict[str, dict[str, str]]
 
 # Bounded per-directory page listing (WikiStore.scan_dir shaped); refresh
 # parses only the mutated chain's own pages through it, never the store.
@@ -61,6 +68,23 @@ def _escape(text: str) -> str:
     return "".join("\\" + ch if ch in _ESCAPE_CHARS else ch for ch in text)
 
 
+def _entry_link(line: str) -> str | None:
+    """The link target of one generated entry line, or None when malformed.
+
+    Escaped title text never holds a bare ``]``, so the first unescaped
+    ``](`` after ``- [`` opens the generator's own link unambiguously.
+    """
+    if not line.startswith("- ["):
+        return None
+    pos = 3
+    while pos < len(line) and line[pos] != "]":
+        pos += 2 if line[pos] == "\\" else 1
+    end = line.find(")", pos + 2)
+    if line[pos : pos + 2] != "](" or end == -1:
+        return None
+    return line[pos + 2 : end]
+
+
 class NavigationGenerator:
     """Deterministic ``index.md`` generation for the docs tree."""
 
@@ -87,8 +111,58 @@ class NavigationGenerator:
             self._remove_index(target.parent, report)
         return report
 
+    def refresh_page(
+        self, page_path: Path, node: WikiNode | None, scan_dir: ScanDir
+    ) -> NavigationReport:
+        """Refresh navigation after one page write (``node``) or delete (None).
+
+        Splices the page's own entry into its directory index in sorted
+        position, so the cost is the index plus the page, never the
+        siblings. Ancestor indexes list child directories only and are
+        touched solely when this directory stops holding pages. Falls back
+        to :meth:`refresh` when the index is missing, is not generator
+        shaped, or lists the page ambiguously; a legacy page at the index
+        path stays untouched and reports a collision, as everywhere else.
+        """
+        directory = page_path.parent
+        if node is not None:
+            self._guard_nodes_inside([node])
+        if not self._inside(page_path):
+            return NavigationReport()
+        target = directory / _INDEX_NAME
+        text = self._structural_text(target)
+        if text is None:
+            return self.refresh(directory, scan_dir)
+        parsed = self._parse_index(directory, text)
+        if parsed is None:
+            return self.refresh(directory, scan_dir)
+        entries, children = parsed
+        slug = page_path.stem
+        listed_under = [node_type for node_type, rows in entries.items() if slug in rows]
+        if len(listed_under) > 1 or (node is None and not listed_under):
+            return self.refresh(directory, scan_dir)
+        if not children and not any(entries.values()):
+            # An orphan index: the directory is only now gaining pages, so
+            # its ancestors must learn about it through the chain refresh.
+            return self.refresh(directory, scan_dir)
+        for node_type in listed_under:
+            del entries[node_type][slug]
+        if node is not None:
+            entries.setdefault(node.type, {})[slug] = self._entry(directory, page_path, node)
+        report = NavigationReport()
+        if children or any(entries.values()):
+            self._write_index(directory, self._compose(directory, entries, children), report)
+            return report
+        self._remove_index(directory, report)
+        for ancestor in self._chain(directory)[1:]:
+            if self._subtree_has_pages(ancestor):
+                self._write_index(ancestor, self.render(ancestor, scan_dir(ancestor, [])), report)
+                break
+            self._remove_index(ancestor, report)
+        return report
+
     def refresh(self, changed_dir: Path, scan_dir: ScanDir) -> NavigationReport:
-        """Refresh indexes on the ancestor chain of one mutated directory.
+        """Refresh indexes on the whole ancestor chain of one mutated directory.
 
         Parses only pages directly inside the chain's directories through
         ``scan_dir``, so one mutation's refresh cost never scales with the
@@ -145,39 +219,92 @@ class NavigationGenerator:
         """
         if not self._inside(directory):
             raise NavigationError("navigation directory escapes the docs root")
-        rel = directory.relative_to(self._wiki_dir).as_posix()
-        lines = ["# index" if directory == self._wiki_dir else f"# {rel}"]
-        direct = [
-            node for node in nodes if node.file_path and Path(node.file_path).parent == directory
-        ]
-        for node_type in NODE_TYPES:
-            pages = sorted(
-                (node for node in direct if node.type == node_type), key=lambda n: n.slug
-            )
-            if not pages:
-                continue
-            lines.append("")
-            lines.append(f"## {TYPE_DIRS[node_type].capitalize()}")
-            for page in pages:
-                link = self._link(directory, Path(page.file_path or ""))
-                entry = f"- [{_escape(page.title)}]({link})"
-                if page.description:
-                    entry += f" — {_escape(page.description)}"
-                lines.append(entry)
+        entries: Entries = {}
+        for node in nodes:
+            if node.file_path and Path(node.file_path).parent == directory:
+                entry = self._entry(directory, Path(node.file_path), node)
+                entries.setdefault(node.type, {})[node.slug] = entry
         children = sorted(
-            child
+            child.name
             for child in directory.iterdir()
             if child.is_dir() and self._subtree_has_pages(child)
         )
+        return self._compose(directory, entries, children)
+
+    def _entry(self, directory: Path, page_path: Path, node: WikiNode) -> str:
+        entry = f"- [{_escape(node.title)}]({self._link(directory, page_path)})"
+        if node.description:
+            entry += f" — {_escape(node.description)}"
+        return entry
+
+    def _heading(self, directory: Path) -> str:
+        if directory == self._wiki_dir:
+            return "# index"
+        return f"# {directory.relative_to(self._wiki_dir).as_posix()}"
+
+    def _compose(self, directory: Path, entries: Entries, children: list[str]) -> str:
+        lines = [self._heading(directory)]
+        for node_type in NODE_TYPES:
+            rows = entries.get(node_type)
+            if not rows:
+                continue
+            lines.append("")
+            lines.append(f"## {TYPE_DIRS[node_type].capitalize()}")
+            lines.extend(rows[slug] for slug in sorted(rows))
         if children:
             lines.append("")
-            lines.append("## Subdirectories")
-            for child in children:
-                lines.append(f"- [{child.name}/]({child.name}/{_INDEX_NAME})")
+            lines.append(f"## {_SUBDIR_HEADING}")
+            lines.extend(f"- [{child}/]({child}/{_INDEX_NAME})" for child in children)
         body = "\n".join(lines) + "\n"
         if directory == self._wiki_dir:
             return f'---\nokf_version: "{OKF_VERSION}"\n---\n{body}'
         return body
+
+    def _parse_index(self, directory: Path, text: str) -> tuple[Entries, list[str]] | None:
+        """Invert :meth:`_compose`; None for anything the generator never wrote.
+
+        Entry lines are kept verbatim so a re-composed index reproduces the
+        full render byte for byte; only each line's link is inspected.
+        """
+        prefix = f'---\nokf_version: "{OKF_VERSION}"\n---\n' if directory == self._wiki_dir else ""
+        if not text.startswith(prefix) or not text.endswith("\n"):
+            return None
+        lines = text[len(prefix) : -1].split("\n")
+        if lines[0] != self._heading(directory):
+            return None
+        entries: Entries = {}
+        children: list[str] = []
+        section_order = [*_SECTION_TYPES, _SUBDIR_HEADING]
+        pos = 1
+        while pos < len(lines):
+            if lines[pos] != "" or pos + 2 > len(lines) or not lines[pos + 1].startswith("## "):
+                return None
+            heading = lines[pos + 1][3:]
+            if heading not in section_order:
+                return None
+            section_order = section_order[section_order.index(heading) + 1 :]
+            pos += 2
+            rows_start = pos
+            while pos < len(lines) and lines[pos] != "":
+                line = lines[pos]
+                link = _entry_link(line)
+                if link is None:
+                    return None
+                if heading == _SUBDIR_HEADING:
+                    child = link.removesuffix(f"/{_INDEX_NAME}")
+                    if line != f"- [{child}/]({child}/{_INDEX_NAME})":
+                        return None
+                    children.append(child)
+                else:
+                    slug = link.removesuffix(".md")
+                    rows = entries.setdefault(_SECTION_TYPES[heading], {})
+                    if link != f"{slug}.md" or "/" in slug or slug in rows:
+                        return None
+                    rows[slug] = line
+                pos += 1
+            if pos == rows_start:
+                return None
+        return entries, children
 
     def _needed_dirs(self) -> set[Path]:
         """Directories needing an index: ancestors of page-holding directories.
@@ -207,6 +334,19 @@ class NavigationGenerator:
                 target.unlink()
             except OSError:
                 continue  # bounded best effort; the file is inert to memory
+
+    def _structural_text(self, target: Path) -> str | None:
+        """The generator-owned index text at ``target``, or None when absent,
+        unreadable, or not structural (a legacy page, a symlink)."""
+        if target.is_symlink():
+            return None
+        try:
+            text = target.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            return None
+        if classify_reserved_text(target.name, text) != "structural":
+            return None
+        return text
 
     def _write_index(self, directory: Path, text: str, report: NavigationReport) -> None:
         target = directory / _INDEX_NAME

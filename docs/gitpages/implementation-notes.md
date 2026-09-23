@@ -76,6 +76,51 @@ rule, and the OpenAI SDK is the single LLM client.
   `index.md` files and pages carrying a `description` key as malformed pages.
   Markdown is never touched by the upgrade; recovery from a downgrade is
   deleting `mem.db`, removing generated indexes, and stripping descriptions.
+- **Incremental navigation refresh.**
+  `NavigationGenerator.refresh_page(page_path, node, scan_dir)` refreshes
+  navigation after one page mutation (`node` is `None` for a delete). It
+  reads the directory's `index.md`, confirms it is structural with
+  `is_structural`, parses it back into entry lines keyed by node type and
+  slug plus child-directory names, replaces or removes the page's own row,
+  and re-serializes through the same composer `render` uses, so the splice
+  and a full render produce identical bytes. Anything the parser does not
+  recognise (missing index, non-generator shape, the page listed under two
+  headings, a delete of an unlisted page, an orphan index) falls back to the
+  unchanged chain `refresh(directory, scan_dir)`. Ancestor indexes list child
+  directories only and are rewritten only when the directory loses its last
+  page. The facade (`Memex._refresh_navigation`) receives only the page path
+  from its callers, so it re-reads that one page through the store (an absent
+  file means deleted); this is the one place the application layer calls
+  `WikiStore._read_path`, pending a public `read_path`. The watcher keeps the
+  directory-level `refresh`, and `rebuild-index` keeps `regenerate`.
+- **Navigation engine reads front matter only.** `NavigationSearch` fills
+  `RecallHit` fields from a bounded front-matter read (stops at the closing
+  `---`, 16 KB ceiling) and never opens a body, so hits have no body snippet
+  (`snippet_source` is `title` or `description`) and no access statistics
+  are recorded. Score is higher-is-better for this engine, unlike FTS5's
+  ascending `bm25()`; read `search_engine` before comparing scores. A project
+  filter learns each project directory's id from one page's front matter,
+  since locators are opaque. No stop-word or document-frequency pruning
+  applies: every alphanumeric query token scores.
+- **Link expansion visibility reuse.** `BM25Retriever.neighbours` runs the
+  one SQL join from `wiki_links` to `wiki_index` (target resolved in the
+  source page's scope and project) under the same visibility clauses recall
+  applies (active status, validity window, scope/project). The application
+  layer's `graph_expansion` only walks the graph it returns, so the
+  visibility rule lives in exactly one place and no SQL leaves
+  infrastructure.
+- **Cross-namespace links are not expanded.** A project page naming a global
+  slug (or vice versa) yields no expansion entry in this slice; the join
+  requires the same scope and project as the source.
+- **Expansion budget rule.** `expand_links` reserves the omitted marker
+  before packing and stops at the first entry that does not fit.
+  `build_injection` and `with_linked_pages` then drop the whole linked
+  section if even the marker would push the rendered text over the bound;
+  direct hits are never trimmed for expansion.
+- **Benchmark cannot show the expansion gain.** The committed fixture's four
+  `[[...]]` references target slugs no card carries, so expansion adds zero
+  pages/tokens there; a fixture with linked cards is needed to measure
+  coverage lift.
 - Change detection hashes body text on read: a hand-edited page keeps a stale
   front-matter `content_hash`, so the watcher and `rebuild_index` compare a
   freshly computed hash against the index row and refresh the front matter

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from memex.application.memory import Memex
 from memex.domain.models import RecallResult
 
@@ -42,8 +44,12 @@ def pack_to_budget[T](hits: list[T], max_tokens: int = DEFAULT_MAX_TOKENS) -> li
     return packed
 
 
-def format_context_block(result: RecallResult) -> str:
-    """Render recall hits in the spec's context-window injection format."""
+def format_context_block(result: RecallResult, *, linked: Sequence[str] = ()) -> str:
+    """Render recall hits in the spec's context-window injection format.
+
+    ``linked`` lines (rendered link-graph expansion) follow the hits, before
+    the footer.
+    """
     lines = [f"[memex] {line}" for line in CONSTITUTION]
     lines += [_MEMORY_HEADER, f'[Search: "{result.query}"]']
     for hit in result.hits:
@@ -57,6 +63,9 @@ def format_context_block(result: RecallResult) -> str:
         lines.append(f"   Tags: {', '.join(hit.tags)}")
         lines.append(f"   Links: {', '.join(hit.links)}")
     lines.append("---")
+    if linked:
+        lines.extend(linked)
+        lines.append("---")
     lines.append(_MEMORY_FOOTER)
     return "\n".join(lines)
 
@@ -67,17 +76,28 @@ def build_injection(
     *,
     top_k: int = DEFAULT_INJECTION_TOP_K,
     max_tokens: int | None = None,
+    depth: int = 1,
 ) -> str:
     """Recall, pack to budget, render; empty when nothing clears the floor.
 
     The floor: the best hit must rank within MIN_INJECTION_RANK for injection
     to fire at all \u2014 weak matches inject silence rather than noise.
+    Direct hits pack first; pages linked within ``depth`` hops fill only the
+    budget they leave, and the block stays as it was when they cannot fit.
     """
+    from memex.application.graph_expansion import expand_links, render_expansion
+
     result = memex.recall(query, top_k=top_k)
     if not result.hits or result.hits[0].rank > MIN_INJECTION_RANK:
         return ""
-    packed = pack_to_budget(result.hits, max_tokens or DEFAULT_MAX_TOKENS)
-    if not packed:
-        return ""
-    result.hits = packed
-    return format_context_block(result)
+    budget = max_tokens or DEFAULT_MAX_TOKENS
+    result.hits = pack_to_budget(result.hits, budget)
+    block = format_context_block(result)
+    expansion = expand_links(
+        memex, result.hits, depth=depth, max_tokens=budget - estimate_tokens(block)
+    )
+    linked = render_expansion(expansion)
+    if not linked:
+        return block
+    expanded = format_context_block(result, linked=linked)
+    return expanded if estimate_tokens(expanded) <= budget else block

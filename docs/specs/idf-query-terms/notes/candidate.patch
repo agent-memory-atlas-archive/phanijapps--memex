@@ -1,0 +1,478 @@
+diff --git a/src/memex/infrastructure/search/bm25_retriever.py b/src/memex/infrastructure/search/bm25_retriever.py
+index c03a602..08dc2a8 100644
+--- a/src/memex/infrastructure/search/bm25_retriever.py
++++ b/src/memex/infrastructure/search/bm25_retriever.py
+@@ -18,30 +18,21 @@ MAX_QUERY_TOKENS = 64
+ _WINNER_SEARCH_ENGINE = "semantic-and-fallback-fts5"
+ _WINNER_BODY_WEIGHT = 2.0
+ _WINNER_DESCRIPTION_WEIGHT = 2.0  # a purpose-written signpost match ranks like a body match
+-_QUERY_STOP_WORDS = frozenset(
+-    {
+-        "a",
+-        "an",
+-        "did",
+-        "do",
+-        "does",
+-        "from",
+-        "how",
+-        "in",
+-        "is",
+-        "of",
+-        "the",
+-        "to",
+-        "we",
+-        "what",
+-        "why",
+-    }
+-)
+-_SEMANTIC_SCAFFOLDING_PHRASES = (
+-    ("instead", "of"),
+-    ("how", "many"),
+-    ("switch", "from"),
+-)
++# A term is query scaffolding when the index shows it in more than this share
++# of pages: at that frequency it cannot narrow a strict AND match.
++# On the 1,000-page seed-42 realistic corpus this drops the/this/in/for/was/is/a
++# (0.52-0.98) while keeping every content term (at most 0.46).
++MAX_TERM_DOCUMENT_RATIO = 0.5
++
++# FTS5 has no SQL tokenizer function, so query tokens pass through a one-row
++# helper table that uses the index tokenizer; its instance vocabulary yields
++# one stem per token position for the wiki_vocab document-frequency lookup.
++_QUERY_TERMS_SCHEMA = """
++CREATE VIRTUAL TABLE IF NOT EXISTS temp.query_terms
++    USING fts5(term, tokenize='porter unicode61');
++CREATE VIRTUAL TABLE IF NOT EXISTS temp.query_vocab
++    USING fts5vocab(temp, query_terms, 'instance');
++"""
+ 
+ # FTS column order: slug=0, title=1, description=2, body=3, tags=4.
+ _SNIPPET_TITLE_COLUMN = 1
+@@ -102,51 +93,6 @@ def _query_tokens(query: str) -> list[str]:
+     return tokens
+ 
+ 
+-def _phrase_indexes(tokens: list[str], phrase: tuple[str, ...]) -> set[int]:
+-    indexes: set[int] = set()
+-    width = len(phrase)
+-    for start in range(len(tokens) - width + 1):
+-        if tuple(tokens[start : start + width]) == phrase:
+-            indexes.update(range(start, start + width))
+-    return indexes
+-
+-
+-def _how_does_handle_indexes(tokens: list[str]) -> set[int]:
+-    indexes: set[int] = set()
+-    for start in range(len(tokens) - 2):
+-        if tokens[start : start + 2] != ["how", "does"]:
+-            continue
+-        try:
+-            handle = tokens.index("handle", start + 2)
+-        except ValueError:
+-            continue
+-        indexes.update({start, start + 1, handle})
+-    return indexes
+-
+-
+-def _why_is_showing_indexes(tokens: list[str]) -> set[int]:
+-    indexes: set[int] = set()
+-    for start in range(len(tokens) - 2):
+-        if tokens[start : start + 2] != ["why", "is"]:
+-            continue
+-        try:
+-            indexes.add(tokens.index("showing", start + 2))
+-        except ValueError:
+-            continue
+-    return indexes
+-
+-
+-def _drop_semantic_scaffolding(tokens: list[str]) -> list[str]:
+-    rejected = {
+-        index
+-        for phrase in _SEMANTIC_SCAFFOLDING_PHRASES
+-        for index in _phrase_indexes(tokens, phrase)
+-    }
+-    rejected.update(_how_does_handle_indexes(tokens))
+-    rejected.update(_why_is_showing_indexes(tokens))
+-    return [token for index, token in enumerate(tokens) if index not in rejected]
+-
+-
+ def production_ranker_metadata() -> dict[str, object]:
+     """Describe the promoted production retrieval algorithm."""
+     return {
+@@ -154,13 +100,13 @@ def production_ranker_metadata() -> dict[str, object]:
+         "query_strategy": "strict-and-weighted-fts5",
+         "zero_hit_fallback": "broad-or-weighted-fts5",
+         "token_strategy": "lowercase-alphanumeric-safe-stable-dedupe",
+-        "removed_scaffolding": (
+-            "instead of",
+-            "how does ... handle",
+-            "how many",
+-            "why is ... showing",
+-            "switch from",
++        "term_filter": "fts5vocab-document-frequency",
++        "max_term_document_ratio": MAX_TERM_DOCUMENT_RATIO,
++        "dropped_terms": (
++            "absent from the index",
++            "present in more than max_term_document_ratio of pages",
+         ),
++        "kept_when_all_dropped": "every indexed term, else the first token",
+         "column_weights": {
+             "slug": 1.0,
+             "title": 1.0,
+@@ -197,17 +143,50 @@ class BM25Retriever:
+         # threads, so this connection may be used from several threads.
+         self._lock = threading.RLock()
+         self._conn.row_factory = sqlite3.Row
++        self._conn.executescript(_QUERY_TERMS_SCHEMA)
+ 
+     def _match_query(self, query: str) -> str:
+         """Reduce free text to safe OR-joined FTS5 terms (untrusted input)."""
+         return " OR ".join(_query_tokens(query))
+ 
+     def _semantic_tokens(self, query: str) -> list[str]:
+-        raw_tokens = _query_tokens(query)
+-        tokens = _drop_semantic_scaffolding(raw_tokens)
+-        tokens = [token for token in tokens if token not in _QUERY_STOP_WORDS]
+-        tokens = _stable_dedupe(tokens)
+-        return tokens or _stable_dedupe(raw_tokens)
++        """Keep the tokens that can narrow a match, never dropping the last one."""
++        tokens = _stable_dedupe(_query_tokens(query))
++        frequencies = self._document_frequencies(tokens)
++        ceiling = MAX_TERM_DOCUMENT_RATIO * self._document_count()
++        indexed = [
++            (token, frequency)
++            for token, frequency in zip(tokens, frequencies, strict=True)
++            if frequency
++        ]
++        focused = [token for token, frequency in indexed if frequency <= ceiling]
++        return focused or [token for token, _ in indexed] or tokens[:1]
++
++    def _document_frequencies(self, tokens: list[str]) -> list[int]:
++        """Pages containing each token, stemmed exactly as the index stems it."""
++        with self._lock, self._conn:
++            self._conn.execute("DELETE FROM temp.query_terms")
++            self._conn.execute(
++                "INSERT INTO temp.query_terms(rowid, term) VALUES (1, ?)", (" ".join(tokens),)
++            )
++            stems = [
++                str(row["term"])
++                for row in self._conn.execute("SELECT term FROM temp.query_vocab ORDER BY offset")
++            ]
++            placeholders = ",".join("?" * len(stems))
++            counts = {
++                str(row["term"]): int(row["doc"])
++                for row in self._conn.execute(
++                    f"SELECT term, doc FROM wiki_vocab WHERE term IN ({placeholders})",  # noqa: S608
++                    stems,
++                )
++            }
++        return [counts.get(stem, 0) for stem in stems]
++
++    def _document_count(self) -> int:
++        with self._lock:
++            row = self._conn.execute("SELECT COUNT(*) AS n FROM wiki_index").fetchone()
++        return int(row["n"])
+ 
+     def search_fts(self, query: str, top_k: int) -> list[tuple[str, float]]:
+         """Raw (slug, score) pairs ordered by ascending bm25 score."""
+diff --git a/src/memex/infrastructure/search/index_manager.py b/src/memex/infrastructure/search/index_manager.py
+index b2ed7b0..e0b3986 100644
+--- a/src/memex/infrastructure/search/index_manager.py
++++ b/src/memex/infrastructure/search/index_manager.py
+@@ -20,7 +20,7 @@ from typing import cast
+ from memex.domain.errors import IndexManagerError
+ from memex.domain.models import WikiNode, utc_now_iso
+ 
+-SCHEMA_VERSION = "6"
++SCHEMA_VERSION = "7"
+ 
+ _SCHEMA = """
+ CREATE TABLE IF NOT EXISTS index_meta (
+@@ -70,6 +70,9 @@ CREATE VIRTUAL TABLE IF NOT EXISTS wiki_fts USING fts5(
+     tokenize='porter unicode61'
+ );
+ 
++-- Per-term document frequency read straight from the FTS index: term, doc, cnt.
++CREATE VIRTUAL TABLE IF NOT EXISTS wiki_vocab USING fts5vocab(wiki_fts, 'row');
++
+ CREATE TRIGGER IF NOT EXISTS wiki_index_ai AFTER INSERT ON wiki_index BEGIN
+     INSERT INTO wiki_fts(rowid, slug, title, description, body, tags)
+     VALUES (new.rowid, new.slug, new.title, new.description, new.body, new.tags);
+@@ -243,6 +246,7 @@ class IndexManager:
+         with self._lock:
+             self._conn.executescript(
+                 "DROP TABLE IF EXISTS wiki_links;"
++                "DROP TABLE IF EXISTS wiki_vocab;"
+                 "DROP TABLE IF EXISTS wiki_fts;"
+                 "DROP TABLE IF EXISTS wiki_index;"
+                 "DROP TABLE IF EXISTS index_meta;"
+@@ -257,6 +261,7 @@ class IndexManager:
+                 self._needs_rebuild = True
+                 self._conn.executescript(
+                     "DROP TABLE IF EXISTS wiki_links;"
++                    "DROP TABLE IF EXISTS wiki_vocab;"
+                     "DROP TABLE IF EXISTS wiki_fts;"
+                     "DROP TABLE IF EXISTS wiki_index;"
+                     "DROP TABLE IF EXISTS index_meta;"
+diff --git a/tests/unit/test_bm25_retriever.py b/tests/unit/test_bm25_retriever.py
+index 1cb6d3e..9bef48f 100644
+--- a/tests/unit/test_bm25_retriever.py
++++ b/tests/unit/test_bm25_retriever.py
+@@ -187,34 +187,18 @@ def test_empty_description_pages_keep_existing_ranking(data_dir: Path) -> None:
+     index.close()
+ 
+ 
+-def test_retrieve_removes_semantic_scaffolding_and_deduplicates_tokens(
+-    data_dir: Path,
+-) -> None:
++def test_retrieve_deduplicates_tokens_before_the_strict_match(data_dir: Path) -> None:
+     index = _index_nodes(
+         data_dir,
+-        [
+-            _node(
+-                "Query engine rate limiting polling chart rest nodes",
+-                "query engine rate limiting polling chart rest nodes",
+-                slug="target",
+-            )
+-        ],
++        [_node("Query engine rate limiting", "query engine rate limiting", slug="target")],
+     )
+     retriever = BM25Retriever(data_dir / "mem.db")
+     statements: list[str] = []
+     retriever._conn.set_trace_callback(statements.append)
+ 
+-    retriever.retrieve(
+-        "How does query-engine handle rate limiting instead of polling, "
+-        "why is chart showing switch from REST? How many nodes nodes!",
+-        top_k=3,
+-    )
++    retriever.retrieve("Query-engine rate limiting, query engine RATE limiting!", top_k=3)
+ 
+-    assert any(
+-        "'query AND engine AND rate AND limiting AND polling AND chart AND rest AND nodes'"
+-        in statement
+-        for statement in statements
+-    )
++    assert any("'query AND engine AND rate AND limiting'" in statement for statement in statements)
+     retriever.close()
+     index.close()
+ 
+@@ -230,9 +214,7 @@ def test_retrieve_keeps_showing_when_it_is_content(data_dir: Path) -> None:
+     index.close()
+ 
+ 
+-def test_retrieve_uses_raw_tokens_when_scaffolding_filters_every_token(
+-    data_dir: Path,
+-) -> None:
++def test_retrieve_keeps_every_indexed_token_on_a_single_page_store(data_dir: Path) -> None:
+     index = _index_nodes(data_dir, [_node("Scaffold only", "how does handle")])
+     retriever = BM25Retriever(data_dir / "mem.db")
+     statements: list[str] = []
+diff --git a/tests/unit/test_idf_query_terms.py b/tests/unit/test_idf_query_terms.py
+new file mode 100644
+index 0000000..e5b30c5
+--- /dev/null
++++ b/tests/unit/test_idf_query_terms.py
+@@ -0,0 +1,183 @@
++"""Index-derived query term filtering: fts5vocab document frequency drives token drops."""
++
++import sqlite3
++from pathlib import Path
++
++from memex.domain.models import WikiNode
++from memex.infrastructure.search.bm25_retriever import (
++    MAX_TERM_DOCUMENT_RATIO,
++    BM25Retriever,
++    production_ranker_metadata,
++)
++from memex.infrastructure.search.index_manager import SCHEMA_VERSION, IndexManager
++from memex.infrastructure.store.wiki_store import WikiStore
++
++
++def _node(title: str, body: str, *, slug: str) -> WikiNode:
++    return WikiNode(type="entity", title=title, body=body, id=slug, slug=slug)
++
++
++def _index_nodes(data_dir: Path, nodes: list[WikiNode]) -> IndexManager:
++    store = WikiStore(data_dir)
++    index = IndexManager(data_dir / "mem.db")
++    for node in nodes:
++        index.update_record(store.write(node))
++    return index
++
++
++def _table_names(index: IndexManager) -> set[str]:
++    rows = index.connection.execute(
++        "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name"
++    ).fetchall()
++    return {str(row["name"]) for row in rows}
++
++
++def _strict_match(statements: list[str]) -> str:
++    matches = [statement for statement in statements if "wiki_fts MATCH" in statement]
++    assert matches, statements
++    return matches[0]
++
++
++def _traced_retriever(data_dir: Path) -> tuple[BM25Retriever, list[str]]:
++    retriever = BM25Retriever(data_dir / "mem.db")
++    statements: list[str] = []
++    retriever._conn.set_trace_callback(statements.append)
++    return retriever, statements
++
++
++def test_schema_version_is_seven_and_vocab_table_exists_on_fresh_index(data_dir: Path) -> None:
++    index = IndexManager(data_dir / "mem.db")
++
++    assert SCHEMA_VERSION == "7"
++    assert "wiki_vocab" in _table_names(index)
++    assert index.get_meta("schema_version") == SCHEMA_VERSION
++    index.close()
++
++
++def test_rebuild_path_recreates_vocab_table(data_dir: Path) -> None:
++    index = _index_nodes(data_dir, [_node("Alpha", "alpha body", slug="alpha")])
++
++    index.drop_for_rebuild()
++
++    assert "wiki_vocab" in _table_names(index)
++    assert index.connection.execute("SELECT COUNT(*) AS n FROM wiki_vocab").fetchone()["n"] == 0
++    index.update_record(WikiStore(data_dir).write(_node("Beta", "beta body", slug="beta")))
++    terms = {str(row["term"]) for row in index.connection.execute("SELECT term FROM wiki_vocab")}
++    assert {"beta", "bodi"} <= terms
++    index.close()
++
++
++def test_pre_vocab_store_gains_vocab_table_on_open(data_dir: Path) -> None:
++    index = _index_nodes(data_dir, [_node("Alpha", "alpha body", slug="alpha")])
++    index.connection.execute("DROP TABLE wiki_vocab")
++    index.connection.commit()
++    index.close()
++
++    reopened = IndexManager(data_dir / "mem.db")
++
++    assert "wiki_vocab" in _table_names(reopened)
++    assert reopened.needs_rebuild() is False
++    reopened.close()
++
++
++def test_incompatible_legacy_index_is_replaced_with_vocab_table(data_dir: Path) -> None:
++    data_dir.mkdir()
++    connection = sqlite3.connect(data_dir / "mem.db")
++    connection.execute("CREATE TABLE wiki_index (id TEXT PRIMARY KEY, slug TEXT NOT NULL)")
++    connection.execute("CREATE VIRTUAL TABLE wiki_fts USING fts5(slug, title, body)")
++    connection.commit()
++    connection.close()
++
++    index = IndexManager(data_dir / "mem.db")
++
++    assert "wiki_vocab" in _table_names(index)
++    assert index.needs_rebuild() is True
++    index.close()
++
++
++def test_document_frequency_lookup_stems_query_tokens(data_dir: Path) -> None:
++    index = _index_nodes(
++        data_dir,
++        [
++            _node("One", "runs handled databases", slug="one"),
++            _node("Two", "running handles", slug="two"),
++            _node("Three", "unrelated words", slug="three"),
++        ],
++    )
++    retriever = BM25Retriever(data_dir / "mem.db")
++
++    frequencies = retriever._document_frequencies(["run", "handle", "database", "absent"])
++
++    assert frequencies == [2, 2, 1, 0]
++    retriever.close()
++    index.close()
++
++
++def test_tokens_above_document_ratio_are_dropped(data_dir: Path) -> None:
++    pages = [_node(f"Page {n}", f"common filler{n}", slug=f"page-{n}") for n in range(10)]
++    pages.append(_node("Target", "common filler0 rare", slug="target"))
++    index = _index_nodes(data_dir, pages)
++    retriever, statements = _traced_retriever(data_dir)
++
++    result = retriever.retrieve("common rare", top_k=5)
++
++    assert MAX_TERM_DOCUMENT_RATIO < 1.0
++    assert [hit.slug for hit in result.hits] == ["target"]
++    assert "'rare'" in _strict_match(statements)
++    retriever.close()
++    index.close()
++
++
++def test_tokens_absent_from_the_index_are_dropped(data_dir: Path) -> None:
++    index = _index_nodes(
++        data_dir,
++        [
++            _node("Target", "kafka consumer", slug="target"),
++            _node("Other", "postgres pool", slug="other"),
++        ],
++    )
++    retriever, statements = _traced_retriever(data_dir)
++
++    result = retriever.retrieve("kafka eviction", top_k=5)
++
++    assert [hit.slug for hit in result.hits] == ["target"]
++    assert "'kafka'" in _strict_match(statements)
++    assert sum("wiki_fts MATCH" in statement for statement in statements) == 1
++    retriever.close()
++    index.close()
++
++
++def test_last_remaining_tokens_are_never_dropped(data_dir: Path) -> None:
++    index = _index_nodes(
++        data_dir,
++        [_node(f"Page {n}", "shared everywhere", slug=f"page-{n}") for n in range(3)],
++    )
++    retriever, statements = _traced_retriever(data_dir)
++
++    result = retriever.retrieve("shared everywhere", top_k=5)
++
++    assert [hit.slug for hit in result.hits] == ["page-0", "page-1", "page-2"]
++    assert "'shared AND everywhere'" in _strict_match(statements)
++    retriever.close()
++    index.close()
++
++
++def test_query_of_only_absent_tokens_keeps_its_first_token(data_dir: Path) -> None:
++    index = _index_nodes(data_dir, [_node("Page", "indexed words", slug="page")])
++    retriever, statements = _traced_retriever(data_dir)
++
++    result = retriever.retrieve("missing gone", top_k=5)
++
++    assert result.hits == []
++    assert "'missing'" in _strict_match(statements)
++    retriever.close()
++    index.close()
++
++
++def test_ranker_metadata_describes_document_frequency_filtering() -> None:
++    metadata = production_ranker_metadata()
++
++    assert "removed_scaffolding" not in metadata
++    assert metadata["term_filter"] == "fts5vocab-document-frequency"
++    assert metadata["max_term_document_ratio"] == MAX_TERM_DOCUMENT_RATIO
++    assert "explicit_function_words" not in metadata
+diff --git a/tests/unit/test_okf_frontmatter.py b/tests/unit/test_okf_frontmatter.py
+index 250c5ee..f2417de 100644
+--- a/tests/unit/test_okf_frontmatter.py
++++ b/tests/unit/test_okf_frontmatter.py
+@@ -415,11 +415,11 @@ class TestReviewedCriteria:
+         assert not hasattr(hit, "updated")
+         assert hit.created and hit.timestamp and hit.updated_at
+ 
+-    def test_schema_version_is_six(self) -> None:
++    def test_schema_version_is_seven(self) -> None:
+         """AC-0029."""
+         from memex.infrastructure.search.index_manager import SCHEMA_VERSION
+ 
+-        assert SCHEMA_VERSION == "6"
++        assert SCHEMA_VERSION == "7"
+ 
+     def test_store_passes_the_okf_reference_linter(self, memex: Memex, tmp_path: Path) -> None:
+         """AC-0028: the real OKF linter, when the reference checkout is present."""

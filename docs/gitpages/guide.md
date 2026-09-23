@@ -165,7 +165,8 @@ memex recall "Repair project lookup" --question "project layout" \
   limiting, returned slugs are unique, and ascending slug is the final
   tie-break.
 - Filters: `--type`, `--tag` (AND semantics), `--top-k` (1–100),
-  `--include-expired`.
+  `--include-expired`. `--engine {fts5,navigation}` picks the ranker; see
+  [recall without the SQLite index](#recall-without-the-sqlite-index).
 - Every hit bumps its access counter — recall telemetry feeds
   [recency decay](#configuration-reference) and `verify` evidence.
 - Recall stays offline and dependency-light: no embeddings, hosted search,
@@ -190,6 +191,18 @@ Task mode requires caller-written questions and has not been shown to improve
 that score. The measurements are recorded in
 `docs/research/2026-09-20-task-evidence-focused-candidate.md` in the source
 repository.
+
+#### Recall without the SQLite index
+
+`memex recall "<query>" --engine navigation` ranks the generated `index.md`
+rows instead of the FTS5 index. It matches titles and descriptions only (never
+page bodies), reads only the front matter of the pages it returns, supports
+`--type`, `--tag`, `--scope`/`--project-id`, `--top-k`, and `--max-tokens`,
+and rejects time ranges. The result's `search_engine` is
+`navigation-index-md`. The default `--engine fts5` uses this path
+automatically when `mem.db` holds no rows but pages exist, reporting
+`navigation-index-md-fallback`; run `memex rebuild-index` to restore FTS5
+ranking (and to regenerate navigation if `index.md` files are missing).
 
 ### forget
 
@@ -358,7 +371,10 @@ keeps one `index.md` per directory that contains pages:
   missing. Opening a store never writes Markdown navigation — the explicit
   rebuild path does.
 - Refresh after a page mutation is best effort: a navigation refresh failure
-  never fails the page write. `memex verify` reports stale, missing, or
+  never fails the page write. A single write, update, or delete splices that
+  page's row into its directory index in sorted position (bytes identical to
+  a full render) instead of rescanning every sibling; a missing, hand-written,
+  or ambiguous index falls back to the full render. `memex verify` reports stale, missing, or
   orphaned navigation as a `navigation-consistent` defect, and regeneration
   repairs it. A reserved-name collision is surfaced in the check's detail
   output instead: resolve it manually (rename or remove the colliding page),
@@ -455,6 +471,32 @@ memex hook transcript --harness H [--path FILE]
     ingests a harness-native session file; idempotent; --path may instead
     arrive as transcript_path in stdin JSON
 ```
+
+### Linked pages in the session-start block
+
+After the direct hits, the hook block lists pages linked from those hits (one
+hop by default), each as a short entry:
+
+```
+---
++ Pytest runner (entity) | depth: 1 | via: ruff-linter -mentions-> pytest-runner
+   File: <data-dir>/docs/global/entities/pytest-runner.md
+   Test command
+---
+=== END memex MEMORY ===
+```
+
+The header names the page, how many hops away it is, and the relation route
+from the hit it was reached through (`mentions` for a `[[slug]]` body
+reference; `depends_on`, `parent`, `supersedes`, `implements`, or a typed
+link's own `rel` otherwise). Only the title, file path, and description (or a
+short body snippet) are shown; open the file for the full page. Direct hits
+always come first and are never trimmed to make room; linked pages fill
+whatever budget remains under the 4,096-token bound, and when some do not fit
+the block ends with `[memex] linked pages omitted (token budget): N`. Pages
+that recall would hide (archived, expired, pending, or in another project) are
+never listed. Task recall (`memex recall --question`, or `memex_recall` with
+questions) appends the same entries after its sources.
 
 ### Adapters
 
